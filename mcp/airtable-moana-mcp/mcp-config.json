@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "Airtable Moana MCP": {
+      "command": "node",
+      "args": [
+        "C:/Users/beatr/Documents/projets/moana/mcp/airtable-moana-mcp/dist/index.js"
+      ],
+      "env": {
+        "AIRTABLE_API_KEY": "your_airtable_personal_access_token_here",
+        "AIRTABLE_BASE_ID": "appNyZVynxa8shk4c",
+        "AIRTABLE_LISTINGS_TABLE_ID": "tblxxQhUvQd2Haztz",
+        "AIRTABLE_BROKER_TABLE_ID": "tbl9dTwK6RfutmqVY"
+      }
+    }
+  }
+}

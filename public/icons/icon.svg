@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#0284c7"/>
+
+  <!-- Anchor icon in white -->
+  <g fill="#ffffff">
+    <!-- Anchor ring -->
+    <circle cx="256" cy="180" r="30" stroke="#ffffff" stroke-width="12" fill="none"/>
+
+    <!-- Anchor shaft -->
+    <rect x="244" y="180" width="24" height="180" rx="2"/>
+
+    <!-- Anchor flukes (bottom part) -->
+    <path d="M 256 360 L 180 420 Q 180 400 200 380 L 256 340 L 312 380 Q 332 400 332 420 L 256 360 Z"/>
+
+    <!-- Left fluke curve -->
+    <path d="M 180 420 Q 160 430 150 450 Q 145 465 155 475 Q 165 485 180 480 Q 200 475 210 450" stroke="#ffffff" stroke-width="12" fill="none"/>
+
+    <!-- Right fluke curve -->
+    <path d="M 332 420 Q 352 430 362 450 Q 367 465 357 475 Q 347 485 332 480 Q 312 475 302 450" stroke="#ffffff" stroke-width="12" fill="none"/>
+
+    <!-- Anchor top bar -->
+    <rect x="200" y="150" width="112" height="16" rx="8"/>
+  </g>
+
+  <!-- Wave decoration at bottom -->
+  <path d="M 0 450 Q 64 430 128 450 T 256 450 T 384 450 T 512 450 L 512 512 L 0 512 Z" fill="#ffffff" opacity="0.2"/>
+</svg>
