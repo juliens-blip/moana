@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
@@ -11,7 +10,6 @@ import type { Listing } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteLoading, setDeleteLoading] = useState(false);

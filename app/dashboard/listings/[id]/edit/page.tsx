@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -14,7 +13,6 @@ import type { ListingInput } from '@/lib/validations';
 export default function EditListingPage() {
   const router = useRouter();
   const params = useParams();
-  const { data: session } = useSession();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -45,7 +43,7 @@ export default function EditListingPage() {
     };
 
     fetchListing();
-  }, [listingId, session, router]);
+  }, [listingId, router]);
 
   const handleSubmit = async (data: ListingInput) => {
     setSubmitLoading(true);

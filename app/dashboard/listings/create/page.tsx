@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -12,7 +11,6 @@ import type { ListingInput } from '@/lib/validations';
 
 export default function CreateListingPage() {
   const router = useRouter();
-  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (data: ListingInput) => {
@@ -24,10 +22,7 @@ export default function CreateListingPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...data,
-          broker: session?.user.broker,
-        }),
+        body: JSON.stringify(data),
       });
 
       const result = await response.json();
@@ -71,9 +66,6 @@ export default function CreateListingPage() {
           onSubmit={handleSubmit}
           submitLabel="Créer le bateau"
           loading={loading}
-          defaultValues={{
-            broker: session?.user.broker || '',
-          }}
         />
       </div>
     </div>
