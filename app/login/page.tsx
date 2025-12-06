@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { LoginForm } from '@/components/auth/LoginForm';
 
 export const metadata = {
@@ -9,7 +8,7 @@ export const metadata = {
 };
 
 export default async function LoginPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
 
   // If already logged in, redirect to dashboard
   if (session) {
