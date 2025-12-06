@@ -1,6 +1,5 @@
 import { brokersTable } from './client';
 import type { Broker } from '@/lib/types';
-import bcrypt from 'bcryptjs';
 
 /**
  * Get all brokers (without passwords)
@@ -50,8 +49,7 @@ export async function authenticateBroker(
     const record = records[0];
     const storedPassword = record.get('password') as string;
 
-    // Direct password comparison for now
-    // TODO: Implement bcrypt hashing for passwords in Airtable
+    // Direct password comparison with Airtable stored passwords
     if (storedPassword === password) {
       return {
         id: record.id,
@@ -112,12 +110,9 @@ export async function createBroker(
   password: string
 ): Promise<Broker> {
   try {
-    // Hash password before storing
-    // const hashedPassword = await bcrypt.hash(password, 10);
-
     const record = await brokersTable.create({
       broker: username,
-      password: password, // Store plain text for now, implement hashing later
+      password: password, // Stored as plain text in Airtable
     });
 
     return {

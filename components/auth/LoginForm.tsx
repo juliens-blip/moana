@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,15 +25,22 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        broker: data.broker,
-        password: data.password,
-        redirect: false,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          broker: data.broker,
+          password: data.password,
+        }),
       });
 
-      if (result?.error) {
-        toast.error('Identifiants invalides');
-      } else if (result?.ok) {
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(result.error || 'Identifiants invalides');
+      } else {
         toast.success('Connexion réussie!');
         router.push('/dashboard');
         router.refresh();

@@ -1,15 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)",
-      "Bash(findstr:*)",
-      "Bash(npm install:*)",
-      "Bash(npm run build:*)",
-      "Bash(node scripts/generate-icons.js:*)",
-      "Bash(git init:*)",
-      "Bash(git add:*)",
-      "Bash(git config:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nAdd PWA support and fix critical bugs\n\nPWA Features:\n- Add manifest.json with app configuration\n- Create InstallPrompt component for app installation\n- Configure next-pwa with cache strategies for Airtable API and images\n- Add PWA metadata to layout.tsx (app icons, viewport, theme color)\n- Create offline.html fallback page\n- Generate app icons script (192x192, 512x512, 180x180)\n\nBug Fixes:\n- Fix API 500 error by removing invalid Airtable price filters\n- Fix broken debounce mechanism using useRef pattern\n- Add client-side price filtering with parsePrix() function\n- Support multiple price formats (European, American, millions)\n\nTechnical Changes:\n- Update lib/airtable/filters.ts - remove price filter formulas\n- Update app/api/listings/route.ts - remove price params\n- Refactor app/dashboard/page.tsx - stable refs for debounce\n- Add .gitignore entry for Windows reserved ''nul'' file\n\n🤖 Generated with Claude Code\nEOF\n)\")"
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []
