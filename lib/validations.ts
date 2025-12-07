@@ -14,7 +14,7 @@ export const listingSchema = z.object({
   }).int('L\'année doit être un nombre entier').min(1900, 'Année invalide').max(new Date().getFullYear() + 2, 'Année invalide'),
   proprietaire: z.string().min(1, 'Le propriétaire est requis').max(100, 'Le nom est trop long'),
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
-  broker: z.string().min(1, 'Le broker est requis'),
+  broker: z.string().optional(),
   localisation: z.string().min(1, 'La localisation est requise'),
   prix: z.string().max(100, 'Le prix est trop long').optional().transform(val => val === '' ? undefined : val),
   prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().transform(val => val === '' ? undefined : val),
