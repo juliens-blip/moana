@@ -16,10 +16,10 @@ export const listingSchema = z.object({
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
   broker: z.string().min(1, 'Le broker est requis'),
   localisation: z.string().min(1, 'La localisation est requise'),
-  prix: z.string().max(100, 'Le prix est trop long').optional().or(z.literal('')),
-  prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().or(z.literal('')),
-  dernierMessage: z.string().max(500, 'Le message est trop long').optional().or(z.literal('')),
-  commentaire: z.string().max(2000, 'Le commentaire est trop long').optional().or(z.literal(''))
+  prix: z.string().max(100, 'Le prix est trop long').optional().transform(val => val === '' ? undefined : val),
+  prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().transform(val => val === '' ? undefined : val),
+  dernierMessage: z.string().max(500, 'Le message est trop long').optional().transform(val => val === '' ? undefined : val),
+  commentaire: z.string().max(2000, 'Le commentaire est trop long').optional().transform(val => val === '' ? undefined : val)
 });
 
 // Login Validation Schema
