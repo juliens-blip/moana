@@ -8,6 +8,10 @@ import {
 import { listingSchema } from '@/lib/validations';
 import type { ApiResponse } from '@/lib/types';
 
+// Force dynamic rendering - required for cookies()
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 /**
  * GET /api/listings/[id]
  * Get a single listing by ID
