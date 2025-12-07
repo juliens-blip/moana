@@ -32,7 +32,7 @@ export async function login(broker: string, password: string): Promise<Session |
 }
 
 export async function getSession(): Promise<Session | null> {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
 
   if (!sessionCookie) {
@@ -56,7 +56,7 @@ export async function getSession(): Promise<Session | null> {
 }
 
 export async function setSessionCookie(session: Session): Promise<void> {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -67,6 +67,6 @@ export async function setSessionCookie(session: Session): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
