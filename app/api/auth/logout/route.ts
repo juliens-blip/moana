@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { logout } from '@/lib/auth';
+import { logout } from '@/lib/supabase/auth';
+
+// Force dynamic rendering - required for cookies()
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST() {
   try {

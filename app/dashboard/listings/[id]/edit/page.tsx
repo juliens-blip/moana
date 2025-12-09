@@ -96,7 +96,7 @@ export default function EditListingPage() {
           Modifier le bateau
         </h1>
         <p className="text-gray-600 mt-2">
-          {listing.fields['Nom du Bateau']}
+          {listing.nom_bateau}
         </p>
       </div>
 
@@ -107,14 +107,18 @@ export default function EditListingPage() {
           submitLabel="Mettre à jour"
           loading={submitLoading}
           defaultValues={{
-            nomBateau: listing.fields['Nom du Bateau'],
-            constructeur: listing.fields.Constructeur,
-            longueur: listing.fields['Longueur (M/pieds)'],
-            annee: listing.fields.Année,
-            proprietaire: listing.fields.Propriétaire,
-            capitaine: listing.fields.Capitaine,
-            broker: listing.fields.Broker,
-            localisation: listing.fields.Localisation,
+            nomBateau: listing.nom_bateau,
+            constructeur: listing.constructeur,
+            longueur: listing.longueur_m,
+            annee: listing.annee,
+            proprietaire: listing.proprietaire,
+            capitaine: listing.capitaine,
+            broker: listing.broker_id,
+            localisation: listing.localisation,
+            prix: listing.prix_actuel,
+            prixPrecedent: listing.prix_precedent,
+            dernierMessage: listing.dernier_message,
+            commentaire: listing.commentaire,
           }}
         />
       </div>

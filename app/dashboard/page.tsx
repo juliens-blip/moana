@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+// Force dynamic rendering to avoid SSR errors
+export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
@@ -150,7 +153,7 @@ export default function DashboardPage() {
           const maxPrixNum = filters.maxPrix ? parseFloat(filters.maxPrix) : null;
 
           filtered = filtered.filter((listing: Listing) => {
-            const prixStr = listing.fields['Prix Actuel (€/$)'];
+            const prixStr = listing.prix_actuel;
             const prix = parsePrix(prixStr);
 
             // Si le prix ne peut pas être parsé, ne pas l'afficher

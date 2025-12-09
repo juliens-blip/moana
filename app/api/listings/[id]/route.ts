@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/lib/supabase/auth';
 import {
   getListing,
   updateListing,
   deleteListing,
-} from '@/lib/airtable/listings';
+} from '@/lib/supabase/listings';
 import { listingSchema } from '@/lib/validations';
 import type { ApiResponse } from '@/lib/types';
 

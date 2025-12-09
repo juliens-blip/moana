@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-12-09T13:37:19.838Z",
+  "summary": {
+    "total": 8,
+    "passed": 0,
+    "failed": 6,
+    "skipped": 2,
+    "successRate": "0.0%"
+  },
+  "results": [
+    {
+      "testName": "Connexion Supabase",
+      "status": "FAIL",
+      "message": "Echec de connexion a Supabase",
+      "error": "column brokers.name does not exist"
+    },
+    {
+      "testName": "Filtre broker par nom (Charles)",
+      "status": "FAIL",
+      "message": "Erreur lors du filtrage par nom de broker",
+      "error": "Status 401: Non authentifié"
+    },
+    {
+      "testName": "Filtre broker inexistant",
+      "status": "FAIL",
+      "message": "Erreur lors du test de broker inexistant",
+      "error": "Status 401: Non authentifié"
+    },
+    {
+      "testName": "Filtre localisation (Monaco)",
+      "status": "FAIL",
+      "message": "Erreur lors du filtrage par localisation",
+      "error": "Status 401: Non authentifié"
+    },
+    {
+      "testName": "Recherche (Sunseeker)",
+      "status": "FAIL",
+      "message": "Erreur lors de la recherche",
+      "error": "Status 401: Non authentifié"
+    },
+    {
+      "testName": "Filtres combines (broker + location)",
+      "status": "FAIL",
+      "message": "Erreur lors du test des filtres combines",
+      "error": "Status 401: Non authentifié"
+    },
+    {
+      "testName": "Creation de listing",
+      "status": "SKIP",
+      "message": "Aucun broker disponible pour le test"
+    },
+    {
+      "testName": "Modification de listing",
+      "status": "SKIP",
+      "message": "Aucun broker disponible pour le test"
+    }
+  ]
+}

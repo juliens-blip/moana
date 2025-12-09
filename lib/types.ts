@@ -1,39 +1,43 @@
-// Airtable Record Types
+// ============================================
+// SUPABASE DATABASE TYPES
+// ============================================
 
-export interface ListingFields {
-  'Nom du Bateau': string;
-  'Constructeur': string;
-  'Longueur (M/pieds)': number;
-  'Année': number;
-  'Propriétaire': string;
-  'Capitaine': string;
-  'Broker': string;
-  'Localisation': string;
-  'Prix Actuel (€/$)'?: string; // Optional - current price as text (e.g., "1,850,000 €")
-  'Prix Précédent (€/$)'?: string; // Optional - previous price as text
-  'Dernier message'?: string; // Optional - last message/note (max 500 chars)
-  'Commentaire'?: string; // Optional - comment/remarks (max 2000 chars)
+export interface Broker {
+  id: string;
+  email: string;
+  broker_name: string;
+  password_hash: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Listing {
   id: string;
-  fields: ListingFields;
-  createdTime: string;
+  nom_bateau: string;
+  constructeur: string;
+  longueur_m: number;
+  annee: number;
+  proprietaire: string;
+  capitaine: string;
+  broker_id: string;
+  localisation: string;
+  prix_actuel?: string;
+  prix_precedent?: string;
+  dernier_message?: string;
+  commentaire?: string;
+  created_at: string;
+  updated_at: string;
+  airtable_id?: string; // Pour référence migration
 }
 
-export interface BrokerFields {
-  broker: string;
-  password: string;
-  'Date de création'?: string;
+export interface ListingWithBroker extends Listing {
+  broker_name: string;
+  broker_email: string;
 }
 
-export interface Broker {
-  id: string;
-  fields: BrokerFields;
-  createdTime: string;
-}
-
-// API Response Types
+// ============================================
+// API RESPONSE TYPES
+// ============================================
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -52,7 +56,9 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Form Types
+// ============================================
+// FORM TYPES
+// ============================================
 
 export interface ListingFormData {
   nomBateau: string;
@@ -61,8 +67,12 @@ export interface ListingFormData {
   annee: number;
   proprietaire: string;
   capitaine: string;
-  broker: string;
+  broker: string; // broker_id
   localisation: string;
+  prix?: string;
+  prixPrecedent?: string;
+  dernierMessage?: string;
+  commentaire?: string;
 }
 
 export interface LoginFormData {
@@ -70,7 +80,9 @@ export interface LoginFormData {
   password: string;
 }
 
-// Session Types
+// ============================================
+// SESSION TYPES
+// ============================================
 
 export interface BrokerSession {
   id: string;
@@ -78,20 +90,21 @@ export interface BrokerSession {
   createdAt: string;
 }
 
-// Filter Types
+// ============================================
+// FILTER TYPES
+// ============================================
 
 export interface ListingFilters {
   search?: string;           // Search in boat name and constructor
-  broker?: string;           // Exact match on broker name
-  localisation?: string;     // Exact match on location
+  broker?: string;           // Broker name or Broker ID (UUID) - will be resolved automatically
+  localisation?: string;     // Free text localisation
   minLength?: number;        // Minimum length in meters
   maxLength?: number;        // Maximum length in meters
-  // Note: minPrix and maxPrix removed
-  // Prix Actuel field is formatted text (e.g., "1,850,000 €"), not a number
-  // Would require Airtable schema change to add numeric price field for filtering
 }
 
-// UI Component Types
+// ============================================
+// UI COMPONENT TYPES
+// ============================================
 
 export interface ModalProps {
   isOpen: boolean;
@@ -117,4 +130,27 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
   options: Array<{ value: string; label: string }>;
 }
 
-// Note: Localisation is now a free text field, no longer a predefined list
+// ============================================
+// LEGACY AIRTABLE TYPES (pour migration)
+// ============================================
+
+export interface LegacyListingFields {
+  'Nom du Bateau': string;
+  'Constructeur': string;
+  'Longueur (M/pieds)': number;
+  'Année': number;
+  'Propriétaire': string;
+  'Capitaine': string;
+  'Broker': string;
+  'Localisation': string;
+  'Prix Actuel (€/$)'?: string;
+  'Prix Précédent (€/$)'?: string;
+  'Dernier message'?: string;
+  'Commentaire'?: string;
+}
+
+export interface LegacyListing {
+  id: string;
+  fields: LegacyListingFields;
+  createdTime: string;
+}

@@ -1,0 +1,192 @@
+
+> moana-yachting-saas@1.0.0 build
+> next build
+
+ ⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+  ▲ Next.js 14.2.33
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/7) ...
+   Generating static pages (1/7) 
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908) {
+  digest: '1317234906'
+}
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+   Generating static pages (3/7) 
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908) {
+  digest: '1317234906'
+}
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+
+Error occurred prerendering page "/dashboard". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908) {
+  digest: '1317234906'
+}
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+
+Error occurred prerendering page "/dashboard/listings/create". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:109365)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:21677)
+    at h (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\507.js:1:13615)
+    at au (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:10446)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:15122
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+    at a_ (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:49776)
+    at ab (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:11808)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16871
+    at aw (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:16908)
+   Generating static pages (5/7) 
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\pages.runtime.prod.js:16:5430)
+    at I (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\682.js:6:1263)
+    at renderWithHooks (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5732:15)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5696:3)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5954:7)
+
+Error occurred prerendering page "/500". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\pages.runtime.prod.js:16:5430)
+    at I (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\682.js:6:1263)
+    at renderWithHooks (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5732:15)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5696:3)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5954:7)
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\pages.runtime.prod.js:16:5430)
+    at I (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\682.js:6:1263)
+    at renderWithHooks (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5732:15)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5696:3)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5954:7)
+
+Error occurred prerendering page "/404". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\pages.runtime.prod.js:16:5430)
+    at I (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\682.js:6:1263)
+    at renderWithHooks (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5732:15)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5696:3)
+    at renderElement (C:\Users\beatr\Documents\projets\moana\node_modules\react-dom\cjs\react-dom-server.browser.development.js:5954:7)
+ ✓ Generating static pages (7/7)
+
+> Export encountered errors on following paths:
+	/_error: /404
+	/_error: /500
+	/_not-found/page: /_not-found
+	/dashboard/listings/create/page: /dashboard/listings/create
+	/dashboard/page: /dashboard

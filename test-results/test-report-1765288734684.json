@@ -1,0 +1,246 @@
+{
+  "passed": 1,
+  "failed": 11,
+  "total": 12,
+  "tests": [
+    {
+      "name": "Login avec credentials valides",
+      "status": "FAIL",
+      "error": "Status: 401, Data: {\"error\":\"Identifiants invalides\"}",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Identifiants invalides"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.049Z"
+    },
+    {
+      "name": "Login avec credentials invalides (devrait échouer)",
+      "status": "PASS",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Identifiants invalides"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.145Z"
+    },
+    {
+      "name": "Get current session",
+      "status": "FAIL",
+      "error": "Status: 401",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.435Z"
+    },
+    {
+      "name": "GET /api/listings - Sans filtres",
+      "status": "FAIL",
+      "error": "Status: 401, Data: {\"success\":false,\"error\":\"Non authentifié\"}",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.563Z"
+    },
+    {
+      "name": "GET /api/listings?broker=Charles - Filtre broker",
+      "status": "FAIL",
+      "error": "Status: 401, Error: Non authentifié",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.575Z"
+    },
+    {
+      "name": "GET /api/listings?localisation=Monaco - Filtre localisation",
+      "status": "FAIL",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.586Z"
+    },
+    {
+      "name": "GET /api/listings?minLength=20&maxLength=50 - Filtre longueur",
+      "status": "FAIL",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.600Z"
+    },
+    {
+      "name": "GET /api/listings?search=Princess - Recherche",
+      "status": "FAIL",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.615Z"
+    },
+    {
+      "name": "POST /api/listings - Créer un listing",
+      "status": "FAIL",
+      "error": "Status: 401, Error: Non authentifié, Validation: undefined",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        },
+        "id": null
+      },
+      "timestamp": "2025-12-09T13:58:54.633Z"
+    },
+    {
+      "name": "POST /api/listings - Champs requis manquants (devrait échouer)",
+      "status": "FAIL",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.651Z"
+    },
+    {
+      "name": "POST /api/listings - Longueur négative (devrait échouer)",
+      "status": "FAIL",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.669Z"
+    },
+    {
+      "name": "POST /api/listings - Année invalide (devrait échouer)",
+      "status": "FAIL",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.683Z"
+    }
+  ],
+  "bugs": [
+    {
+      "testName": "Login avec credentials valides",
+      "error": "Status: 401, Data: {\"error\":\"Identifiants invalides\"}",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Identifiants invalides"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.049Z"
+    },
+    {
+      "testName": "Get current session",
+      "error": "Status: 401",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.435Z"
+    },
+    {
+      "testName": "GET /api/listings - Sans filtres",
+      "error": "Status: 401, Data: {\"success\":false,\"error\":\"Non authentifié\"}",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.563Z"
+    },
+    {
+      "testName": "GET /api/listings?broker=Charles - Filtre broker",
+      "error": "Status: 401, Error: Non authentifié",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.575Z"
+    },
+    {
+      "testName": "GET /api/listings?localisation=Monaco - Filtre localisation",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.586Z"
+    },
+    {
+      "testName": "GET /api/listings?minLength=20&maxLength=50 - Filtre longueur",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.600Z"
+    },
+    {
+      "testName": "GET /api/listings?search=Princess - Recherche",
+      "error": "Status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.615Z"
+    },
+    {
+      "testName": "POST /api/listings - Créer un listing",
+      "error": "Status: 401, Error: Non authentifié, Validation: undefined",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        },
+        "id": null
+      },
+      "timestamp": "2025-12-09T13:58:54.633Z"
+    },
+    {
+      "testName": "POST /api/listings - Champs requis manquants (devrait échouer)",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401,
+        "data": {
+          "success": false,
+          "error": "Non authentifié"
+        }
+      },
+      "timestamp": "2025-12-09T13:58:54.651Z"
+    },
+    {
+      "testName": "POST /api/listings - Longueur négative (devrait échouer)",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.669Z"
+    },
+    {
+      "testName": "POST /api/listings - Année invalide (devrait échouer)",
+      "error": "Should have failed but got status: 401",
+      "details": {
+        "status": 401
+      },
+      "timestamp": "2025-12-09T13:58:54.683Z"
+    }
+  ],
+  "timestamp": "2025-12-09T13:58:53.706Z"
+}

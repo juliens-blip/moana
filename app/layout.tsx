@@ -6,6 +6,9 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
+// Force dynamic rendering to prevent prerender errors with framer-motion
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Moana Yachting - Gestion de Listings',
   description: 'Système de gestion des listings de bateaux pour Moana Yachting',

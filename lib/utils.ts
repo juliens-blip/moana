@@ -115,3 +115,102 @@ export function isEmpty(value: any): boolean {
   if (typeof value === 'object') return Object.keys(value).length === 0;
   return false;
 }
+
+/**
+ * Clean listing fields for Airtable submission
+ * Removes empty strings, null, undefined values
+ * Only includes fields with actual data
+ */
+export function cleanListingFields<T extends Record<string, any>>(fields: T): Partial<T> {
+  const cleaned: Partial<T> = {};
+
+  for (const [key, value] of Object.entries(fields)) {
+    // Skip if value is null or undefined
+    if (value == null) {
+      continue;
+    }
+
+    // Skip empty strings (but keep 0 and false)
+    if (typeof value === 'string' && value.trim() === '') {
+      continue;
+    }
+
+    // Skip empty arrays
+    if (Array.isArray(value) && value.length === 0) {
+      continue;
+    }
+
+    // Include the value (it's valid)
+    cleaned[key as keyof T] = value;
+  }
+
+  return cleaned;
+}
+
+/**
+ * Validate Airtable field value
+ * Returns true if the value is valid for Airtable
+ */
+export function isValidAirtableValue(value: any): boolean {
+  // Null and undefined are invalid
+  if (value == null) return false;
+
+  // Empty strings are invalid
+  if (typeof value === 'string' && value.trim() === '') return false;
+
+  // Empty arrays are invalid
+  if (Array.isArray(value) && value.length === 0) return false;
+
+  // Numbers (including 0) are valid
+  if (typeof value === 'number') return true;
+
+  // Non-empty strings are valid
+  if (typeof value === 'string') return true;
+
+  // Booleans are valid
+  if (typeof value === 'boolean') return true;
+
+  // Objects with keys are valid
+  if (typeof value === 'object' && Object.keys(value).length > 0) return true;
+
+  return false;
+}
+
+/**
+ * Parse Airtable error message to user-friendly French message
+ */
+export function parseAirtableError(error: any): string {
+  const errorMessage = error?.message || error?.error || 'Erreur inconnue';
+
+  // Handle common Airtable errors
+  if (errorMessage.includes('INVALID_MULTIPLE_CHOICE_OPTIONS')) {
+    return 'Valeur invalide pour un champ à choix multiples. Veuillez sélectionner une option valide.';
+  }
+
+  if (errorMessage.includes('INVALID_VALUE_FOR_COLUMN')) {
+    return 'Valeur invalide pour un champ. Veuillez vérifier vos données.';
+  }
+
+  if (errorMessage.includes('NOT_FOUND')) {
+    return 'Enregistrement non trouvé.';
+  }
+
+  if (errorMessage.includes('UNAUTHORIZED')) {
+    return 'Accès non autorisé. Veuillez vérifier vos permissions.';
+  }
+
+  if (errorMessage.includes('INVALID_PERMISSIONS')) {
+    return 'Permissions insuffisantes pour cette opération.';
+  }
+
+  if (errorMessage.includes('INVALID_REQUEST')) {
+    return 'Requête invalide. Veuillez vérifier vos données.';
+  }
+
+  // Return original message for debugging in dev mode
+  if (process.env.NODE_ENV === 'development') {
+    return `Erreur Airtable: ${errorMessage}`;
+  }
+
+  return 'Une erreur est survenue. Veuillez réessayer.';
+}

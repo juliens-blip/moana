@@ -1,0 +1,40 @@
+
+> moana-yachting-saas@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.33
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/7) ...
+   Generating static pages (1/7) 
+   Generating static pages (3/7) 
+   Generating static pages (5/7) 
+ ✓ Generating static pages (7/7)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    138 B          87.4 kB
+├ ƒ /_not-found                          873 B          88.1 kB
+├ ƒ /api/auth/login                      0 B                0 B
+├ ƒ /api/auth/logout                     0 B                0 B
+├ ƒ /api/auth/me                         0 B                0 B
+├ ƒ /api/brokers                         0 B                0 B
+├ ƒ /api/listings                        0 B                0 B
+├ ƒ /api/listings/[id]                   0 B                0 B
+├ ƒ /dashboard                           2.07 kB         176 kB
+├ ƒ /dashboard/listings/[id]/edit        1.38 kB         176 kB
+├ ƒ /dashboard/listings/create           1.11 kB         175 kB
+└ ƒ /login                               1.86 kB         126 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/117-de3e662447722f04.js       31.7 kB
+  ├ chunks/fd9d1056-4a9853f3fae16b4a.js  53.6 kB
+  └ other shared chunks (total)          1.89 kB
+
+
+ƒ  (Dynamic)  server-rendered on demand
+

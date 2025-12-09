@@ -45,10 +45,10 @@ export function DeleteConfirmModal({
           </p>
           <div className="bg-gray-50 rounded-lg p-3 text-left transition-smooth hover:bg-gray-100">
             <p className="text-sm font-semibold text-gray-900">
-              {listing.fields['Nom du Bateau']}
+              {listing.nom_bateau}
             </p>
             <p className="text-sm text-gray-600">
-              {listing.fields.Constructeur} • {listing.fields.Année}
+              {listing.constructeur} • {listing.annee}
             </p>
           </div>
           <p className="text-sm text-red-600 font-medium">

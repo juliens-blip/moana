@@ -3,6 +3,10 @@ import { getSession } from '@/lib/auth';
 import { Header } from '@/components/layout/Header';
 import { InstallPrompt } from '@/components/pwa';
 
+// Force dynamic rendering - do not prerender dashboard pages
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+
 export default async function DashboardLayout({
   children,
 }: {

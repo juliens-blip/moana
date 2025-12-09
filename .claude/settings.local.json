@@ -4,7 +4,22 @@
       "Bash(node -e:*)",
       "Bash(git commit:*)",
       "Bash(git push)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run export-airtable:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run import-csv:*)",
+      "Bash(dotenv -e .env.local -- tsx:*)",
+      "Bash(npx dotenv:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next build:*)",
+      "Bash(grep:*)",
+      "Bash(npm run build:*)",
+      "Bash(if exist .next rmdir /s /q .next)",
+      "Bash(npm view:*)",
+      "Bash(tee:*)",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

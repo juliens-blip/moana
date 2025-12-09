@@ -64,4 +64,6 @@ const nextConfig = {
   },
 };
 
-module.exports = withPWA(nextConfig);
+// Temporarily disable PWA to test build
+module.exports = nextConfig;
+// module.exports = withPWA(nextConfig);

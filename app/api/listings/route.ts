@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
-import { getListings, createListing } from '@/lib/airtable/listings';
+import { getSession } from '@/lib/supabase/auth';
+import { getListings, createListing } from '@/lib/supabase/listings';
 import { listingSchema } from '@/lib/validations';
 import type { ApiResponse, ListingFilters } from '@/lib/types';
+
+// Force dynamic rendering - required for cookies() and searchParams
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
  * GET /api/listings
@@ -87,10 +91,10 @@ export async function POST(request: NextRequest) {
     }
 
     // All authenticated brokers can create listings for any broker
-    // If no broker specified, default to current user
+    // If no broker specified, default to current user's brokerId
     const data = {
       ...validation.data,
-      broker: validation.data.broker || session.broker,
+      broker: validation.data.broker || session.brokerId,
     };
 
     const listing = await createListing(data);

@@ -17,7 +17,7 @@ interface ListingCardProps {
 }
 
 export function ListingCard({ listing, onDelete, onClick, canEdit = true, index = 0 }: ListingCardProps) {
-  const { id, fields } = listing;
+  const { id } = listing;
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't trigger card click if clicking on buttons
@@ -40,17 +40,17 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
     >
       {/* Header with gradient */}
       <div className="bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-4 transition-smooth group-hover:from-primary-700 group-hover:to-secondary-700">
-        <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{fields['Nom du Bateau']}</h3>
-        <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{fields.Constructeur}</p>
+        <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{listing.nom_bateau}</h3>
+        <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{listing.constructeur}</p>
       </div>
 
       {/* Content */}
       <div className="p-6 space-y-3">
         {/* Price (if available) */}
-        {fields['Prix Actuel (€/$)'] && (
+        {listing.prix_actuel && (
           <div className="flex items-center gap-2 text-primary-700 font-semibold text-lg pb-3 border-b border-gray-200">
             <Euro className="h-5 w-5" />
-            <span>{fields['Prix Actuel (€/$)']}</span>
+            <span>{listing.prix_actuel}</span>
           </div>
         )}
 
@@ -59,20 +59,20 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
           <div className="flex items-center gap-2 text-gray-600">
             <Anchor className="h-4 w-4 text-primary-500" />
             <span className="text-sm">
-              {formatNumber(fields['Longueur (M/pieds)'], 1)} m
+              {formatNumber(listing.longueur_m, 1)} m
             </span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Calendar className="h-4 w-4 text-primary-500" />
-            <span className="text-sm">{fields.Année}</span>
+            <span className="text-sm">{listing.annee}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <MapPin className="h-4 w-4 text-primary-500" />
-            <span className="text-sm">{fields.Localisation}</span>
+            <span className="text-sm">{listing.localisation}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <User className="h-4 w-4 text-primary-500" />
-            <span className="text-sm">{fields.Broker}</span>
+            <span className="text-sm">{(listing as any).brokers?.broker_name || 'N/A'}</span>
           </div>
         </div>
 
@@ -80,11 +80,11 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         <div className="pt-3 border-t border-gray-200 space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Propriétaire:</span>
-            <span className="font-medium text-gray-900">{fields.Propriétaire}</span>
+            <span className="font-medium text-gray-900">{listing.proprietaire}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Capitaine:</span>
-            <span className="font-medium text-gray-900">{fields.Capitaine}</span>
+            <span className="font-medium text-gray-900">{listing.capitaine}</span>
           </div>
         </div>
 

@@ -1,0 +1,54 @@
+
+> moana-yachting-saas@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.33
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/8) ...
+[GET /api/brokers] Exception: n [Error]: Dynamic server usage: Route /api/brokers couldn't be rendered statically because it used `cookies`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at l (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\276.js:1:37206)
+    at d (C:\Users\beatr\Documents\projets\moana\.next\server\chunks\438.js:59:45301)
+    at s (C:\Users\beatr\Documents\projets\moana\.next\server\app\api\auth\me\route.js:1:2617)
+    at p (C:\Users\beatr\Documents\projets\moana\.next\server\app\api\brokers\route.js:1:821)
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\beatr\Documents\projets\moana\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Route /api/brokers couldn't be rendered statically because it used `cookies`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+   Generating static pages (2/8) 
+   Generating static pages (4/8) 
+   Generating static pages (6/8) 
+ ✓ Generating static pages (8/8)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    138 B          87.4 kB
+├ ƒ /_not-found                          873 B          88.1 kB
+├ ƒ /api/auth/login                      0 B                0 B
+├ ƒ /api/auth/logout                     0 B                0 B
+├ ƒ /api/auth/me                         0 B                0 B
+├ ƒ /api/brokers                         0 B                0 B
+├ ƒ /api/listings                        0 B                0 B
+├ ƒ /api/listings/[id]                   0 B                0 B
+├ ƒ /dashboard                           2.07 kB         176 kB
+├ ƒ /dashboard/listings/[id]/edit        1.38 kB         176 kB
+├ ƒ /dashboard/listings/create           1.11 kB         175 kB
+└ ƒ /login                               1.86 kB         126 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/117-de3e662447722f04.js       31.7 kB
+  ├ chunks/fd9d1056-4a9853f3fae16b4a.js  53.6 kB
+  └ other shared chunks (total)          1.89 kB
+
+
+ƒ  (Dynamic)  server-rendered on demand
+

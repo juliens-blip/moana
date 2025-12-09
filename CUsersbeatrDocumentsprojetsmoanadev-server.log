@@ -1,0 +1,17 @@
+
+> moana-yachting-saas@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.33
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 12s
+ ○ Compiling /api/listings ...
+ ✓ Compiled /api/listings in 4s (151 modules)
+ GET /api/listings?broker=Charles 401 in 4800ms
+ GET /api/listings?broker=BrokerInexistant123 401 in 29ms
+ GET /api/listings?location=Monaco 401 in 25ms
+ GET /api/listings?search=Sunseeker 401 in 26ms
+ GET /api/listings?broker=Charles&location=Monaco 401 in 26ms

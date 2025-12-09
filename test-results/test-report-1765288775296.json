@@ -1,0 +1,477 @@
+{
+  "passed": 13,
+  "failed": 2,
+  "total": 15,
+  "tests": [
+    {
+      "name": "Login avec credentials valides",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "data": {
+          "success": true,
+          "broker": "Charles"
+        }
+      },
+      "timestamp": "2025-12-09T13:59:27.639Z"
+    },
+    {
+      "name": "Login avec credentials invalides (devrait échouer)",
+      "status": "PASS",
+      "details": {
+        "status": 401,
+        "data": {
+          "error": "Identifiants invalides"
+        }
+      },
+      "timestamp": "2025-12-09T13:59:27.730Z"
+    },
+    {
+      "name": "Get current session",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "data": {
+          "broker": "Charles",
+          "brokerId": "655c2259-b40f-4eb1-bcc6-194d5fd4925c"
+        }
+      },
+      "timestamp": "2025-12-09T13:59:27.743Z"
+    },
+    {
+      "name": "GET /api/listings - Sans filtres",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "count": 89
+      },
+      "timestamp": "2025-12-09T13:59:27.841Z"
+    },
+    {
+      "name": "GET /api/listings?broker=Charles - Filtre broker",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "data": {
+          "success": true,
+          "data": [
+            {
+              "id": "4f75b646-b016-4e7e-998c-39d0f1c3e8b5",
+              "nom_bateau": "AL SAID",
+              "constructeur": "Lürssen",
+              "longueur_m": 155,
+              "annee": 2009,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Singapour",
+              "prix_actuel": "295M€",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:47.197641+00:00",
+              "updated_at": "2025-12-08T22:33:47.197641+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "2b3fd0e2-135d-4188-9baf-3f17d6d872dd",
+              "nom_bateau": "IMPERIUM",
+              "constructeur": "Sunseeker 68",
+              "longueur_m": 21,
+              "annee": 2001,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Nice",
+              "prix_actuel": "499K€ Ex VAT",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:55.793357+00:00",
+              "updated_at": "2025-12-08T22:33:55.793357+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "509fd02d-c63e-432d-82d8-f38dfee65460",
+              "nom_bateau": "IMPULSIVE",
+              "constructeur": "Pershing 62",
+              "longueur_m": 19,
+              "annee": 2007,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Nice",
+              "prix_actuel": "1.050M€",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:56.740458+00:00",
+              "updated_at": "2025-12-08T22:33:56.740458+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "fdfd90e6-9345-4aac-a4d4-2255121c545f",
+              "nom_bateau": "LA DIGUE",
+              "constructeur": "Mangusta 92",
+              "longueur_m": 28,
+              "annee": 2007,
+              "proprietaire": "Patrick Breton (Potentiel)",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Cannes",
+              "prix_actuel": "1.275M€",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": "Patrick Breton. Potentiel exclu par De Valques.",
+              "created_at": "2025-12-08T22:33:52.228274+00:00",
+              "updated_at": "2025-12-08T22:33:52.228274+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "8fcd6525-6f46-494b-9956-ae61aefdc033",
+              "nom_bateau": "LADY K OF MONACO",
+              "constructeur": "Falcon 80S",
+              "longueur_m": 24,
+              "annee": 1995,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "San remo",
+              "prix_actuel": "550K€ VAT Paid",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:53.799724+00:00",
+              "updated_at": "2025-12-08T22:33:53.799724+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "7db5e1cc-3750-4c3e-b43a-f1a7f24eb2d7",
+              "nom_bateau": "MAORO",
+              "constructeur": "Sunseeker Predator 115",
+              "longueur_m": 35,
+              "annee": 2013,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Sète",
+              "prix_actuel": "6.5M€ VAT Paid",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:50.246383+00:00",
+              "updated_at": "2025-12-08T22:33:50.246383+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "88989211-97bb-425b-900a-da3217a31a6a",
+              "nom_bateau": "PRINCESS V62",
+              "constructeur": "Princess V62",
+              "longueur_m": 19,
+              "annee": 2014,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Sof",
+              "prix_actuel": "1.3M€",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": null,
+              "created_at": "2025-12-08T22:33:56.846477+00:00",
+              "updated_at": "2025-12-08T22:33:56.846477+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "1db52a48-2a42-4cfb-b249-938507e05cc1",
+              "nom_bateau": "RIZZARDI 73",
+              "constructeur": "Rizzardi 73",
+              "longueur_m": 22,
+              "annee": 2006,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Sof",
+              "prix_actuel": "700K€ VAT PAID",
+              "prix_precedent": null,
+              "dernier_message": null,
+              "commentaire": "Steal for sale.",
+              "created_at": "2025-12-08T22:33:55.362385+00:00",
+              "updated_at": "2025-12-08T22:33:55.362385+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            },
+            {
+              "id": "433fb525-1e90-4efb-9c4b-07ac9301b7ec",
+              "nom_bateau": "VISTA DEL MAR",
+              "constructeur": "Princess 64 Fly",
+              "longueur_m": 19.5,
+              "annee": 2012,
+              "proprietaire": "N/A",
+              "capitaine": "N/A",
+              "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+              "localisation": "Golf-juan",
+              "prix_actuel": "980K€ TTC",
+              "prix_precedent": "700K€ (estimation)",
+              "dernier_message": null,
+              "commentaire": "700K€ il part.",
+              "created_at": "2025-12-08T22:33:56.619554+00:00",
+              "updated_at": "2025-12-08T22:33:56.619554+00:00",
+              "airtable_id": null,
+              "brokers": {
+                "email": "charles@moana-yachting.com",
+                "broker_name": "Charles"
+              }
+            }
+          ]
+        },
+        "count": 9
+      },
+      "timestamp": "2025-12-09T13:59:28.048Z"
+    },
+    {
+      "name": "GET /api/listings?localisation=Monaco - Filtre localisation",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "count": 4
+      },
+      "timestamp": "2025-12-09T13:59:28.141Z"
+    },
+    {
+      "name": "GET /api/listings?minLength=20&maxLength=50 - Filtre longueur",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "count": 71
+      },
+      "timestamp": "2025-12-09T13:59:28.231Z"
+    },
+    {
+      "name": "GET /api/listings?search=Princess - Recherche",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "count": 6
+      },
+      "timestamp": "2025-12-09T13:59:28.332Z"
+    },
+    {
+      "name": "POST /api/listings - Créer un listing",
+      "status": "PASS",
+      "details": {
+        "status": 201,
+        "data": {
+          "success": true,
+          "data": {
+            "id": "0e306fe2-b997-4253-a104-4672ac6d23ce",
+            "nom_bateau": "Test Yacht",
+            "constructeur": "Test Builder",
+            "longueur_m": 25.5,
+            "annee": 2023,
+            "proprietaire": "Test Owner",
+            "capitaine": "Test Captain",
+            "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+            "localisation": "Test Location",
+            "prix_actuel": "1,000,000 €",
+            "prix_precedent": null,
+            "dernier_message": null,
+            "commentaire": "Test comment",
+            "created_at": "2025-12-09T13:59:28.752959+00:00",
+            "updated_at": "2025-12-09T13:59:28.752959+00:00",
+            "airtable_id": null
+          },
+          "message": "Bateau créé avec succès"
+        },
+        "id": "0e306fe2-b997-4253-a104-4672ac6d23ce"
+      },
+      "timestamp": "2025-12-09T13:59:28.430Z"
+    },
+    {
+      "name": "GET /api/listings/0e306fe2-b997-4253-a104-4672ac6d23ce - Lire un listing",
+      "status": "PASS",
+      "details": {
+        "status": 200,
+        "data": {
+          "success": true,
+          "data": {
+            "id": "0e306fe2-b997-4253-a104-4672ac6d23ce",
+            "nom_bateau": "Test Yacht",
+            "constructeur": "Test Builder",
+            "longueur_m": 25.5,
+            "annee": 2023,
+            "proprietaire": "Test Owner",
+            "capitaine": "Test Captain",
+            "broker_id": "655c2259-b40f-4eb1-bcc6-194d5fd4925c",
+            "localisation": "Test Location",
+            "prix_actuel": "1,000,000 €",
+            "prix_precedent": null,
+            "dernier_message": null,
+            "commentaire": "Test comment",
+            "created_at": "2025-12-09T13:59:28.752959+00:00",
+            "updated_at": "2025-12-09T13:59:28.752959+00:00",
+            "airtable_id": null,
+            "brokers": {
+              "email": "charles@moana-yachting.com",
+              "broker_name": "Charles"
+            }
+          }
+        }
+      },
+      "timestamp": "2025-12-09T13:59:28.611Z"
+    },
+    {
+      "name": "PUT /api/listings/0e306fe2-b997-4253-a104-4672ac6d23ce - Modifier un listing",
+      "status": "FAIL",
+      "error": "Status: 500, Error: undefined",
+      "details": {
+        "status": 500,
+        "data": "<!DOCTYPE html><html><head><style data-next-hide-fouc=\"true\">body{display:none}</style><noscript data-next-hide-fouc=\"true\"><style>body{display:block}</style></noscript><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width\"/><meta name=\"next-head-count\" content=\"2\"/><noscript data-n-css=\"\"></noscript><script defer=\"\" nomodule=\"\" src=\"/_next/static/chunks/polyfills.js\"></script><script src=\"/_next/static/chunks/webpack.js\" defer=\"\"></script><script src=\"/_next/static/chunks/main.js\" defer=\"\"></script><script src=\"/_next/static/chunks/pages/_app.js\" defer=\"\"></script><script src=\"/_next/static/chunks/pages/_error.js\" defer=\"\"></script><script src=\"/_next/static/development/_buildManifest.js\" defer=\"\"></script><script src=\"/_next/static/development/_ssgManifest.js\" defer=\"\"></script><noscript id=\"__next_css__DO_NOT_USE__\"></noscript></head><body><div id=\"__next\"></div><script src=\"/_next/static/chunks/react-refresh.js\"></script><script id=\"__NEXT_DATA__\" type=\"application/json\">{\"props\":{\"pageProps\":{\"statusCode\":500}},\"page\":\"/_error\",\"query\":{},\"buildId\":\"development\",\"isFallback\":false,\"err\":{\"name\":\"Error\",\"source\":\"server\",\"message\":\"Jest worker encountered 2 child process exceptions, exceeding retry limit\",\"stack\":\"Error: Jest worker encountered 2 child process exceptions, exceeding retry limit\\n    at ChildProcessWorker.initialize (C:\\\\Users\\\\beatr\\\\Documents\\\\projets\\\\moana\\\\node_modules\\\\next\\\\dist\\\\compiled\\\\jest-worker\\\\index.js:1:11580)\\n    at ChildProcessWorker._onExit (C:\\\\Users\\\\beatr\\\\Documents\\\\projets\\\\moana\\\\node_modules\\\\next\\\\dist\\\\compiled\\\\jest-worker\\\\index.js:1:12545)\\n    at ChildProcess.emit (node:events:508:28)\\n    at ChildProcess._handle.onexit (node:internal/child_process:294:12)\"},\"gip\":true,\"scriptLoader\":[]}</script></body></html>"
+      },
+      "timestamp": "2025-12-09T13:59:33.579Z"
+    },
+    {
+      "name": "DELETE /api/listings/0e306fe2-b997-4253-a104-4672ac6d23ce - Supprimer un listing",
+      "status": "FAIL",
+      "error": "Status: 500",
+      "details": {
+        "status": 500
+      },
+      "timestamp": "2025-12-09T13:59:34.195Z"
+    },
+    {
+      "name": "POST /api/listings - Champs requis manquants (devrait échouer)",
+      "status": "PASS",
+      "details": {
+        "status": 400,
+        "data": {
+          "success": false,
+          "error": "Données invalides",
+          "data": [
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "received": "undefined",
+              "path": [
+                "constructeur"
+              ],
+              "message": "Required"
+            },
+            {
+              "code": "invalid_type",
+              "expected": "number",
+              "received": "undefined",
+              "path": [
+                "longueur"
+              ],
+              "message": "La longueur est requise"
+            },
+            {
+              "code": "invalid_type",
+              "expected": "number",
+              "received": "undefined",
+              "path": [
+                "annee"
+              ],
+              "message": "L'année est requise"
+            },
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "received": "undefined",
+              "path": [
+                "proprietaire"
+              ],
+              "message": "Required"
+            },
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "received": "undefined",
+              "path": [
+                "capitaine"
+              ],
+              "message": "Required"
+            },
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "received": "undefined",
+              "path": [
+                "localisation"
+              ],
+              "message": "Required"
+            }
+          ]
+        }
+      },
+      "timestamp": "2025-12-09T13:59:34.682Z"
+    },
+    {
+      "name": "POST /api/listings - Longueur négative (devrait échouer)",
+      "status": "PASS",
+      "details": {
+        "status": 400
+      },
+      "timestamp": "2025-12-09T13:59:34.991Z"
+    },
+    {
+      "name": "POST /api/listings - Année invalide (devrait échouer)",
+      "status": "PASS",
+      "details": {
+        "status": 400
+      },
+      "timestamp": "2025-12-09T13:59:35.295Z"
+    }
+  ],
+  "bugs": [
+    {
+      "testName": "PUT /api/listings/0e306fe2-b997-4253-a104-4672ac6d23ce - Modifier un listing",
+      "error": "Status: 500, Error: undefined",
+      "details": {
+        "status": 500,
+        "data": "<!DOCTYPE html><html><head><style data-next-hide-fouc=\"true\">body{display:none}</style><noscript data-next-hide-fouc=\"true\"><style>body{display:block}</style></noscript><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width\"/><meta name=\"next-head-count\" content=\"2\"/><noscript data-n-css=\"\"></noscript><script defer=\"\" nomodule=\"\" src=\"/_next/static/chunks/polyfills.js\"></script><script src=\"/_next/static/chunks/webpack.js\" defer=\"\"></script><script src=\"/_next/static/chunks/main.js\" defer=\"\"></script><script src=\"/_next/static/chunks/pages/_app.js\" defer=\"\"></script><script src=\"/_next/static/chunks/pages/_error.js\" defer=\"\"></script><script src=\"/_next/static/development/_buildManifest.js\" defer=\"\"></script><script src=\"/_next/static/development/_ssgManifest.js\" defer=\"\"></script><noscript id=\"__next_css__DO_NOT_USE__\"></noscript></head><body><div id=\"__next\"></div><script src=\"/_next/static/chunks/react-refresh.js\"></script><script id=\"__NEXT_DATA__\" type=\"application/json\">{\"props\":{\"pageProps\":{\"statusCode\":500}},\"page\":\"/_error\",\"query\":{},\"buildId\":\"development\",\"isFallback\":false,\"err\":{\"name\":\"Error\",\"source\":\"server\",\"message\":\"Jest worker encountered 2 child process exceptions, exceeding retry limit\",\"stack\":\"Error: Jest worker encountered 2 child process exceptions, exceeding retry limit\\n    at ChildProcessWorker.initialize (C:\\\\Users\\\\beatr\\\\Documents\\\\projets\\\\moana\\\\node_modules\\\\next\\\\dist\\\\compiled\\\\jest-worker\\\\index.js:1:11580)\\n    at ChildProcessWorker._onExit (C:\\\\Users\\\\beatr\\\\Documents\\\\projets\\\\moana\\\\node_modules\\\\next\\\\dist\\\\compiled\\\\jest-worker\\\\index.js:1:12545)\\n    at ChildProcess.emit (node:events:508:28)\\n    at ChildProcess._handle.onexit (node:internal/child_process:294:12)\"},\"gip\":true,\"scriptLoader\":[]}</script></body></html>"
+      },
+      "timestamp": "2025-12-09T13:59:33.579Z"
+    },
+    {
+      "testName": "DELETE /api/listings/0e306fe2-b997-4253-a104-4672ac6d23ce - Supprimer un listing",
+      "error": "Status: 500",
+      "details": {
+        "status": 500
+      },
+      "timestamp": "2025-12-09T13:59:34.195Z"
+    }
+  ],
+  "timestamp": "2025-12-09T13:59:27.448Z"
+}

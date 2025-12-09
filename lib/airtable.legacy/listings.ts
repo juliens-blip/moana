@@ -2,6 +2,7 @@ import { listingsTable } from './client';
 import type { Listing, ListingFields, ListingFilters } from '@/lib/types';
 import type { ListingInput } from '@/lib/validations';
 import { buildFilterFormula } from './filters';
+import { cleanListingFields, parseAirtableError } from '@/lib/utils';
 
 /**
  * Get all listings with optional filters
@@ -92,7 +93,8 @@ export async function getListing(id: string): Promise<Listing | null> {
  */
 export async function createListing(data: ListingInput): Promise<Listing> {
   try {
-    const fields: any = {
+    // Build fields object with all data (including optional fields)
+    const rawFields: Record<string, any> = {
       'Nom du Bateau': data.nomBateau,
       'Constructeur': data.constructeur,
       'Longueur (M/pieds)': data.longueur,
@@ -101,23 +103,18 @@ export async function createListing(data: ListingInput): Promise<Listing> {
       'Capitaine': data.capitaine,
       'Broker': data.broker,
       'Localisation': data.localisation,
+      'Prix Actuel (€/$)': data.prix,
+      'Prix Précédent (€/$)': data.prixPrecedent,
+      'Dernier message': data.dernierMessage,
+      'Commentaire': data.commentaire,
     };
 
-    // Handle optional fields
-    if (data.prix !== undefined && data.prix !== '') {
-      fields['Prix Actuel (€/$)'] = data.prix;
-    }
-    if (data.prixPrecedent !== undefined && data.prixPrecedent !== '') {
-      fields['Prix Précédent (€/$)'] = data.prixPrecedent;
-    }
-    if (data.dernierMessage !== undefined && data.dernierMessage !== '') {
-      fields['Dernier message'] = data.dernierMessage;
-    }
-    if (data.commentaire !== undefined && data.commentaire !== '') {
-      fields['Commentaire'] = data.commentaire;
-    }
+    // Clean fields: remove empty strings, null, undefined
+    // This prevents Airtable INVALID_MULTIPLE_CHOICE_OPTIONS errors
+    const fields = cleanListingFields(rawFields);
 
-    console.log('[createListing] Creating with fields:', fields);
+    console.log('[createListing] Raw fields:', rawFields);
+    console.log('[createListing] Cleaned fields:', fields);
 
     const record: any = await listingsTable.create(fields);
 
@@ -147,7 +144,10 @@ export async function createListing(data: ListingInput): Promise<Listing> {
       statusCode: error?.statusCode,
       error: error,
     });
-    throw new Error(`Failed to create listing: ${error?.message || 'Unknown error'}`);
+
+    // Parse Airtable error to user-friendly message
+    const friendlyMessage = parseAirtableError(error);
+    throw new Error(friendlyMessage);
   }
 }
 
@@ -159,20 +159,27 @@ export async function updateListing(
   data: Partial<ListingInput>
 ): Promise<Listing> {
   try {
-    const updates: any = {};
+    // Build updates object with all provided data
+    const rawUpdates: Record<string, any> = {};
 
-    if (data.nomBateau !== undefined) updates['Nom du Bateau'] = data.nomBateau;
-    if (data.constructeur !== undefined) updates['Constructeur'] = data.constructeur;
-    if (data.longueur !== undefined) updates['Longueur (M/pieds)'] = data.longueur;
-    if (data.annee !== undefined) updates['Année'] = data.annee;
-    if (data.proprietaire !== undefined) updates['Propriétaire'] = data.proprietaire;
-    if (data.capitaine !== undefined) updates['Capitaine'] = data.capitaine;
-    if (data.broker !== undefined) updates['Broker'] = data.broker;
-    if (data.localisation !== undefined) updates['Localisation'] = data.localisation;
-    if (data.prix !== undefined) updates['Prix Actuel (€/$)'] = data.prix;
-    if (data.prixPrecedent !== undefined) updates['Prix Précédent (€/$)'] = data.prixPrecedent;
-    if (data.dernierMessage !== undefined) updates['Dernier message'] = data.dernierMessage;
-    if (data.commentaire !== undefined) updates['Commentaire'] = data.commentaire;
+    if (data.nomBateau !== undefined) rawUpdates['Nom du Bateau'] = data.nomBateau;
+    if (data.constructeur !== undefined) rawUpdates['Constructeur'] = data.constructeur;
+    if (data.longueur !== undefined) rawUpdates['Longueur (M/pieds)'] = data.longueur;
+    if (data.annee !== undefined) rawUpdates['Année'] = data.annee;
+    if (data.proprietaire !== undefined) rawUpdates['Propriétaire'] = data.proprietaire;
+    if (data.capitaine !== undefined) rawUpdates['Capitaine'] = data.capitaine;
+    if (data.broker !== undefined) rawUpdates['Broker'] = data.broker;
+    if (data.localisation !== undefined) rawUpdates['Localisation'] = data.localisation;
+    if (data.prix !== undefined) rawUpdates['Prix Actuel (€/$)'] = data.prix;
+    if (data.prixPrecedent !== undefined) rawUpdates['Prix Précédent (€/$)'] = data.prixPrecedent;
+    if (data.dernierMessage !== undefined) rawUpdates['Dernier message'] = data.dernierMessage;
+    if (data.commentaire !== undefined) rawUpdates['Commentaire'] = data.commentaire;
+
+    // Clean updates: remove empty strings, null, undefined
+    const updates = cleanListingFields(rawUpdates);
+
+    console.log('[updateListing] Raw updates:', rawUpdates);
+    console.log('[updateListing] Cleaned updates:', updates);
 
     const record: any = await listingsTable.update(id, updates);
 
@@ -194,9 +201,16 @@ export async function updateListing(
       },
       createdTime: record._rawJson?.createdTime || new Date().toISOString(),
     };
-  } catch (error) {
-    console.error('Error updating listing:', error);
-    throw new Error('Failed to update listing');
+  } catch (error: any) {
+    console.error('[updateListing] Error updating listing:', {
+      message: error?.message,
+      statusCode: error?.statusCode,
+      error: error,
+    });
+
+    // Parse Airtable error to user-friendly message
+    const friendlyMessage = parseAirtableError(error);
+    throw new Error(friendlyMessage);
   }
 }
 

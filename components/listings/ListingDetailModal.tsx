@@ -15,8 +15,6 @@ interface ListingDetailModalProps {
 export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailModalProps) {
   if (!listing) return null;
 
-  const { fields } = listing;
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -48,14 +46,14 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                 >
                   <X className="h-5 w-5 text-white" />
                 </button>
-                <h2 className="text-2xl font-bold text-white pr-12">{fields['Nom du Bateau']}</h2>
-                <p className="text-primary-100 mt-1">{fields.Constructeur}</p>
+                <h2 className="text-2xl font-bold text-white pr-12">{listing.nom_bateau}</h2>
+                <p className="text-primary-100 mt-1">{listing.constructeur}</p>
               </div>
 
               {/* Content */}
               <div className="p-6 space-y-6">
                 {/* Price Section */}
-                {fields['Prix Actuel (€/$)'] && (
+                {listing.prix_actuel && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -66,15 +64,15 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                       <div>
                         <div className="flex items-center gap-2 text-primary-700 font-bold text-2xl">
                           <Euro className="h-6 w-6" />
-                          <span>{fields['Prix Actuel (€/$)']}</span>
+                          <span>{listing.prix_actuel}</span>
                         </div>
                         <p className="text-sm text-primary-600 mt-1">Prix actuel</p>
                       </div>
-                      {fields['Prix Précédent (€/$)'] && (
+                      {listing.prix_precedent && (
                         <div className="text-right">
                           <div className="flex items-center gap-2 text-gray-600">
                             <TrendingDown className="h-5 w-5" />
-                            <span className="font-semibold">{fields['Prix Précédent (€/$)']}</span>
+                            <span className="font-semibold">{listing.prix_precedent}</span>
                           </div>
                           <p className="text-sm text-gray-500 mt-1">Prix précédent</p>
                         </div>
@@ -95,7 +93,7 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                       <Anchor className="h-5 w-5" />
                       <span className="font-semibold">Longueur</span>
                     </div>
-                    <p className="text-xl font-bold text-gray-900">{formatNumber(fields['Longueur (M/pieds)'], 1)} m</p>
+                    <p className="text-xl font-bold text-gray-900">{formatNumber(listing.longueur_m, 1)} m</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -103,7 +101,7 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                       <Calendar className="h-5 w-5" />
                       <span className="font-semibold">Année</span>
                     </div>
-                    <p className="text-xl font-bold text-gray-900">{fields.Année}</p>
+                    <p className="text-xl font-bold text-gray-900">{listing.annee}</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -111,7 +109,7 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                       <MapPin className="h-5 w-5" />
                       <span className="font-semibold">Localisation</span>
                     </div>
-                    <p className="text-lg font-medium text-gray-900">{fields.Localisation}</p>
+                    <p className="text-lg font-medium text-gray-900">{listing.localisation}</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -119,7 +117,7 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                       <User className="h-5 w-5" />
                       <span className="font-semibold">Broker</span>
                     </div>
-                    <p className="text-lg font-medium text-gray-900">{fields.Broker}</p>
+                    <p className="text-lg font-medium text-gray-900">{(listing as any).brokers?.broker_name || 'N/A'}</p>
                   </div>
                 </motion.div>
 
@@ -135,40 +133,40 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-500">Propriétaire</p>
-                      <p className="font-medium text-gray-900 mt-1">{fields.Propriétaire}</p>
+                      <p className="font-medium text-gray-900 mt-1">{listing.proprietaire}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Capitaine</p>
-                      <p className="font-medium text-gray-900 mt-1">{fields.Capitaine}</p>
+                      <p className="font-medium text-gray-900 mt-1">{listing.capitaine}</p>
                     </div>
                   </div>
                 </motion.div>
 
                 {/* Messages and Comments */}
-                {(fields['Dernier message'] || fields['Commentaire']) && (
+                {(listing.dernier_message || listing.commentaire) && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.25 }}
                     className="space-y-4 pt-4 border-t border-gray-200"
                   >
-                    {fields['Dernier message'] && (
+                    {listing.dernier_message && (
                       <div className="bg-blue-50 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-blue-700 mb-2">
                           <MessageSquare className="h-5 w-5" />
                           <span className="font-semibold">Dernier message</span>
                         </div>
-                        <p className="text-gray-700 whitespace-pre-wrap">{fields['Dernier message']}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{listing.dernier_message}</p>
                       </div>
                     )}
 
-                    {fields['Commentaire'] && (
+                    {listing.commentaire && (
                       <div className="bg-amber-50 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-amber-700 mb-2">
                           <FileText className="h-5 w-5" />
                           <span className="font-semibold">Commentaire</span>
                         </div>
-                        <p className="text-gray-700 whitespace-pre-wrap">{fields['Commentaire']}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{listing.commentaire}</p>
                       </div>
                     )}
                   </motion.div>
