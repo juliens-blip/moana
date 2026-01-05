@@ -25,6 +25,7 @@ export interface Listing {
   prix_precedent?: string;
   dernier_message?: string;
   commentaire?: string;
+  image_url?: string;
   created_at: string;
   updated_at: string;
   airtable_id?: string; // Pour référence migration

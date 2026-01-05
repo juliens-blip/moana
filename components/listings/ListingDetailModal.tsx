@@ -1,19 +1,91 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Anchor, Calendar, MapPin, User, Euro, TrendingDown, MessageSquare, FileText } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { Listing } from '@/lib/types';
 import { formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui';
 
 interface ListingDetailModalProps {
   listing: Listing | null;
   isOpen: boolean;
   onClose: () => void;
+  onListingUpdated?: (listing: Listing) => void;
 }
 
-export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailModalProps) {
+export function ListingDetailModal({
+  listing,
+  isOpen,
+  onClose,
+  onListingUpdated
+}: ListingDetailModalProps) {
   if (!listing) return null;
+
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(listing.image_url || null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setPreviewUrl(listing.image_url || null);
+  }, [listing.id, listing.image_url]);
+
+  const handleImageUpload = async (file: File | null) => {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploading(true);
+
+    try {
+      const response = await fetch(`/api/listings/${listing.id}/image`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setPreviewUrl(data.data?.image_url || null);
+        onListingUpdated?.(data.data);
+        toast.success('Image ajoutée');
+      } else {
+        toast.error(data.error || 'Erreur lors de l\'upload');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageDelete = async () => {
+    if (!listing.image_url) return;
+
+    setUploading(true);
+
+    try {
+      const response = await fetch(`/api/listings/${listing.id}/image`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setPreviewUrl(null);
+        onListingUpdated?.(data.data);
+        toast.success('Image supprimée');
+      } else {
+        toast.error(data.error || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -52,6 +124,62 @@ export function ListingDetailModal({ listing, isOpen, onClose }: ListingDetailMo
 
               {/* Content */}
               <div className="p-6 space-y-6">
+                {/* Image Upload */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                  className="space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900 text-lg">Photo du bateau</h3>
+                    {uploading && <span className="text-sm text-gray-500">Upload en cours...</span>}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt={`Photo ${listing.nom_bateau}`}
+                        className="h-48 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+                        Aucune image pour ce bateau
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={(event) => {
+                        handleImageUpload(event.target.files ? event.target.files[0] : null);
+                        if (event.target) event.target.value = '';
+                      }}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Importer une image
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={uploading || !listing.image_url}
+                      onClick={handleImageDelete}
+                    >
+                      Supprimer l'image
+                    </Button>
+                    <span className="text-xs text-gray-500">Max 5 Mo</span>
+                  </div>
+                </motion.div>
+
                 {/* Price Section */}
                 {listing.prix_actuel && (
                   <motion.div

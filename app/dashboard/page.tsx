@@ -290,6 +290,13 @@ export default function DashboardPage() {
     }
   };
 
+  const handleListingUpdated = (updated: Listing) => {
+    setListings((prev) =>
+      prev.map((listing) => (listing.id === updated.id ? updated : listing))
+    );
+    setSelectedListing(updated);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -359,6 +366,7 @@ export default function DashboardPage() {
         listing={selectedListing}
         isOpen={!!selectedListing}
         onClose={() => setSelectedListing(null)}
+        onListingUpdated={handleListingUpdated}
       />
 
       {/* Delete Confirmation Modal */}

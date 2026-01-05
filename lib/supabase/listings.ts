@@ -214,6 +214,31 @@ export async function updateListing(
 }
 
 /**
+ * Update listing image URL
+ * Uses admin client to bypass RLS
+ */
+export async function updateListingImage(
+  id: string,
+  imageUrl: string | null
+): Promise<Listing> {
+  const supabase = createAdminClient();
+
+  const { data: listing, error } = await supabase
+    .from('listings')
+    .update({ image_url: imageUrl })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[updateListingImage] Error:', error);
+    throw new Error(`Failed to update listing image: ${error.message}`);
+  }
+
+  return listing;
+}
+
+/**
  * Delete a listing
  * Uses admin client to bypass RLS
  */

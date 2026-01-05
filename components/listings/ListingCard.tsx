@@ -44,6 +44,19 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{listing.constructeur}</p>
       </div>
 
+      {listing.image_url && (
+        <div className="px-6 pt-4">
+          <div className="rounded-lg border border-primary-100 overflow-hidden shadow-sm bg-white">
+            <img
+              src={listing.image_url}
+              alt={`Bateau ${listing.nom_bateau}`}
+              className="h-40 w-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div className="p-6 space-y-3">
         {/* Price (if available) */}
