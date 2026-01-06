@@ -34,7 +34,7 @@ export async function POST(
       );
     }
 
-    console.log('[API Upload] Session validated:', session.user?.id);
+    console.log('[API Upload] Session validated:', session.brokerId);
 
     const existing = await getListing(params.id);
     if (!existing) {
