@@ -26,13 +26,38 @@ export function ListingDetailModal({
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(listing.image_url || null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setPreviewUrl(listing.image_url || null);
   }, [listing.id, listing.image_url]);
 
-  const handleImageUpload = async (file: File | null) => {
-    if (!file) return;
+  const handleImageUpload = async (file: File | null, source: 'gallery' | 'camera' = 'gallery') => {
+    if (!file) {
+      console.warn('[Mobile Upload] No file selected');
+      return;
+    }
+
+    console.log('[Mobile Upload] Starting upload:', {
+      source,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      listingId: listing.id
+    });
+
+    // Validation côté client
+    if (!file.type.startsWith('image/')) {
+      toast.error('Format image invalide');
+      console.error('[Mobile Upload] Invalid file type:', file.type);
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image trop lourde (max 5 Mo)');
+      console.error('[Mobile Upload] File too large:', file.size);
+      return;
+    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -40,21 +65,33 @@ export function ListingDetailModal({
     setUploading(true);
 
     try {
+      console.log('[Mobile Upload] Sending request to:', `/api/listings/${listing.id}/image`);
+
       const response = await fetch(`/api/listings/${listing.id}/image`, {
         method: 'POST',
         body: formData,
       });
+
+      console.log('[Mobile Upload] Response status:', response.status);
+
       const data = await response.json();
+      console.log('[Mobile Upload] Response data:', data);
 
       if (data.success) {
         setPreviewUrl(data.data?.image_url || null);
         onListingUpdated?.(data.data);
         toast.success('Image ajoutée');
+        console.log('[Mobile Upload] Upload successful');
+
+        // Reset input après succès
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
       } else {
         toast.error(data.error || 'Erreur lors de l\'upload');
+        console.error('[Mobile Upload] Upload failed:', data.error);
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
+      console.error('[Mobile Upload] Error uploading image:', error);
       toast.error('Erreur de connexion');
     } finally {
       setUploading(false);
@@ -149,24 +186,54 @@ export function ListingDetailModal({
                     )}
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    {/* Input pour galerie - invisible mais accessible pour iOS */}
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
-                      className="hidden"
+                      className="sr-only"
                       disabled={uploading}
                       onChange={(event) => {
-                        handleImageUpload(event.target.files ? event.target.files[0] : null);
-                        if (event.target) event.target.value = '';
+                        console.log('[Mobile Upload] Gallery input triggered');
+                        handleImageUpload(event.target.files?.[0] || null, 'gallery');
                       }}
+                      aria-label="Choisir une image depuis la galerie"
+                    />
+                    {/* Input pour caméra - invisible mais accessible pour iOS */}
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="sr-only"
+                      disabled={uploading}
+                      onChange={(event) => {
+                        console.log('[Mobile Upload] Camera input triggered');
+                        handleImageUpload(event.target.files?.[0] || null, 'camera');
+                      }}
+                      aria-label="Prendre une photo"
                     />
                     <Button
                       variant="secondary"
                       size="sm"
                       disabled={uploading}
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        console.log('[Mobile Upload] Camera button clicked');
+                        cameraInputRef.current?.click();
+                      }}
                     >
-                      Importer une image
+                      📷 Prendre une photo
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={uploading}
+                      onClick={() => {
+                        console.log('[Mobile Upload] Gallery button clicked');
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      🖼️ Galerie
                     </Button>
                     <Button
                       variant="danger"
@@ -174,7 +241,7 @@ export function ListingDetailModal({
                       disabled={uploading || !listing.image_url}
                       onClick={handleImageDelete}
                     >
-                      Supprimer l'image
+                      Supprimer
                     </Button>
                     <span className="text-xs text-gray-500">Max 5 Mo</span>
                   </div>
