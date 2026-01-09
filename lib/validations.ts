@@ -14,15 +14,15 @@ export const listingSchema = z.object({
   }).int('L\'année doit être un nombre entier').min(1900, 'Année invalide').max(new Date().getFullYear() + 2, 'Année invalide'),
   proprietaire: z.string().min(1, 'Le propriétaire est requis').max(100, 'Le nom est trop long'),
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
-  broker: z.string().optional(),
+  broker: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   localisation: z.string().min(1, 'La localisation est requise'),
   nombreCabines: z.number({
     invalid_type_error: 'Le nombre de cabines doit être un nombre'
-  }).int('Le nombre de cabines doit être un nombre entier').positive('Le nombre de cabines doit être positif').optional(),
-  prix: z.string().max(100, 'Le prix est trop long').optional().transform(val => val === '' ? undefined : val),
-  prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().transform(val => val === '' ? undefined : val),
-  dernierMessage: z.string().max(500, 'Le message est trop long').optional().transform(val => val === '' ? undefined : val),
-  commentaire: z.string().max(2000, 'Le commentaire est trop long').optional().transform(val => val === '' ? undefined : val)
+  }).int('Le nombre de cabines doit être un nombre entier').positive('Le nombre de cabines doit être positif').optional().or(z.literal(NaN)).transform(val => isNaN(val) ? undefined : val),
+  prix: z.string().max(100, 'Le prix est trop long').optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  dernierMessage: z.string().max(500, 'Le message est trop long').optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  commentaire: z.string().max(2000, 'Le commentaire est trop long').optional().or(z.literal('')).transform(val => val === '' ? undefined : val)
 });
 
 // Login Validation Schema
