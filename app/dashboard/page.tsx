@@ -23,6 +23,8 @@ export default function DashboardPage() {
   const [maxLength, setMaxLength] = useState('');
   const [minPrix, setMinPrix] = useState('');
   const [maxPrix, setMaxPrix] = useState('');
+  const [minCabines, setMinCabines] = useState('');
+  const [maxCabines, setMaxCabines] = useState('');
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
   const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -36,6 +38,8 @@ export default function DashboardPage() {
     maxLength: '',
     minPrix: '',
     maxPrix: '',
+    minCabines: '',
+    maxCabines: '',
   });
 
   // Mettre à jour les refs quand les états changent
@@ -48,8 +52,36 @@ export default function DashboardPage() {
       maxLength,
       minPrix,
       maxPrix,
+      minCabines,
+      maxCabines,
     };
-  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, sortBy]);
+  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, minCabines, maxCabines]);
+
+  // Déclencher le fetch quand sortBy change
+  useEffect(() => {
+    if (listings.length > 0) {
+      // Re-trier les listings existants
+      let sorted = [...listings];
+      if (sortBy === 'size-desc') {
+        sorted = sorted.sort((a, b) => b.longueur_m - a.longueur_m);
+      } else if (sortBy === 'size-asc') {
+        sorted = sorted.sort((a, b) => a.longueur_m - b.longueur_m);
+      } else if (sortBy === 'price-desc') {
+        sorted = sorted.sort((a, b) => {
+          const prixA = parsePrix(a.prix_actuel) || 0;
+          const prixB = parsePrix(b.prix_actuel) || 0;
+          return prixB - prixA;
+        });
+      } else if (sortBy === 'price-asc') {
+        sorted = sorted.sort((a, b) => {
+          const prixA = parsePrix(a.prix_actuel) || 0;
+          const prixB = parsePrix(b.prix_actuel) || 0;
+          return prixA - prixB;
+        });
+      }
+      setListings(sorted);
+    }
+  }, [sortBy]);
 
   /**
    * Parse le prix depuis une chaîne formatée en nombre
@@ -174,6 +206,31 @@ export default function DashboardPage() {
         });
       }
 
+      // Filtrage côté client pour le nombre de cabines
+      if (filters.minCabines || filters.maxCabines) {
+        const minCabinesNum = filters.minCabines ? parseInt(filters.minCabines) : null;
+        const maxCabinesNum = filters.maxCabines ? parseInt(filters.maxCabines) : null;
+
+        filtered = filtered.filter((listing: Listing) => {
+          const cabines = listing.nombre_cabines;
+
+          // Si pas de cabines renseignées, ne pas l'afficher si on filtre
+          if (!cabines) {
+            return false;
+          }
+
+          // Vérifier les bornes min et max
+          if (minCabinesNum !== null && cabines < minCabinesNum) {
+            return false;
+          }
+          if (maxCabinesNum !== null && cabines > maxCabinesNum) {
+            return false;
+          }
+
+          return true;
+        });
+      }
+
       // Tri des résultats selon sortBy (size-desc par défaut)
       if (sortBy === 'size-desc') {
         filtered = filtered.sort((a: Listing, b: Listing) => b.longueur_m - a.longueur_m);
@@ -258,6 +315,17 @@ export default function DashboardPage() {
     debouncedFetchRef.current();
   };
 
+  // Handle cabines filters change
+  const handleMinCabinesChange = (value: string) => {
+    setMinCabines(value);
+    debouncedFetchRef.current();
+  };
+
+  const handleMaxCabinesChange = (value: string) => {
+    setMaxCabines(value);
+    debouncedFetchRef.current();
+  };
+
   // Handle clear filters
   const handleClearFilters = () => {
     setSearch('');
@@ -267,6 +335,8 @@ export default function DashboardPage() {
     setMaxLength('');
     setMinPrix('');
     setMaxPrix('');
+    setMinCabines('');
+    setMaxCabines('');
     // Mettre à jour les refs immédiatement
     filtersRef.current = {
       search: '',
@@ -276,6 +346,8 @@ export default function DashboardPage() {
       maxLength: '',
       minPrix: '',
       maxPrix: '',
+      minCabines: '',
+      maxCabines: '',
     };
     // Fetch directement sans debounce pour le clear
     setLoading(true);
@@ -393,6 +465,8 @@ export default function DashboardPage() {
         maxLength={maxLength}
         minPrix={minPrix}
         maxPrix={maxPrix}
+        minCabines={minCabines}
+        maxCabines={maxCabines}
         onSearchChange={handleSearchChange}
         onBrokerChange={handleBrokerChange}
         onLocalisationChange={handleLocalisationChange}
@@ -400,6 +474,8 @@ export default function DashboardPage() {
         onMaxLengthChange={handleMaxLengthChange}
         onMinPrixChange={handleMinPrixChange}
         onMaxPrixChange={handleMaxPrixChange}
+        onMinCabinesChange={handleMinCabinesChange}
+        onMaxCabinesChange={handleMaxCabinesChange}
         onClear={handleClearFilters}
       />
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, X, Anchor, Euro, MapPin, User } from 'lucide-react';
+import { Search, X, Anchor, Euro, MapPin, User, BedDouble } from 'lucide-react';
 import { Input, Select, Button } from '@/components/ui';
 
 interface ListingFiltersProps {
@@ -12,6 +12,8 @@ interface ListingFiltersProps {
   maxLength: string;
   minPrix: string;
   maxPrix: string;
+  minCabines: string;
+  maxCabines: string;
   onSearchChange: (value: string) => void;
   onBrokerChange: (value: string) => void;
   onLocalisationChange: (value: string) => void;
@@ -19,6 +21,8 @@ interface ListingFiltersProps {
   onMaxLengthChange: (value: string) => void;
   onMinPrixChange: (value: string) => void;
   onMaxPrixChange: (value: string) => void;
+  onMinCabinesChange: (value: string) => void;
+  onMaxCabinesChange: (value: string) => void;
   onClear: () => void;
 }
 
@@ -30,6 +34,8 @@ export function ListingFilters({
   maxLength,
   minPrix,
   maxPrix,
+  minCabines,
+  maxCabines,
   onSearchChange,
   onBrokerChange,
   onLocalisationChange,
@@ -37,9 +43,11 @@ export function ListingFilters({
   onMaxLengthChange,
   onMinPrixChange,
   onMaxPrixChange,
+  onMinCabinesChange,
+  onMaxCabinesChange,
   onClear,
 }: ListingFiltersProps) {
-  const hasFilters = search || broker || localisation || minLength || maxLength || minPrix || maxPrix;
+  const hasFilters = search || broker || localisation || minLength || maxLength || minPrix || maxPrix || minCabines || maxCabines;
 
   return (
     <div className="bg-white rounded-lg shadow hover:shadow-md transition-smooth p-4 space-y-4 animate-slide-down hw-accelerate" style={{ animationDelay: '200ms' }}>
@@ -176,6 +184,42 @@ export function ListingFilters({
                          hover:border-gray-400"
               min="0"
               step="1000"
+            />
+          </div>
+        </div>
+
+        {/* Cabines Range */}
+        <div className="flex gap-2 items-center">
+          <div className="relative flex-1">
+            <BedDouble className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-smooth" />
+            <input
+              type="number"
+              placeholder="Min cabines"
+              value={minCabines}
+              onChange={(e) => onMinCabinesChange(e.target.value)}
+              className="w-full h-10 pl-10 pr-4 rounded-md border border-gray-300
+                         transition-smooth hw-accelerate
+                         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                         focus:scale-[1.01] focus:shadow-md
+                         hover:border-gray-400"
+              min="0"
+              step="1"
+            />
+          </div>
+          <span className="text-gray-500">-</span>
+          <div className="relative flex-1">
+            <input
+              type="number"
+              placeholder="Max cabines"
+              value={maxCabines}
+              onChange={(e) => onMaxCabinesChange(e.target.value)}
+              className="w-full h-10 pl-4 pr-4 rounded-md border border-gray-300
+                         transition-smooth hw-accelerate
+                         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                         focus:scale-[1.01] focus:shadow-md
+                         hover:border-gray-400"
+              min="0"
+              step="1"
             />
           </div>
         </div>

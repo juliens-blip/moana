@@ -1,16 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { listingSchema, type ListingInput } from '@/lib/validations';
 import { Button, Input } from '@/components/ui';
-
-interface Broker {
-  id: string;
-  broker_name: string;
-  email: string;
-}
 
 interface ListingFormProps {
   defaultValues?: Partial<ListingInput>;
@@ -27,9 +21,6 @@ export function ListingForm({
   loading = false,
   allowBrokerChange = false,
 }: ListingFormProps) {
-  const [brokers, setBrokers] = useState<Broker[]>([]);
-  const [loadingBrokers, setLoadingBrokers] = useState(false);
-
   const {
     register,
     handleSubmit,
@@ -38,26 +29,6 @@ export function ListingForm({
     resolver: zodResolver(listingSchema),
     defaultValues,
   });
-
-  useEffect(() => {
-    if (allowBrokerChange) {
-      const fetchBrokers = async () => {
-        setLoadingBrokers(true);
-        try {
-          const response = await fetch('/api/brokers');
-          const data = await response.json();
-          if (data.success) {
-            setBrokers(data.data);
-          }
-        } catch (error) {
-          console.error('Error fetching brokers:', error);
-        } finally {
-          setLoadingBrokers(false);
-        }
-      };
-      fetchBrokers();
-    }
-  }, [allowBrokerChange]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 animate-fade-in">
@@ -182,26 +153,12 @@ export function ListingForm({
 
       {/* Broker */}
       {allowBrokerChange ? (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Broker
-          </label>
-          <select
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            {...register('broker')}
-            disabled={loadingBrokers}
-          >
-            <option value="">Sélectionner un broker...</option>
-            {brokers.map((broker) => (
-              <option key={broker.id} value={broker.id}>
-                {broker.broker_name} ({broker.email})
-              </option>
-            ))}
-          </select>
-          {errors.broker && (
-            <p className="mt-1 text-sm text-red-600">{errors.broker.message}</p>
-          )}
-        </div>
+        <Input
+          label="Broker"
+          placeholder="Nom du broker"
+          error={errors.broker?.message}
+          {...register('broker')}
+        />
       ) : (
         <input type="hidden" {...register('broker')} />
       )}
