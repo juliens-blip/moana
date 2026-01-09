@@ -124,13 +124,14 @@ export async function createListing(data: ListingInput): Promise<Listing> {
   const supabase = createAdminClient();
 
   // Resolve broker name/ID to ID if provided
-  let brokerId: string | undefined = undefined;
+  // If broker doesn't exist, we allow broker_id to be null (free text broker name)
+  let brokerId: string | null = null;
   if (data.broker) {
     const resolved = await resolveBrokerNameToId(data.broker);
-    if (!resolved) {
-      throw new Error(`Broker not found: ${data.broker}`);
+    if (resolved) {
+      brokerId = resolved;
     }
-    brokerId = resolved;
+    // If not resolved, we keep broker_id as null (free text entry)
   }
 
   const { data: listing, error } = await supabase
@@ -144,6 +145,7 @@ export async function createListing(data: ListingInput): Promise<Listing> {
       capitaine: data.capitaine,
       broker_id: brokerId,
       localisation: data.localisation,
+      nombre_cabines: data.nombreCabines,
       prix_actuel: data.prix,
       prix_precedent: data.prixPrecedent,
       dernier_message: data.dernierMessage,
@@ -180,19 +182,23 @@ export async function updateListing(
   if (data.capitaine !== undefined) updates.capitaine = data.capitaine;
 
   // Resolve broker name/ID to ID if provided
+  // If broker doesn't exist, we allow broker_id to be null (free text broker name)
   if (data.broker !== undefined) {
     if (data.broker) {
       const brokerId = await resolveBrokerNameToId(data.broker);
-      if (!brokerId) {
-        throw new Error(`Broker not found: ${data.broker}`);
+      if (brokerId) {
+        updates.broker_id = brokerId;
+      } else {
+        // Broker not found in DB, keep as null (free text entry)
+        updates.broker_id = null;
       }
-      updates.broker_id = brokerId;
     } else {
       updates.broker_id = null;
     }
   }
 
   if (data.localisation !== undefined) updates.localisation = data.localisation;
+  if (data.nombreCabines !== undefined) updates.nombre_cabines = data.nombreCabines;
   if (data.prix !== undefined) updates.prix_actuel = data.prix;
   if (data.prixPrecedent !== undefined) updates.prix_precedent = data.prixPrecedent;
   if (data.dernierMessage !== undefined) updates.dernier_message = data.dernierMessage;
