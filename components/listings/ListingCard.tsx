@@ -109,7 +109,11 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         {/* Actions */}
         {canEdit && (
           <div className="flex gap-2 pt-4 border-t border-gray-200">
-            <Link href={`/dashboard/listings/${id}/edit`} className="flex-1">
+            <Link 
+              href={`/dashboard/listings/${id}/edit`} 
+              className="flex-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <Button variant="secondary" size="sm" className="w-full">
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifier
