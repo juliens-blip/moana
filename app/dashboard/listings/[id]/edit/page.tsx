@@ -106,6 +106,7 @@ export default function EditListingPage() {
           onSubmit={handleSubmit}
           submitLabel="Mettre à jour"
           loading={submitLoading}
+          allowBrokerChange={true}
           defaultValues={{
             nomBateau: listing.nom_bateau,
             constructeur: listing.constructeur,
@@ -115,6 +116,7 @@ export default function EditListingPage() {
             capitaine: listing.capitaine,
             broker: listing.broker_id,
             localisation: listing.localisation,
+            nombreCabines: listing.nombre_cabines,
             prix: listing.prix_actuel,
             prixPrecedent: listing.prix_precedent,
             dernierMessage: listing.dernier_message,

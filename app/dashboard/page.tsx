@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [maxLength, setMaxLength] = useState('');
   const [minPrix, setMinPrix] = useState('');
   const [maxPrix, setMaxPrix] = useState('');
+  const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
   const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
@@ -48,7 +49,7 @@ export default function DashboardPage() {
       minPrix,
       maxPrix,
     };
-  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix]);
+  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, sortBy]);
 
   /**
    * Parse le prix depuis une chaîne formatée en nombre
@@ -145,35 +146,54 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (data.success) {
-        let filtered = data.data;
+      let filtered = data.data;
 
-        // Filtrage côté client pour les prix (champ texte dans Airtable)
-        if (filters.minPrix || filters.maxPrix) {
-          const minPrixNum = filters.minPrix ? parseFloat(filters.minPrix) : null;
-          const maxPrixNum = filters.maxPrix ? parseFloat(filters.maxPrix) : null;
+      // Filtrage côté client pour les prix (champ texte dans Airtable)
+      if (filters.minPrix || filters.maxPrix) {
+        const minPrixNum = filters.minPrix ? parseFloat(filters.minPrix) : null;
+        const maxPrixNum = filters.maxPrix ? parseFloat(filters.maxPrix) : null;
 
-          filtered = filtered.filter((listing: Listing) => {
-            const prixStr = listing.prix_actuel;
-            const prix = parsePrix(prixStr);
+        filtered = filtered.filter((listing: Listing) => {
+          const prixStr = listing.prix_actuel;
+          const prix = parsePrix(prixStr);
 
-            // Si le prix ne peut pas être parsé, ne pas l'afficher
-            if (prix === null) {
-              return false;
-            }
+          // Si le prix ne peut pas être parsé, ne pas l'afficher
+          if (prix === null) {
+            return false;
+          }
 
-            // Vérifier les bornes min et max
-            if (minPrixNum !== null && prix < minPrixNum) {
-              return false;
-            }
-            if (maxPrixNum !== null && prix > maxPrixNum) {
-              return false;
-            }
+          // Vérifier les bornes min et max
+          if (minPrixNum !== null && prix < minPrixNum) {
+            return false;
+          }
+          if (maxPrixNum !== null && prix > maxPrixNum) {
+            return false;
+          }
 
-            return true;
-          });
-        }
+          return true;
+        });
+      }
 
-        setListings(filtered);
+      // Tri des résultats selon sortBy (size-desc par défaut)
+      if (sortBy === 'size-desc') {
+        filtered = filtered.sort((a: Listing, b: Listing) => b.longueur_m - a.longueur_m);
+      } else if (sortBy === 'size-asc') {
+        filtered = filtered.sort((a: Listing, b: Listing) => a.longueur_m - b.longueur_m);
+      } else if (sortBy === 'price-desc') {
+        filtered = filtered.sort((a: Listing, b: Listing) => {
+          const prixA = parsePrix(a.prix_actuel) || 0;
+          const prixB = parsePrix(b.prix_actuel) || 0;
+          return prixB - prixA;
+        });
+      } else if (sortBy === 'price-asc') {
+        filtered = filtered.sort((a: Listing, b: Listing) => {
+          const prixA = parsePrix(a.prix_actuel) || 0;
+          const prixB = parsePrix(b.prix_actuel) || 0;
+          return prixA - prixB;
+        });
+      }
+
+      setListings(filtered);
       } else {
         toast.error('Erreur lors du chargement des bateaux');
       }
@@ -313,6 +333,55 @@ export default function DashboardPage() {
             Ajouter un bateau
           </Button>
         </Link>
+      </div>
+
+      {/* Sort Controls */}
+      <div className="bg-white rounded-lg shadow hover:shadow-md transition-smooth p-4 animate-slide-down hw-accelerate" style={{ animationDelay: '100ms' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">Trier par:</span>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSortBy('size-desc')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-smooth ${
+                sortBy === 'size-desc'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Taille ↓
+            </button>
+            <button
+              onClick={() => setSortBy('size-asc')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-smooth ${
+                sortBy === 'size-asc'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Taille ↑
+            </button>
+            <button
+              onClick={() => setSortBy('price-desc')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-smooth ${
+                sortBy === 'price-desc'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Prix ↓
+            </button>
+            <button
+              onClick={() => setSortBy('price-asc')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-smooth ${
+                sortBy === 'price-asc'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Prix ↑
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}

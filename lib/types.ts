@@ -21,6 +21,7 @@ export interface Listing {
   capitaine: string;
   broker_id: string;
   localisation: string;
+  nombre_cabines?: number;
   prix_actuel?: string;
   prix_precedent?: string;
   dernier_message?: string;
@@ -70,6 +71,7 @@ export interface ListingFormData {
   capitaine: string;
   broker: string; // broker_id
   localisation: string;
+  nombreCabines?: number;
   prix?: string;
   prixPrecedent?: string;
   dernierMessage?: string;

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Anchor, Calendar, MapPin, User, Euro, TrendingDown, MessageSquare, FileText } from 'lucide-react';
+import { X, Anchor, Calendar, MapPin, User, Euro, TrendingDown, MessageSquare, FileText, BedDouble } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Listing } from '@/lib/types';
 import { formatNumber } from '@/lib/utils';
@@ -258,7 +258,6 @@ export function ListingDetailModal({
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2 text-primary-700 font-bold text-2xl">
-                          <Euro className="h-6 w-6" />
                           <span>{listing.prix_actuel}</span>
                         </div>
                         <p className="text-sm text-primary-600 mt-1">Prix actuel</p>
@@ -314,6 +313,16 @@ export function ListingDetailModal({
                     </div>
                     <p className="text-lg font-medium text-gray-900">{(listing as any).brokers?.broker_name || 'N/A'}</p>
                   </div>
+
+                  {listing.nombre_cabines && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-primary-500 mb-1">
+                        <BedDouble className="h-5 w-5" />
+                        <span className="font-semibold">Cabines</span>
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">{listing.nombre_cabines}</p>
+                    </div>
+                  )}
                 </motion.div>
 
                 {/* Details Section */}

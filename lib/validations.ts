@@ -16,6 +16,9 @@ export const listingSchema = z.object({
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
   broker: z.string().optional(),
   localisation: z.string().min(1, 'La localisation est requise'),
+  nombreCabines: z.number({
+    invalid_type_error: 'Le nombre de cabines doit être un nombre'
+  }).int('Le nombre de cabines doit être un nombre entier').positive('Le nombre de cabines doit être positif').optional(),
   prix: z.string().max(100, 'Le prix est trop long').optional().transform(val => val === '' ? undefined : val),
   prixPrecedent: z.string().max(100, 'Le prix précédent est trop long').optional().transform(val => val === '' ? undefined : val),
   dernierMessage: z.string().max(500, 'Le message est trop long').optional().transform(val => val === '' ? undefined : val),

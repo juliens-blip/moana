@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro } from 'lucide-react';
+import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro, BedDouble } from 'lucide-react';
 import type { Listing } from '@/lib/types';
 import { formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui';
@@ -62,7 +62,6 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         {/* Price (if available) */}
         {listing.prix_actuel && (
           <div className="flex items-center gap-2 text-primary-700 font-semibold text-lg pb-3 border-b border-gray-200">
-            <Euro className="h-5 w-5" />
             <span>{listing.prix_actuel}</span>
           </div>
         )}
@@ -87,6 +86,12 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
             <User className="h-4 w-4 text-primary-500" />
             <span className="text-sm">{(listing as any).brokers?.broker_name || 'N/A'}</span>
           </div>
+          {listing.nombre_cabines && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <BedDouble className="h-4 w-4 text-primary-500" />
+              <span className="text-sm">{listing.nombre_cabines} cabine{listing.nombre_cabines > 1 ? 's' : ''}</span>
+            </div>
+          )}
         </div>
 
         {/* Details */}
