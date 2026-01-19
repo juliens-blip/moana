@@ -134,6 +134,96 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 }
 
 // ============================================
+// YATCO LEADFLOW TYPES
+// ============================================
+
+export interface YatcoLeadPayload {
+  lead: {
+    id: string;
+    date: string; // ISO 8601
+    source: string;
+    detailedSource?: string;
+    detailedSourceSummary?: string;
+    requestType?: string;
+  };
+  contact: {
+    name: {
+      display: string;
+      first?: string;
+      last?: string;
+    };
+    phone?: string;
+    email?: string;
+    country?: string;
+  };
+  customerComments?: string;
+  leadComments?: string;
+  boat?: {
+    make?: string;
+    model?: string;
+    year?: string;
+    condition?: string;
+    length?: {
+      measure?: string;
+      units?: string;
+    };
+    price?: {
+      amount?: string;
+      currency?: string;
+    };
+    url?: string;
+  };
+  recipient: {
+    officeName: string;
+    officeId: string;
+    contactName: string;
+  };
+}
+
+export type LeadStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'CONVERTED' | 'LOST';
+
+export interface Lead {
+  id: string;
+  yatco_lead_id: string;
+  lead_date: string;
+  source: string;
+  detailed_source?: string;
+  detailed_source_summary?: string;
+  request_type?: string;
+  contact_display_name: string;
+  contact_first_name?: string;
+  contact_last_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contact_country?: string;
+  boat_make?: string;
+  boat_model?: string;
+  boat_year?: string;
+  boat_condition?: string;
+  boat_length_value?: string;
+  boat_length_units?: string;
+  boat_price_amount?: string;
+  boat_price_currency?: string;
+  boat_url?: string;
+  customer_comments?: string;
+  lead_comments?: string;
+  recipient_office_name?: string;
+  recipient_office_id?: string;
+  recipient_contact_name?: string;
+  broker_id?: string;
+  status: LeadStatus;
+  raw_payload?: Record<string, unknown>;
+  received_at: string;
+  updated_at: string;
+  processed_at?: string;
+}
+
+export interface LeadWithBroker extends Lead {
+  broker_name?: string;
+  broker_email?: string;
+}
+
+// ============================================
 // LEGACY AIRTABLE TYPES (pour migration)
 // ============================================
 
