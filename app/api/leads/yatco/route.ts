@@ -1,0 +1,199 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { yatcoLeadPayloadSchema } from '@/lib/validations';
+import { YatcoLeadPayload } from '@/lib/types';
+
+// Yatco IP whitelist
+const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
+
+/**
+ * POST /api/leads/yatco
+ * Webhook endpoint to receive Yatco LeadFlow leads
+ * No authentication required - IP whitelist only
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // IP whitelist check
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+                     request.headers.get('x-real-ip') ||
+                     'unknown';
+    
+    console.log('[Yatco Webhook] Received request from IP:', clientIp);
+
+    // Skip IP check in development
+    if (process.env.NODE_ENV === 'production' && !YATCO_IPS.includes(clientIp)) {
+      console.warn('[Yatco Webhook] Rejected - Unauthorized IP:', clientIp);
+      return NextResponse.json(
+        { error: 'Unauthorized IP address' },
+        { status: 403 }
+      );
+    }
+
+    // Parse and validate payload
+    const body = await request.json();
+    const validationResult = yatcoLeadPayloadSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      console.error('[Yatco Webhook] Validation failed:', validationResult.error.errors);
+      return NextResponse.json(
+        { 
+          error: 'Invalid payload',
+          details: validationResult.error.errors 
+        },
+        { status: 400 }
+      );
+    }
+
+    const payload: YatcoLeadPayload = validationResult.data;
+    console.log('[Yatco Webhook] Valid payload received - Lead ID:', payload.lead.id);
+
+    // Initialize Supabase admin client
+    const supabase = createAdminClient();
+
+    // Check for duplicate lead by yatco_lead_id
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('yatco_lead_id', payload.lead.id)
+      .single();
+
+    if (existingLead) {
+      console.log('[Yatco Webhook] Duplicate lead detected:', payload.lead.id);
+      return NextResponse.json(
+        { 
+          message: 'Lead already exists',
+          lead_id: existingLead.id 
+        },
+        { status: 200 }
+      );
+    }
+
+    // YachtWorld contactName to email mapping
+    const yachtWorldMapping: Record<string, string> = {
+      'Cedrc': 'cedric@moanayachting.com',
+      'PE': 'contact@moanayachting.com',
+      'Bart': 'bart@moanayachting.com',
+      'Aldric': 'aldric@moanayachting.com',
+      'Charles': 'charles@moanayachting.com',
+      'Foulques': 'foulques@moanayachting.com'
+    };
+
+    // Get broker email from mapping, fallback to contactName
+    const brokerEmail = yachtWorldMapping[payload.recipient.contactName] || payload.recipient.contactName;
+
+    // Find broker by email, fallback to broker name
+    let broker = null as { id: string; broker_name: string; email: string } | null;
+    if (brokerEmail) {
+      const { data: brokerByEmail } = await supabase
+        .from('brokers')
+        .select('id, broker_name, email')
+        .eq('email', brokerEmail)
+        .maybeSingle();
+      broker = brokerByEmail ?? null;
+    }
+
+    if (!broker && payload.recipient?.contactName) {
+      const { data: brokerByName } = await supabase
+        .from('brokers')
+        .select('id, broker_name, email')
+        .ilike('broker_name', payload.recipient.contactName)
+        .maybeSingle();
+      broker = brokerByName ?? null;
+    }
+
+    if (!broker) {
+      console.warn('[Yatco Webhook] Broker not found for:', payload.recipient.contactName, '-> email:', brokerEmail);
+    } else {
+      console.log('[Yatco Webhook] Broker matched:', payload.recipient.contactName, '->', broker.broker_name, `(${broker.email})`);
+    }
+
+    // Transform payload to database format
+    const leadData = {
+      yatco_lead_id: payload.lead.id,
+      lead_date: payload.lead.date,
+      source: payload.lead.source,
+      detailed_source: payload.lead.detailedSource,
+      detailed_source_summary: payload.lead.detailedSourceSummary,
+      request_type: payload.lead.requestType,
+      
+      contact_display_name: payload.contact.name.display,
+      contact_first_name: payload.contact.name.first,
+      contact_last_name: payload.contact.name.last,
+      contact_email: payload.contact.email,
+      contact_phone: payload.contact.phone,
+      contact_country: payload.contact.country,
+      
+      boat_make: payload.boat?.make,
+      boat_model: payload.boat?.model,
+      boat_year: payload.boat?.year,
+      boat_condition: payload.boat?.condition,
+      boat_length_value: payload.boat?.length?.measure,
+      boat_length_units: payload.boat?.length?.units,
+      boat_price_amount: payload.boat?.price?.amount,
+      boat_price_currency: payload.boat?.price?.currency,
+      boat_url: payload.boat?.url,
+      
+      customer_comments: payload.customerComments,
+      lead_comments: payload.leadComments,
+      
+      recipient_office_name: payload.recipient.officeName,
+      recipient_office_id: payload.recipient.officeId,
+      recipient_contact_name: payload.recipient.contactName,
+      
+      broker_id: broker?.id || null,
+      status: 'NEW' as const,
+      raw_payload: payload,
+      processed_at: broker ? new Date().toISOString() : null
+    };
+
+    // Insert lead into database
+    const { data: newLead, error: insertError } = await supabase
+      .from('leads')
+      .insert(leadData)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[Yatco Webhook] Database insert error:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to store lead', details: insertError.message },
+        { status: 500 }
+      );
+    }
+
+    console.log('[Yatco Webhook] Lead created successfully:', newLead.id);
+
+    // Success response
+    return NextResponse.json(
+      {
+        success: true,
+        lead_id: newLead.id,
+        broker_assigned: !!broker,
+        broker_name: broker?.broker_name
+      },
+      { status: 201 }
+    );
+
+  } catch (error) {
+    console.error('[Yatco Webhook] Unexpected error:', error);
+    return NextResponse.json(
+      { 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/leads/yatco
+ * Health check endpoint
+ */
+export async function GET() {
+  return NextResponse.json({
+    status: 'ok',
+    endpoint: 'Yatco LeadFlow Webhook',
+    whitelisted_ips: YATCO_IPS
+  });
+}

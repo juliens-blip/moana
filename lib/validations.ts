@@ -49,8 +49,61 @@ export const listingFiltersSchema = z.object({
   maxPrix: z.string().optional()
 });
 
+// Yatco LeadFlow Validation Schema
+export const yatcoLeadPayloadSchema = z.object({
+  lead: z.object({
+    id: z.string().min(1, 'Lead ID is required'),
+    date: z.string().datetime('Invalid lead date format'),
+    source: z.string().min(1, 'Source is required'),
+    detailedSource: z.string().optional(),
+    detailedSourceSummary: z.string().optional(),
+    requestType: z.string().optional()
+  }),
+  contact: z.object({
+    name: z.object({
+      display: z.string().min(1, 'Contact display name is required'),
+      first: z.string().optional(),
+      last: z.string().optional()
+    }),
+    phone: z.string().optional(),
+    email: z.string().email('Invalid email format').optional(),
+    country: z.string().optional()
+  }),
+  customerComments: z.string().optional(),
+  leadComments: z.string().optional(),
+  boat: z.object({
+    make: z.string().optional(),
+    model: z.string().optional(),
+    year: z.string().optional(),
+    condition: z.string().optional(),
+    length: z.object({
+      measure: z.string().optional(),
+      units: z.string().optional()
+    }).optional(),
+    price: z.object({
+      amount: z.string().optional(),
+      currency: z.string().optional()
+    }).optional(),
+    url: z.string().url('Invalid boat URL').optional()
+  }).optional(),
+  recipient: z.object({
+    officeName: z.string().min(1, 'Office name is required'),
+    officeId: z.string().min(1, 'Office ID is required'),
+    contactName: z.string().min(1, 'Contact name is required')
+  })
+});
+
+// Lead Update Schema
+export const leadUpdateSchema = z.object({
+  status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'CONVERTED', 'LOST']).optional(),
+  customer_comments: z.string().max(2000).optional(),
+  lead_comments: z.string().max(2000).optional()
+});
+
 // Types inferred from schemas
 export type ListingInput = z.infer<typeof listingSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PartialListingInput = z.infer<typeof partialListingSchema>;
 export type ListingFiltersInput = z.infer<typeof listingFiltersSchema>;
+export type YatcoLeadPayloadInput = z.infer<typeof yatcoLeadPayloadSchema>;
+export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>;
