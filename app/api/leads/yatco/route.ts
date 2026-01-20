@@ -60,26 +60,40 @@ export async function POST(request: NextRequest) {
     if (existingLead) {
       console.log('[Yatco Webhook] Duplicate lead detected:', payload.lead.id);
       return NextResponse.json(
-        { 
+        {
           message: 'Lead already exists',
-          lead_id: existingLead.id 
+          lead_id: existingLead.id
         },
         { status: 200 }
       );
     }
 
+    // Build contact display name from available fields
+    // According to LeadFlow doc: "name": {} can be empty in minimal leads
+    const contactName = payload.contact?.name || {};
+    let displayName = contactName.display;
+    if (!displayName) {
+      // Fallback: construct from first/last name
+      const parts = [contactName.first, contactName.last].filter(Boolean);
+      displayName = parts.length > 0 ? parts.join(' ') : 'Unknown Contact';
+    }
+
     // YachtWorld contactName to email mapping
+    // Emails correspondent à ceux dans Supabase (moana-yachting.com)
     const yachtWorldMapping: Record<string, string> = {
-      'Cedrc': 'cedric@moanayachting.com',
-      'PE': 'contact@moanayachting.com',
-      'Bart': 'bart@moanayachting.com',
-      'Aldric': 'aldric@moanayachting.com',
-      'Charles': 'charles@moanayachting.com',
-      'Foulques': 'foulques@moanayachting.com'
+      'Cedrc': 'cedric@moana-yachting.com',
+      'Cedric': 'cedric@moana-yachting.com',
+      'PE': 'pe@moana-yachting.com',
+      'Bart': 'bart@moana-yachting.com',
+      'Aldric': 'aldric@moana-yachting.com',
+      'Charles': 'charles@moana-yachting.com',
+      'Foulques': 'foulques@moana-yachting.com',
+      'Marc': 'marc@moana-yachting.com'
     };
 
     // Get broker email from mapping, fallback to contactName
-    const brokerEmail = yachtWorldMapping[payload.recipient.contactName] || payload.recipient.contactName;
+    const recipientContactName = payload.recipient?.contactName || '';
+    const brokerEmail = yachtWorldMapping[recipientContactName] || recipientContactName;
 
     // Find broker by email, fallback to broker name
     let broker = null as { id: string; broker_name: string; email: string } | null;
@@ -92,37 +106,47 @@ export async function POST(request: NextRequest) {
       broker = brokerByEmail ?? null;
     }
 
-    if (!broker && payload.recipient?.contactName) {
+    if (!broker && recipientContactName) {
       const { data: brokerByName } = await supabase
         .from('brokers')
         .select('id, broker_name, email')
-        .ilike('broker_name', payload.recipient.contactName)
+        .ilike('broker_name', recipientContactName)
         .maybeSingle();
       broker = brokerByName ?? null;
     }
 
+    // If still no broker found, try to find a default broker for the office
     if (!broker) {
-      console.warn('[Yatco Webhook] Broker not found for:', payload.recipient.contactName, '-> email:', brokerEmail);
+      console.warn('[Yatco Webhook] Broker not found for:', recipientContactName, '-> email:', brokerEmail);
+      // Log all available brokers for debugging
+      const { data: allBrokers } = await supabase
+        .from('brokers')
+        .select('id, broker_name, email')
+        .limit(10);
+      console.log('[Yatco Webhook] Available brokers:', allBrokers?.map(b => `${b.broker_name} (${b.email})`));
     } else {
-      console.log('[Yatco Webhook] Broker matched:', payload.recipient.contactName, '->', broker.broker_name, `(${broker.email})`);
+      console.log('[Yatco Webhook] Broker matched:', recipientContactName, '->', broker.broker_name, `(${broker.email})`);
     }
 
     // Transform payload to database format
+    // Handle optional date field - use current time if not provided
+    const leadDate = payload.lead.date || new Date().toISOString();
+
     const leadData = {
       yatco_lead_id: payload.lead.id,
-      lead_date: payload.lead.date,
+      lead_date: leadDate,
       source: payload.lead.source,
       detailed_source: payload.lead.detailedSource,
       detailed_source_summary: payload.lead.detailedSourceSummary,
       request_type: payload.lead.requestType,
-      
-      contact_display_name: payload.contact.name.display,
-      contact_first_name: payload.contact.name.first,
-      contact_last_name: payload.contact.name.last,
-      contact_email: payload.contact.email,
-      contact_phone: payload.contact.phone,
-      contact_country: payload.contact.country,
-      
+
+      contact_display_name: displayName,
+      contact_first_name: contactName.first,
+      contact_last_name: contactName.last,
+      contact_email: payload.contact?.email,
+      contact_phone: payload.contact?.phone,
+      contact_country: payload.contact?.country,
+
       boat_make: payload.boat?.make,
       boat_model: payload.boat?.model,
       boat_year: payload.boat?.year,
@@ -132,14 +156,14 @@ export async function POST(request: NextRequest) {
       boat_price_amount: payload.boat?.price?.amount,
       boat_price_currency: payload.boat?.price?.currency,
       boat_url: payload.boat?.url,
-      
+
       customer_comments: payload.customerComments,
       lead_comments: payload.leadComments,
-      
+
       recipient_office_name: payload.recipient.officeName,
       recipient_office_id: payload.recipient.officeId,
-      recipient_contact_name: payload.recipient.contactName,
-      
+      recipient_contact_name: recipientContactName || null,
+
       broker_id: broker?.id || null,
       status: 'NEW' as const,
       raw_payload: payload,

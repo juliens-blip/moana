@@ -137,24 +137,27 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 // YATCO LEADFLOW TYPES
 // ============================================
 
+// Conforme à la documentation LeadFlow de Boats Group
+// Note: La plupart des champs sont optionnels selon la doc
 export interface YatcoLeadPayload {
   lead: {
     id: string;
-    date: string; // ISO 8601
+    date?: string; // ISO 8601, optionnel selon doc
     source: string;
     detailedSource?: string;
     detailedSourceSummary?: string;
     requestType?: string;
   };
   contact: {
-    name: {
-      display: string;
+    name?: {
+      display?: string; // Peut être vide dans leads minimaux
       first?: string;
       last?: string;
     };
     phone?: string;
     email?: string;
     country?: string;
+    postalCode?: string; // US leads only
   };
   customerComments?: string;
   leadComments?: string;
@@ -162,10 +165,21 @@ export interface YatcoLeadPayload {
     make?: string;
     model?: string;
     year?: string;
+    hin?: string;
     condition?: string;
+    classCode?: string;
+    name?: string;
+    stockNumber?: string;
+    imtId?: string;
     length?: {
       measure?: string;
       units?: string;
+    };
+    location?: {
+      city?: string;
+      stateProvince?: string;
+      country?: string;
+      postalCode?: string;
     };
     price?: {
       amount?: string;
@@ -176,7 +190,22 @@ export interface YatcoLeadPayload {
   recipient: {
     officeName: string;
     officeId: string;
-    contactName: string;
+    contactName?: string; // Optionnel selon l'exemple minimal de la doc
+  };
+  // LeadSmart: historique des leads du contact
+  leadSmart?: {
+    leadHistory?: Array<{
+      make?: string;
+      model?: string;
+      year?: string;
+      dateOfLead?: string;
+      portalName?: string;
+      location?: {
+        city?: string;
+        country?: string;
+        stateProvince?: string;
+      };
+    }>;
   };
 }
 

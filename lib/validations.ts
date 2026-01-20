@@ -50,10 +50,13 @@ export const listingFiltersSchema = z.object({
 });
 
 // Yatco LeadFlow Validation Schema
+// Conforme à la documentation LeadFlow: https://www.boatsgroup.com/leadflow
+// Note: La plupart des champs sont optionnels selon la doc (page 1: "Most fields are optional")
 export const yatcoLeadPayloadSchema = z.object({
   lead: z.object({
     id: z.string().min(1, 'Lead ID is required'),
-    date: z.string().datetime('Invalid lead date format'),
+    // Date peut être ISO 8601 ou format légèrement différent
+    date: z.string().optional(),
     source: z.string().min(1, 'Source is required'),
     detailedSource: z.string().optional(),
     detailedSourceSummary: z.string().optional(),
@@ -61,13 +64,16 @@ export const yatcoLeadPayloadSchema = z.object({
   }),
   contact: z.object({
     name: z.object({
-      display: z.string().min(1, 'Contact display name is required'),
+      // Selon doc LeadFlow page 5: "name": {} peut être vide
+      display: z.string().optional(),
       first: z.string().optional(),
       last: z.string().optional()
-    }),
+    }).optional().default({}),
     phone: z.string().optional(),
-    email: z.string().email('Invalid email format').optional(),
-    country: z.string().optional()
+    // Email peut être vide ou invalide selon les leads
+    email: z.string().optional(),
+    country: z.string().optional(),
+    postalCode: z.string().optional()
   }),
   customerComments: z.string().optional(),
   leadComments: z.string().optional(),
@@ -75,22 +81,49 @@ export const yatcoLeadPayloadSchema = z.object({
     make: z.string().optional(),
     model: z.string().optional(),
     year: z.string().optional(),
+    hin: z.string().optional(),
     condition: z.string().optional(),
+    classCode: z.string().optional(),
+    name: z.string().optional(),
+    stockNumber: z.string().optional(),
+    imtId: z.string().optional(),
     length: z.object({
       measure: z.string().optional(),
       units: z.string().optional()
+    }).optional(),
+    location: z.object({
+      city: z.string().optional(),
+      stateProvince: z.string().optional(),
+      country: z.string().optional(),
+      postalCode: z.string().optional()
     }).optional(),
     price: z.object({
       amount: z.string().optional(),
       currency: z.string().optional()
     }).optional(),
-    url: z.string().url('Invalid boat URL').optional()
+    url: z.string().optional() // URL peut être malformée, on ne valide pas strictement
   }).optional(),
   recipient: z.object({
     officeName: z.string().min(1, 'Office name is required'),
     officeId: z.string().min(1, 'Office ID is required'),
-    contactName: z.string().min(1, 'Contact name is required')
-  })
+    // contactName est optionnel selon l'exemple minimal de la doc (page 5-6)
+    contactName: z.string().optional()
+  }),
+  // LeadSmart data (historique des leads du contact)
+  leadSmart: z.object({
+    leadHistory: z.array(z.object({
+      make: z.string().optional(),
+      model: z.string().optional(),
+      year: z.string().optional(),
+      dateOfLead: z.string().optional(),
+      portalName: z.string().optional(),
+      location: z.object({
+        city: z.string().optional(),
+        country: z.string().optional(),
+        stateProvince: z.string().optional()
+      }).optional()
+    })).optional()
+  }).optional()
 });
 
 // Lead Update Schema
