@@ -79,6 +79,10 @@ export async function getListings(filters?: ListingFilters): Promise<Listing[]> 
     query = query.lte('longueur_m', filters.maxLength);
   }
 
+  if (filters?.etoile) {
+    query = query.eq('etoile', true);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -145,6 +149,7 @@ export async function createListing(data: ListingInput): Promise<Listing> {
       capitaine: data.capitaine,
       broker_id: brokerId,
       localisation: data.localisation,
+      etoile: data.etoile ?? false,
       nombre_cabines: data.nombreCabines,
       prix_actuel: data.prix,
       prix_precedent: data.prixPrecedent,
@@ -198,6 +203,7 @@ export async function updateListing(
   }
 
   if (data.localisation !== undefined) updates.localisation = data.localisation;
+  if (data.etoile !== undefined) updates.etoile = data.etoile;
   if (data.nombreCabines !== undefined) updates.nombre_cabines = data.nombreCabines;
   if (data.prix !== undefined) updates.prix_actuel = data.prix;
   if (data.prixPrecedent !== undefined) updates.prix_precedent = data.prixPrecedent;

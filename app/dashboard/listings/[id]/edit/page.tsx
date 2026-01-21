@@ -116,6 +116,7 @@ export default function EditListingPage() {
             capitaine: listing.capitaine,
             broker: listing.broker_id,
             localisation: listing.localisation,
+            etoile: listing.etoile ?? false,
             nombreCabines: listing.nombre_cabines,
             prix: listing.prix_actuel,
             prixPrecedent: listing.prix_precedent,

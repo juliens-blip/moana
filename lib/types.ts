@@ -21,6 +21,7 @@ export interface Listing {
   capitaine: string;
   broker_id: string;
   localisation: string;
+  etoile?: boolean;
   nombre_cabines?: number;
   prix_actuel?: string;
   prix_precedent?: string;
@@ -71,6 +72,7 @@ export interface ListingFormData {
   capitaine: string;
   broker: string; // broker_id
   localisation: string;
+  etoile?: boolean;
   nombreCabines?: number;
   prix?: string;
   prixPrecedent?: string;
@@ -103,6 +105,7 @@ export interface ListingFilters {
   localisation?: string;     // Free text localisation
   minLength?: number;        // Minimum length in meters
   maxLength?: number;        // Maximum length in meters
+  etoile?: boolean;          // Only starred listings (bateaux à pousser)
 }
 
 // ============================================

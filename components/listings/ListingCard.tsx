@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro, BedDouble } from 'lucide-react';
+import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro, BedDouble, Star } from 'lucide-react';
 import type { Listing } from '@/lib/types';
 import { formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui';
@@ -40,8 +40,18 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
     >
       {/* Header with gradient */}
       <div className="bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-4 transition-smooth group-hover:from-primary-700 group-hover:to-secondary-700">
-        <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{listing.nom_bateau}</h3>
-        <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{listing.constructeur}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{listing.nom_bateau}</h3>
+            <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{listing.constructeur}</p>
+          </div>
+          {listing.etoile && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100 border border-amber-200/50">
+              <Star className="h-3 w-3" />
+              ⭐
+            </span>
+          )}
+        </div>
       </div>
 
       {listing.image_url && (

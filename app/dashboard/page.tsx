@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // Force dynamic rendering to avoid SSR errors
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [broker, setBroker] = useState('');
+  const [brokers, setBrokers] = useState<Array<{ id: string; broker_name: string }>>([]);
   const [localisation, setLocalisation] = useState('');
   const [minLength, setMinLength] = useState('');
   const [maxLength, setMaxLength] = useState('');
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const [maxPrix, setMaxPrix] = useState('');
   const [minCabines, setMinCabines] = useState('');
   const [maxCabines, setMaxCabines] = useState('');
+  const [etoileOnly, setEtoileOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
   const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -40,6 +42,7 @@ export default function DashboardPage() {
     maxPrix: '',
     minCabines: '',
     maxCabines: '',
+    etoileOnly: false,
   });
 
   // Mettre à jour les refs quand les états changent
@@ -54,8 +57,9 @@ export default function DashboardPage() {
       maxPrix,
       minCabines,
       maxCabines,
+      etoileOnly,
     };
-  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, minCabines, maxCabines]);
+  }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, minCabines, maxCabines, etoileOnly]);
 
   // Déclencher le fetch quand sortBy change
   useEffect(() => {
@@ -173,6 +177,7 @@ export default function DashboardPage() {
       if (filters.localisation) params.append('localisation', filters.localisation);
       if (filters.minLength) params.append('minLength', filters.minLength);
       if (filters.maxLength) params.append('maxLength', filters.maxLength);
+      if (filters.etoileOnly) params.append('etoile', 'true');
 
       const response = await fetch(`/api/listings?${params.toString()}`);
       const data = await response.json();
@@ -275,6 +280,23 @@ export default function DashboardPage() {
     fetchListings();
   }, []); // Une seule fois au montage
 
+  // Fetch brokers list for filter dropdown
+  useEffect(() => {
+    const fetchBrokers = async () => {
+      try {
+        const response = await fetch('/api/brokers');
+        const data = await response.json();
+        if (data.success) {
+          setBrokers(data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching brokers:', error);
+      }
+    };
+
+    fetchBrokers();
+  }, []);
+
   // Handle search change
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -326,6 +348,12 @@ export default function DashboardPage() {
     debouncedFetchRef.current();
   };
 
+  // Handle etoile filter change
+  const handleEtoileOnlyChange = (value: boolean) => {
+    setEtoileOnly(value);
+    debouncedFetchRef.current();
+  };
+
   // Handle clear filters
   const handleClearFilters = () => {
     setSearch('');
@@ -337,6 +365,7 @@ export default function DashboardPage() {
     setMaxPrix('');
     setMinCabines('');
     setMaxCabines('');
+    setEtoileOnly(false);
     // Mettre à jour les refs immédiatement
     filtersRef.current = {
       search: '',
@@ -348,6 +377,7 @@ export default function DashboardPage() {
       maxPrix: '',
       minCabines: '',
       maxCabines: '',
+      etoileOnly: false,
     };
     // Fetch directement sans debounce pour le clear
     setLoading(true);
@@ -388,6 +418,14 @@ export default function DashboardPage() {
     );
     setSelectedListing(updated);
   };
+
+  const brokerOptions = useMemo(
+    () => [
+      { value: '', label: 'Tous les brokers' },
+      ...brokers.map((b) => ({ value: b.id, label: b.broker_name })),
+    ],
+    [brokers]
+  );
 
   return (
     <div className="space-y-6">
@@ -460,6 +498,7 @@ export default function DashboardPage() {
       <ListingFilters
         search={search}
         broker={broker}
+        brokerOptions={brokerOptions}
         localisation={localisation}
         minLength={minLength}
         maxLength={maxLength}
@@ -467,6 +506,7 @@ export default function DashboardPage() {
         maxPrix={maxPrix}
         minCabines={minCabines}
         maxCabines={maxCabines}
+        etoileOnly={etoileOnly}
         onSearchChange={handleSearchChange}
         onBrokerChange={handleBrokerChange}
         onLocalisationChange={handleLocalisationChange}
@@ -476,6 +516,7 @@ export default function DashboardPage() {
         onMaxPrixChange={handleMaxPrixChange}
         onMinCabinesChange={handleMinCabinesChange}
         onMaxCabinesChange={handleMaxCabinesChange}
+        onEtoileOnlyChange={handleEtoileOnlyChange}
         onClear={handleClearFilters}
       />
 

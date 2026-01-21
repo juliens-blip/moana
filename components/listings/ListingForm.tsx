@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { listingSchema, type ListingInput } from '@/lib/validations';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 
 interface ListingFormProps {
   defaultValues?: Partial<ListingInput>;
@@ -21,6 +21,8 @@ export function ListingForm({
   loading = false,
   allowBrokerChange = false,
 }: ListingFormProps) {
+  const [brokers, setBrokers] = useState<Array<{ id: string; broker_name: string }>>([]);
+
   const {
     register,
     handleSubmit,
@@ -29,6 +31,27 @@ export function ListingForm({
     resolver: zodResolver(listingSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    const fetchBrokers = async () => {
+      try {
+        const response = await fetch('/api/brokers');
+        const data = await response.json();
+        if (data.success) {
+          setBrokers(data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching brokers:', error);
+      }
+    };
+
+    fetchBrokers();
+  }, []);
+
+  const brokerOptions = [
+    { value: '', label: 'Sélectionner un broker' },
+    ...brokers.map((b) => ({ value: b.id, label: b.broker_name })),
+  ];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 animate-fade-in">
@@ -153,15 +176,28 @@ export function ListingForm({
 
       {/* Broker */}
       {allowBrokerChange ? (
-        <Input
+        <Select
           label="Broker"
-          placeholder="Nom du broker"
+          options={brokerOptions}
           error={errors.broker?.message}
           {...register('broker')}
         />
       ) : (
         <input type="hidden" {...register('broker')} />
       )}
+
+      {/* Etoile */}
+      <div className="flex items-center gap-3">
+        <input
+          id="etoile"
+          type="checkbox"
+          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          {...register('etoile')}
+        />
+        <label htmlFor="etoile" className="text-sm font-medium text-gray-700">
+          ⭐ Bateau à pousser
+        </label>
+      </div>
 
       {/* Submit Button */}
       <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">

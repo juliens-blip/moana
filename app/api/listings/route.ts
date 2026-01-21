@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
+    const etoileParam = searchParams.get('etoile');
+    const etoile = etoileParam === 'true' || etoileParam === '1';
 
     // Build filters from query parameters
     const filters: ListingFilters = {
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
       localisation: searchParams.get('localisation') || undefined,
       minLength: searchParams.get('minLength') ? parseFloat(searchParams.get('minLength')!) : undefined,
       maxLength: searchParams.get('maxLength') ? parseFloat(searchParams.get('maxLength')!) : undefined,
+      etoile: etoileParam ? etoile : undefined,
       // Note: minPrix and maxPrix removed - prix field is formatted text, not numeric
     };
 

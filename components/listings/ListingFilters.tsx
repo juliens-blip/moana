@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Search, X, Anchor, Euro, MapPin, User, BedDouble } from 'lucide-react';
-import { Input, Select, Button } from '@/components/ui';
+import { Search, X, Anchor, Euro, MapPin, User, BedDouble, Star } from 'lucide-react';
+import { Select, Button } from '@/components/ui';
 
 interface ListingFiltersProps {
   search: string;
   broker: string;
+  brokerOptions: Array<{ value: string; label: string }>;
   localisation: string;
   minLength: string;
   maxLength: string;
@@ -14,6 +15,7 @@ interface ListingFiltersProps {
   maxPrix: string;
   minCabines: string;
   maxCabines: string;
+  etoileOnly: boolean;
   onSearchChange: (value: string) => void;
   onBrokerChange: (value: string) => void;
   onLocalisationChange: (value: string) => void;
@@ -23,12 +25,14 @@ interface ListingFiltersProps {
   onMaxPrixChange: (value: string) => void;
   onMinCabinesChange: (value: string) => void;
   onMaxCabinesChange: (value: string) => void;
+  onEtoileOnlyChange: (value: boolean) => void;
   onClear: () => void;
 }
 
 export function ListingFilters({
   search,
   broker,
+  brokerOptions,
   localisation,
   minLength,
   maxLength,
@@ -36,6 +40,7 @@ export function ListingFilters({
   maxPrix,
   minCabines,
   maxCabines,
+  etoileOnly,
   onSearchChange,
   onBrokerChange,
   onLocalisationChange,
@@ -45,9 +50,10 @@ export function ListingFilters({
   onMaxPrixChange,
   onMinCabinesChange,
   onMaxCabinesChange,
+  onEtoileOnlyChange,
   onClear,
 }: ListingFiltersProps) {
-  const hasFilters = search || broker || localisation || minLength || maxLength || minPrix || maxPrix || minCabines || maxCabines;
+  const hasFilters = search || broker || localisation || minLength || maxLength || minPrix || maxPrix || minCabines || maxCabines || etoileOnly;
 
   return (
     <div className="bg-white rounded-lg shadow hover:shadow-md transition-smooth p-4 space-y-4 animate-slide-down hw-accelerate" style={{ animationDelay: '200ms' }}>
@@ -85,17 +91,28 @@ export function ListingFilters({
           <div className="absolute left-3 top-1/2 -translate-y-1/2 transition-smooth">
             <User className="h-4 w-4 text-gray-400" />
           </div>
-          <input
-            type="text"
-            placeholder="Filtrer par broker..."
+          <Select
             value={broker}
             onChange={(e) => onBrokerChange(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-md border border-gray-300
-                       transition-smooth hw-accelerate
-                       focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                       focus:scale-[1.01] focus:shadow-md
-                       hover:border-gray-400"
+            options={brokerOptions}
+            className="pl-10"
+            aria-label="Filtrer par broker"
           />
+        </div>
+
+        {/* Etoile Filter */}
+        <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-gray-300 bg-white transition-smooth hover:border-gray-400">
+          <Star className="h-4 w-4 text-amber-500" />
+          <input
+            id="etoile-only"
+            type="checkbox"
+            checked={etoileOnly}
+            onChange={(e) => onEtoileOnlyChange(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <label htmlFor="etoile-only" className="text-sm text-gray-700">
+            Bateaux à pousser
+          </label>
         </div>
 
         {/* Localisation Filter (now free text) */}

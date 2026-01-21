@@ -69,6 +69,7 @@ export default function CreateListingPage() {
           onSubmit={handleSubmit}
           submitLabel="Créer le bateau"
           loading={loading}
+          allowBrokerChange={true}
         />
       </div>
     </div>

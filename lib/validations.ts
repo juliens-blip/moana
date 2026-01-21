@@ -16,6 +16,7 @@ export const listingSchema = z.object({
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
   broker: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   localisation: z.string().min(1, 'La localisation est requise'),
+  etoile: z.boolean().optional().default(false),
   nombreCabines: z.union([
     z.number().int('Le nombre de cabines doit être un nombre entier').positive('Le nombre de cabines doit être positif'),
     z.undefined(),
@@ -46,7 +47,8 @@ export const listingFiltersSchema = z.object({
   minLength: z.number().positive().max(1000).optional(),
   maxLength: z.number().positive().max(1000).optional(),
   minPrix: z.string().optional(),
-  maxPrix: z.string().optional()
+  maxPrix: z.string().optional(),
+  etoile: z.boolean().optional()
 });
 
 // Yatco LeadFlow Validation Schema
