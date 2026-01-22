@@ -148,7 +148,7 @@ export function ListingFilters({
                          focus:scale-[1.01] focus:shadow-md
                          hover:border-gray-400"
               min="0"
-              step="0.1"
+              step="1"
             />
           </div>
           <span className="text-gray-500">-</span>
@@ -164,7 +164,7 @@ export function ListingFilters({
                          focus:scale-[1.01] focus:shadow-md
                          hover:border-gray-400"
               min="0"
-              step="0.1"
+              step="1"
             />
           </div>
         </div>
@@ -175,7 +175,7 @@ export function ListingFilters({
             <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-smooth" />
             <input
               type="number"
-              placeholder="Prix min (€)"
+              placeholder="Prix min (M€)"
               value={minPrix}
               onChange={(e) => onMinPrixChange(e.target.value)}
               className="w-full h-10 pl-10 pr-4 rounded-md border border-gray-300
@@ -184,14 +184,14 @@ export function ListingFilters({
                          focus:scale-[1.01] focus:shadow-md
                          hover:border-gray-400"
               min="0"
-              step="1000"
+              step="1000000"
             />
           </div>
           <span className="text-gray-500">-</span>
           <div className="relative flex-1">
             <input
               type="number"
-              placeholder="Prix max (€)"
+              placeholder="Prix max (M€)"
               value={maxPrix}
               onChange={(e) => onMaxPrixChange(e.target.value)}
               className="w-full h-10 pl-4 pr-4 rounded-md border border-gray-300
@@ -200,7 +200,7 @@ export function ListingFilters({
                          focus:scale-[1.01] focus:shadow-md
                          hover:border-gray-400"
               min="0"
-              step="1000"
+              step="1000000"
             />
           </div>
         </div>
