@@ -105,9 +105,20 @@ export async function POST(request: NextRequest) {
     };
 
     // Get broker email from mapping, fallback to contactName
+    const normalizeRecipientKey = (value: string) => {
+      return value
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
     const recipientContactName = payload.recipient?.contactName || '';
     const normalizedRecipient = recipientContactName.trim();
-    const recipientKey = normalizedRecipient.toLowerCase();
+    const recipientKey = normalizeRecipientKey(recipientContactName);
     const brokerEmail = yachtWorldMapping[recipientKey] || normalizedRecipient;
 
     // Find broker by email, fallback to broker name
