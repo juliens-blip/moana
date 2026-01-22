@@ -5,6 +5,8 @@ import { YatcoLeadPayload } from '@/lib/types';
 
 // Yatco IP whitelist
 const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
+// Temporary bypass for testing: set YATCO_IP_WHITELIST_DISABLED=true
+const IP_WHITELIST_DISABLED = process.env.YATCO_IP_WHITELIST_DISABLED === 'true';
 
 /**
  * POST /api/leads/yatco
@@ -20,8 +22,12 @@ export async function POST(request: NextRequest) {
     
     console.log('[Yatco Webhook] Received request from IP:', clientIp);
 
-    // Skip IP check in development
-    if (process.env.NODE_ENV === 'production' && !YATCO_IPS.includes(clientIp)) {
+    // Skip IP check in development or when explicitly disabled
+    if (
+      process.env.NODE_ENV === 'production' &&
+      !IP_WHITELIST_DISABLED &&
+      !YATCO_IPS.includes(clientIp)
+    ) {
       console.warn('[Yatco Webhook] Rejected - Unauthorized IP:', clientIp);
       return NextResponse.json(
         { error: 'Unauthorized IP address' },
@@ -83,12 +89,18 @@ export async function POST(request: NextRequest) {
     const yachtWorldMapping: Record<string, string> = {
       'Cedrc': 'cedric@moana-yachting.com',
       'Cedric': 'cedric@moana-yachting.com',
+      'Cédric PAPROCKI': 'cedric@moana-yachting.com',
       'PE': 'pe@moana-yachting.com',
       'Bart': 'bart@moana-yachting.com',
       'Aldric': 'aldric@moana-yachting.com',
       'Charles': 'charles@moana-yachting.com',
+      'Charles Michel': 'charles@moana-yachting.com',
       'Foulques': 'foulques@moana-yachting.com',
-      'Marc': 'marc@moana-yachting.com'
+      'Foulques De Raigniac': 'foulques@moana-yachting.com',
+      'Marc': 'marc@moana-yachting.com',
+      'Julien': 'julien@moana-yachting.com',
+      'julien': 'julien@moana-yachting.com',
+      'JULIEN': 'julien@moana-yachting.com'
     };
 
     // Get broker email from mapping, fallback to contactName
@@ -218,6 +230,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     endpoint: 'Yatco LeadFlow Webhook',
-    whitelisted_ips: YATCO_IPS
+    whitelisted_ips: YATCO_IPS,
+    ip_whitelist_disabled: IP_WHITELIST_DISABLED
   });
 }
