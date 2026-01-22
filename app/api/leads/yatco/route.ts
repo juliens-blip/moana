@@ -87,33 +87,42 @@ export async function POST(request: NextRequest) {
     // YachtWorld contactName to email mapping
     // Emails correspondent à ceux dans Supabase (moana-yachting.com)
     const yachtWorldMapping: Record<string, string> = {
-      'Cedrc': 'cedric@moana-yachting.com',
-      'Cedric': 'cedric@moana-yachting.com',
-      'Cédric PAPROCKI': 'cedric@moana-yachting.com',
-      'PE': 'pe@moana-yachting.com',
-      'Bart': 'bart@moanayachting.com',
-      'Aldric': 'aldric@moanayachting.com',
-      'Charles': 'charles@moanayachting.com',
-      'Charles Michel': 'charles@moanayachting.com',
-      'Foulques': 'foulques@moana-yachting.com',
-      'Foulques De Raigniac': 'foulques@moana-yachting.com',
-      'Marc': 'jm@moanayachting.com',
-      'Julien': 'julien@moana-yachting.com',
-      'julien': 'julien@moana-yachting.com',
-      'JULIEN': 'julien@moana-yachting.com'
+      'cedrc': 'cedric@moana-yachting.com',
+      'cedric': 'cedric@moana-yachting.com',
+      'cédric paprocki': 'cedric@moana-yachting.com',
+      'pe': 'pe@moana-yachting.com',
+      'bart': 'bart@moanayachting.com',
+      'aldric': 'aldric@moanayachting.com',
+      'charles': 'charles@moanayachting.com',
+      'charles michel': 'charles@moanayachting.com',
+      'foulques': 'foulques@moana-yachting.com',
+      'foulques de raigniac': 'foulques@moana-yachting.com',
+      'marc': 'jm@moanayachting.com',
+      'julien': 'julien@moana-yachting.com'
     };
 
     // Get broker email from mapping, fallback to contactName
     const recipientContactName = payload.recipient?.contactName || '';
-    const brokerEmail = yachtWorldMapping[recipientContactName] || recipientContactName;
+    const normalizedRecipient = recipientContactName.trim();
+    const recipientKey = normalizedRecipient.toLowerCase();
+    const brokerEmail = yachtWorldMapping[recipientKey] || normalizedRecipient;
 
     // Find broker by email, fallback to broker name
     let broker = null as { id: string; broker_name: string; email: string } | null;
     if (brokerEmail) {
+      const emailCandidates = new Set<string>();
+      emailCandidates.add(brokerEmail);
+      if (brokerEmail.endsWith('@moanayachting.com')) {
+        emailCandidates.add(brokerEmail.replace('@moanayachting.com', '@moana-yachting.com'));
+      }
+      if (brokerEmail.endsWith('@moana-yachting.com')) {
+        emailCandidates.add(brokerEmail.replace('@moana-yachting.com', '@moanayachting.com'));
+      }
+
       const { data: brokerByEmail } = await supabase
         .from('brokers')
         .select('id, broker_name, email')
-        .eq('email', brokerEmail)
+        .in('email', Array.from(emailCandidates))
         .maybeSingle();
       broker = brokerByEmail ?? null;
     }
