@@ -89,8 +89,9 @@ export async function POST(request: NextRequest) {
     const yachtWorldMapping: Record<string, string> = {
       'cedrc': 'cedric@moana-yachting.com',
       'cedric': 'cedric@moana-yachting.com',
-      'cédric paprocki': 'cedric@moana-yachting.com',
+      'cedric paprocki': 'cedric@moana-yachting.com',
       'pe': 'pe@moana-yachting.com',
+      'pierre eliott duverneuil': 'pe@moana-yachting.com',
       'bart': 'bart@moanayachting.com',
       'bart obin': 'bart@moanayachting.com',
       'aldric': 'aldric@moanayachting.com',
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
       'charles michel leke': 'charles@moanayachting.com',
       'foulques': 'foulques@moana-yachting.com',
       'foulques de raigniac': 'foulques@moana-yachting.com',
+      'foulques de reigniac': 'foulques@moana-yachting.com',
       'marc': 'jm@moanayachting.com',
       'julien': 'julien@moana-yachting.com'
     };
