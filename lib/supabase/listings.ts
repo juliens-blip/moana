@@ -139,28 +139,51 @@ export async function createListing(data: ListingInput): Promise<Listing> {
     // If not resolved, we keep broker_id as null (free text entry)
   }
 
+  const baseInsert = {
+    nom_bateau: data.nomBateau,
+    constructeur: data.constructeur,
+    longueur_m: data.longueur,
+    annee: data.annee,
+    proprietaire: data.proprietaire,
+    capitaine: data.capitaine,
+    broker_id: brokerId,
+    localisation: data.localisation,
+    etoile: data.etoile ?? false,
+    prix_actuel: data.prix,
+    prix_precedent: data.prixPrecedent,
+    dernier_message: data.dernierMessage,
+    commentaire: data.commentaire,
+  } as Record<string, any>;
+
+  const insertWithCabins = {
+    ...baseInsert,
+    nombre_cabines: data.nombreCabines,
+  };
+
   const { data: listing, error } = await supabase
     .from('listings')
-    .insert({
-      nom_bateau: data.nomBateau,
-      constructeur: data.constructeur,
-      longueur_m: data.longueur,
-      annee: data.annee,
-      proprietaire: data.proprietaire,
-      capitaine: data.capitaine,
-      broker_id: brokerId,
-      localisation: data.localisation,
-      etoile: data.etoile ?? false,
-      nombre_cabines: data.nombreCabines,
-      prix_actuel: data.prix,
-      prix_precedent: data.prixPrecedent,
-      dernier_message: data.dernierMessage,
-      commentaire: data.commentaire,
-    })
+    .insert(insertWithCabins)
     .select()
     .single();
 
   if (error) {
+    // Fallback if column doesn't exist in DB schema
+    if (error.code === 'PGRST204' && error.message.includes('nombre_cabines')) {
+      console.warn('[createListing] nombre_cabines missing in schema, retrying without it');
+      const retry = await supabase
+        .from('listings')
+        .insert(baseInsert)
+        .select()
+        .single();
+
+      if (retry.error) {
+        console.error('[createListing] Error (retry):', retry.error);
+        throw new Error(`Failed to create listing: ${retry.error.message}`);
+      }
+
+      return retry.data;
+    }
+
     console.error('[createListing] Error:', error);
     throw new Error(`Failed to create listing: ${error.message}`);
   }
@@ -219,6 +242,25 @@ export async function updateListing(
     .single();
 
   if (error) {
+    if (error.code === 'PGRST204' && error.message.includes('nombre_cabines')) {
+      console.warn('[updateListing] nombre_cabines missing in schema, retrying without it');
+      const retryUpdates = { ...updates };
+      delete retryUpdates.nombre_cabines;
+      const retry = await supabase
+        .from('listings')
+        .update(retryUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (retry.error) {
+        console.error('[updateListing] Error (retry):', retry.error);
+        throw new Error(`Failed to update listing: ${retry.error.message}`);
+      }
+
+      return retry.data;
+    }
+
     console.error('[updateListing] Error:', error);
     throw new Error(`Failed to update listing: ${error.message}`);
   }
