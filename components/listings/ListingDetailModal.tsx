@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Anchor, Calendar, MapPin, User, Euro, TrendingDown, MessageSquare, FileText, BedDouble } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Listing } from '@/lib/types';
-import { formatNumber } from '@/lib/utils';
+import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
 
 interface ListingDetailModalProps {
@@ -287,7 +287,7 @@ export function ListingDetailModal({
                       <Anchor className="h-5 w-5" />
                       <span className="font-semibold">Longueur</span>
                     </div>
-                    <p className="text-xl font-bold text-gray-900">{formatNumber(listing.longueur_m, 1)} m</p>
+                    <p className="text-xl font-bold text-gray-900">{formatNumberFlexible(listing.longueur_m, 2)} m</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4">

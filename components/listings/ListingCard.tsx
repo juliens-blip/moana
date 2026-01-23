@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro, BedDouble, Star } from 'lucide-react';
 import type { Listing } from '@/lib/types';
-import { formatNumber } from '@/lib/utils';
+import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
 
 interface ListingCardProps {
@@ -81,7 +81,7 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
           <div className="flex items-center gap-2 text-gray-600">
             <Anchor className="h-4 w-4 text-primary-500" />
             <span className="text-sm">
-              {formatNumber(listing.longueur_m, 1)} m
+              {formatNumberFlexible(listing.longueur_m, 2)} m
             </span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">

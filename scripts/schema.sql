@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.listings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nom_bateau TEXT NOT NULL,
   constructeur TEXT NOT NULL,
-  longueur_m DECIMAL(10,1) NOT NULL,
+  longueur_m DECIMAL(10,2) NOT NULL,
   annee INTEGER NOT NULL,
   proprietaire TEXT NOT NULL,
   capitaine TEXT NOT NULL,

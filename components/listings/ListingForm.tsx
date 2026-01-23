@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { listingSchema, type ListingInput } from '@/lib/validations';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 
 interface ListingFormProps {
   defaultValues?: Partial<ListingInput>;
@@ -78,7 +78,7 @@ export function ListingForm({
         <Input
           label="Longueur (mètres)"
           type="number"
-          step="0.1"
+          step="0.01"
           placeholder="Ex: 23.2"
           error={errors.longueur?.message}
           required
@@ -176,12 +176,21 @@ export function ListingForm({
 
       {/* Broker */}
       {allowBrokerChange ? (
-        <Select
-          label="Broker"
-          options={brokerOptions}
-          error={errors.broker?.message}
-          {...register('broker')}
-        />
+        <div>
+          <Input
+            label="Broker"
+            placeholder="Commencez à taper un nom..."
+            error={errors.broker?.message}
+            helperText="Sélectionnez dans la liste ou saisissez un nom"
+            list="broker-options"
+            {...register('broker')}
+          />
+          <datalist id="broker-options">
+            {brokers.map((b) => (
+              <option key={b.id} value={b.broker_name} />
+            ))}
+          </datalist>
+        </div>
       ) : (
         <input type="hidden" {...register('broker')} />
       )}

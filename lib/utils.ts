@@ -45,6 +45,16 @@ export function formatNumber(num: number, decimals: number = 0): string {
 }
 
 /**
+ * Format number with flexible decimals (no forced rounding to fixed digits)
+ */
+export function formatNumberFlexible(num: number, maxDecimals: number = 2): string {
+  return new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxDecimals,
+  }).format(num);
+}
+
+/**
  * Convert meters to feet
  */
 export function metersToFeet(meters: number): number {
