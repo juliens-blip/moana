@@ -78,6 +78,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    if (typeof body.longueur === 'string') {
+      const normalized = body.longueur.replace(',', '.').trim();
+      const parsed = Number(normalized);
+      if (!Number.isNaN(parsed)) body.longueur = parsed;
+    }
+    if (typeof body.annee === 'string') {
+      const normalized = body.annee.trim();
+      const parsed = Number.parseInt(normalized, 10);
+      if (!Number.isNaN(parsed)) body.annee = parsed;
+    }
 
     // Validate input
     const validation = listingSchema.safeParse(body);
