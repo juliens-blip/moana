@@ -1,17 +1,41 @@
 import { z } from 'zod';
 
+const parseNumberInput = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value;
+  const normalized = value.replace(',', '.').trim();
+  if (normalized.length === 0) return undefined;
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? value : parsed;
+};
+
+const parseIntInput = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim();
+  if (normalized.length === 0) return undefined;
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isNaN(parsed) ? value : parsed;
+};
+
 // Listing Validation Schema
 export const listingSchema = z.object({
   nomBateau: z.string().min(1, 'Le nom du bateau est requis').max(100, 'Le nom est trop long'),
   constructeur: z.string().min(1, 'Le constructeur est requis').max(50, 'Le nom du constructeur est trop long'),
-  longueur: z.number({
-    required_error: 'La longueur est requise',
-    invalid_type_error: 'La longueur doit être un nombre'
-  }).positive('La longueur doit être positive').max(200, 'Longueur invalide'),
-  annee: z.number({
-    required_error: 'L\'année est requise',
-    invalid_type_error: 'L\'année doit être un nombre'
-  }).int('L\'année doit être un nombre entier').min(1900, 'Année invalide').max(new Date().getFullYear() + 2, 'Année invalide'),
+  longueur: z.preprocess(
+    parseNumberInput,
+    z.number({
+      required_error: 'La longueur est requise',
+      invalid_type_error: 'La longueur doit être un nombre'
+    }).positive('La longueur doit être positive').max(200, 'Longueur invalide')
+  ),
+  annee: z.preprocess(
+    parseIntInput,
+    z.number({
+      required_error: 'L\'année est requise',
+      invalid_type_error: 'L\'année doit être un nombre'
+    }).int('L\'année doit être un nombre entier').min(1900, 'Année invalide').max(new Date().getFullYear() + 2, 'Année invalide')
+  ),
   proprietaire: z.string().min(1, 'Le propriétaire est requis').max(100, 'Le nom est trop long'),
   capitaine: z.string().min(1, 'Le capitaine est requis').max(100, 'Le nom est trop long'),
   broker: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),

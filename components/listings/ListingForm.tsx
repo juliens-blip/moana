@@ -77,20 +77,12 @@ export function ListingForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Longueur (mètres)"
-          type="number"
-          step="0.01"
-          placeholder="Ex: 23.2"
+          type="text"
+          inputMode="decimal"
+          placeholder="Ex: 23,2"
           error={errors.longueur?.message}
           required
-          {...register('longueur', {
-            setValueAs: (value) => {
-              if (typeof value === 'number') return value;
-              if (typeof value !== 'string') return value;
-              const normalized = value.replace(',', '.').trim();
-              const parsed = parseFloat(normalized);
-              return Number.isNaN(parsed) ? undefined : parsed;
-            },
-          })}
+          {...register('longueur')}
         />
 
         <Input
