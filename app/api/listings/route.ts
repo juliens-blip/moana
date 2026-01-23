@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/supabase/auth';
-import { getListings, createListing } from '@/lib/supabase/listings';
+import { getListings, createListing, resolveBrokerNameToId } from '@/lib/supabase/listings';
 import { listingSchema } from '@/lib/validations';
 import type { ApiResponse, ListingFilters } from '@/lib/types';
 
@@ -95,9 +95,15 @@ export async function POST(request: NextRequest) {
 
     // All authenticated brokers can create listings for any broker
     // If no broker specified, default to current user's brokerId
+    let brokerValue = validation.data.broker || session.brokerId;
+    if (validation.data.broker) {
+      const resolved = await resolveBrokerNameToId(validation.data.broker);
+      brokerValue = resolved || session.brokerId;
+    }
+
     const data = {
       ...validation.data,
-      broker: validation.data.broker || session.brokerId,
+      broker: brokerValue,
     };
 
     const listing = await createListing(data);

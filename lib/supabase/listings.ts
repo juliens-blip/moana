@@ -7,20 +7,21 @@ import type { ListingInput } from '@/lib/validations';
  * Resolve broker name to broker ID
  * Returns null if broker not found
  */
-async function resolveBrokerNameToId(brokerNameOrId: string): Promise<string | null> {
+export async function resolveBrokerNameToId(brokerNameOrId: string): Promise<string | null> {
   const supabase = createAdminClient();
 
   // Check if it's already a UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(brokerNameOrId)) {
-    return brokerNameOrId;
+  const trimmed = brokerNameOrId.trim();
+  if (uuidRegex.test(trimmed)) {
+    return trimmed;
   }
 
   // Otherwise, treat it as a broker name and look it up
   const { data, error } = await supabase
     .from('brokers')
     .select('id')
-    .eq('broker_name', brokerNameOrId)
+    .ilike('broker_name', trimmed)
     .single();
 
   if (error || !data) {
