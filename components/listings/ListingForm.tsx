@@ -82,7 +82,15 @@ export function ListingForm({
           placeholder="Ex: 23.2"
           error={errors.longueur?.message}
           required
-          {...register('longueur', { valueAsNumber: true })}
+          {...register('longueur', {
+            setValueAs: (value) => {
+              if (typeof value === 'number') return value;
+              if (typeof value !== 'string') return value;
+              const normalized = value.replace(',', '.').trim();
+              const parsed = parseFloat(normalized);
+              return Number.isNaN(parsed) ? undefined : parsed;
+            },
+          })}
         />
 
         <Input
