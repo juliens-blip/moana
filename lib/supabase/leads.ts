@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Lead, LeadWithBroker, LeadStatus } from '@/lib/types';
+import { ManualLeadInput } from '@/lib/validations';
 
 /**
  * Get all leads for a specific broker
@@ -138,54 +139,71 @@ export async function getLeadStats(brokerId: string) {
 }
 
 /**
- * Admin function: Create a test lead (for development)
+ * Admin function: Purge test leads
  */
-export async function createTestLead(brokerId: string) {
+export async function purgeTestLeads(brokerId: string) {
   const supabase = createAdminClient();
-  
-  const testLead = {
-    yatco_lead_id: `TEST-${Date.now()}`,
-    lead_date: new Date().toISOString(),
-    source: 'YachtWorld',
-    detailed_source: 'YachtWorld-Broker SRP',
-    detailed_source_summary: 'YachtWorld',
-    request_type: 'Contact Broker',
-    
-    contact_display_name: 'Test Client',
-    contact_first_name: 'Test',
-    contact_last_name: 'Client',
-    contact_email: 'test@example.com',
-    contact_phone: '+33123456789',
-    contact_country: 'FR',
-    
-    boat_make: 'Sunseeker',
-    boat_model: '76 Yacht',
-    boat_year: '2020',
-    boat_condition: 'Used',
-    boat_length_value: '23.2',
-    boat_length_units: 'meters',
-    boat_price_amount: '2500000',
-    boat_price_currency: 'EUR',
-    
-    customer_comments: 'Interested in viewing this yacht',
-    
-    recipient_office_name: 'Moana Yachting',
-    recipient_office_id: '389841',
-    
+
+  const { error } = await supabase
+    .from('leads')
+    .delete()
+    .eq('broker_id', brokerId)
+    .or('yatco_lead_id.ilike.TEST-%,contact_email.eq.test@example.com,contact_display_name.eq.Test Client');
+
+  if (error) {
+    console.error('[Leads] Error purging test leads:', error);
+    throw new Error(`Failed to purge test leads: ${error.message}`);
+  }
+}
+
+/**
+ * Admin function: Create a manual lead
+ */
+export async function createManualLead(brokerId: string, input: ManualLeadInput): Promise<Lead> {
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  const manualLead = {
+    yatco_lead_id: `MANUAL-${Date.now()}`,
+    lead_date: now,
+    source: input.source ?? 'Manual',
+    detailed_source: input.detailed_source,
+    detailed_source_summary: input.detailed_source_summary,
+    request_type: input.request_type ?? 'Manual',
+    contact_display_name: input.contact_display_name,
+    contact_first_name: input.contact_first_name,
+    contact_last_name: input.contact_last_name,
+    contact_email: input.contact_email,
+    contact_phone: input.contact_phone,
+    contact_country: input.contact_country,
+    boat_make: input.boat_make,
+    boat_model: input.boat_model,
+    boat_year: input.boat_year,
+    boat_condition: input.boat_condition,
+    boat_length_value: input.boat_length_value,
+    boat_length_units: input.boat_length_units,
+    boat_price_amount: input.boat_price_amount,
+    boat_price_currency: input.boat_price_currency,
+    boat_url: input.boat_url,
+    customer_comments: input.customer_comments,
+    lead_comments: input.lead_comments,
+    recipient_office_name: input.recipient_office_name,
+    recipient_office_id: input.recipient_office_id,
+    recipient_contact_name: input.recipient_contact_name,
     broker_id: brokerId,
     status: 'NEW' as const,
-    processed_at: new Date().toISOString()
+    processed_at: now
   };
 
   const { data, error } = await supabase
     .from('leads')
-    .insert(testLead)
+    .insert(manualLead)
     .select()
     .single();
 
   if (error) {
-    console.error('[Leads] Error creating test lead:', error);
-    throw new Error(`Failed to create test lead: ${error.message}`);
+    console.error('[Leads] Error creating manual lead:', error);
+    throw new Error(`Failed to create manual lead: ${error.message}`);
   }
 
   return data as Lead;

@@ -1,13 +1,13 @@
 -- ============================================
--- MOANA YACHTING - LEADS SCHEMA (YATCO CRM)
--- Table pour gérer les leads Yatco LeadFlow
+-- MOANA YACHTING - LEADS SCHEMA (BOats group CRM)
+-- Table pour gérer les leads BOats group LeadFlow
 -- ============================================
 
 -- Table leads
 CREATE TABLE IF NOT EXISTS public.leads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
-  -- Yatco Lead ID (unique identifier)
+  -- BOats group Lead ID (unique identifier)
   yatco_lead_id TEXT UNIQUE NOT NULL,
   
   -- Lead metadata
@@ -75,11 +75,11 @@ CREATE TRIGGER update_leads_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Comments
-COMMENT ON TABLE public.leads IS 'Leads reçus depuis Yatco LeadFlow API';
-COMMENT ON COLUMN public.leads.yatco_lead_id IS 'ID unique du lead fourni par Yatco';
+COMMENT ON TABLE public.leads IS 'Leads reçus depuis BOats group LeadFlow API';
+COMMENT ON COLUMN public.leads.yatco_lead_id IS 'ID unique du lead fourni par BOats group';
 COMMENT ON COLUMN public.leads.broker_id IS 'Broker assigné basé sur recipient.contactName';
 COMMENT ON COLUMN public.leads.status IS 'Statut du lead: NEW, CONTACTED, QUALIFIED, CONVERTED, LOST';
-COMMENT ON COLUMN public.leads.raw_payload IS 'Payload JSON brut de Yatco (pour audit)';
+COMMENT ON COLUMN public.leads.raw_payload IS 'Payload JSON brut de BOats group (pour audit)';
 
 -- ============================================
 

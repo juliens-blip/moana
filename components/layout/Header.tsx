@@ -37,44 +37,44 @@ export function Header() {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <header className="bg-primary-950 border-b border-primary-900 sticky top-0 z-40 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-20">
           {/* Logo & Navigation */}
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="bg-gradient-to-r from-primary-600 to-secondary-600 p-2 rounded-lg">
-                <Anchor className="h-6 w-6 text-white" />
+          <div className="flex items-center gap-10">
+            <Link href="/dashboard" className="flex items-center gap-3 group">
+              <div className="p-2 rounded-full border border-secondary-500/30 group-hover:border-secondary-500 transition-colors">
+                <Anchor className="h-6 w-6 text-secondary-500" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-xl font-bold text-gray-900">Moana Yachting</h1>
-                <p className="text-xs text-gray-500">Gestion de Listings</p>
+                <h1 className="text-lg font-heading font-bold text-white tracking-wider">MOANA</h1>
+                <p className="text-[10px] text-gray-400 tracking-[0.2em] uppercase">YACHTING</p>
               </div>
             </Link>
 
             {/* Navigation Tabs */}
-            <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <nav className="flex items-center gap-6">
               <Link
                 href="/dashboard"
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
                   ${!isLeadsPage
-                    ? 'bg-white text-primary-700 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
                 <Ship className="h-4 w-4" />
-                <span className="hidden md:inline">Bateaux</span>
+                <span className="hidden md:inline uppercase tracking-wide">Listings</span>
               </Link>
               <Link
                 href="/dashboard/leads"
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all relative
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all relative border-b-2
                   ${isLeadsPage
-                    ? 'bg-white text-primary-700 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
                 <Inbox className="h-4 w-4" />
-                <span className="hidden md:inline">Leads CRM</span>
+                <span className="hidden md:inline uppercase tracking-wide">Leads CRM</span>
                 {newLeadsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-bold text-white bg-red-500 rounded-full animate-pulse">
+                  <span className="absolute -top-1 -right-2 flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[10px] font-bold text-primary-950 bg-secondary-500 rounded-full">
                     {newLeadsCount > 99 ? '99+' : newLeadsCount}
                   </span>
                 )}
@@ -86,13 +86,15 @@ export function Header() {
           {broker && (
             <div className="flex items-center gap-4">
               {/* User Info */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
-                <User className="h-4 w-4 text-gray-600" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
+              <div className="hidden sm:flex items-center gap-3 px-3 py-1 border-r border-primary-800 pr-4">
+                <div className="p-1.5 bg-primary-900 rounded-full">
+                  <User className="h-4 w-4 text-secondary-500" />
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-white">
                     {broker}
                   </p>
-                  <p className="text-xs text-gray-500">Broker</p>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">Broker</p>
                 </div>
               </div>
 
@@ -101,9 +103,10 @@ export function Header() {
                 variant="ghost"
                 size="sm"
                 onClick={handleLogout}
+                className="text-gray-400 hover:text-white hover:bg-primary-900"
               >
                 <LogOut className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Déconnexion</span>
+                <span className="hidden sm:inline">Sortie</span>
               </Button>
             </div>
           )}

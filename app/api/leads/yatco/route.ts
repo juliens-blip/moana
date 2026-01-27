@@ -3,14 +3,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { yatcoLeadPayloadSchema } from '@/lib/validations';
 import { YatcoLeadPayload } from '@/lib/types';
 
-// Yatco IP whitelist
+// BOats group IP whitelist
 const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
 // Temporary bypass for testing: set YATCO_IP_WHITELIST_DISABLED=true
 const IP_WHITELIST_DISABLED = process.env.YATCO_IP_WHITELIST_DISABLED === 'true';
 
 /**
  * POST /api/leads/yatco
- * Webhook endpoint to receive Yatco LeadFlow leads
+ * Webhook endpoint to receive BOats group LeadFlow leads
  * No authentication required - IP whitelist only
  */
 export async function POST(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
                      request.headers.get('x-real-ip') ||
                      'unknown';
     
-    console.log('[Yatco Webhook] Received request from IP:', clientIp);
+    console.log('[BOats group Webhook] Received request from IP:', clientIp);
 
     // Skip IP check in development or when explicitly disabled
     if (
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       !IP_WHITELIST_DISABLED &&
       !YATCO_IPS.includes(clientIp)
     ) {
-      console.warn('[Yatco Webhook] Rejected - Unauthorized IP:', clientIp);
+      console.warn('[BOats group Webhook] Rejected - Unauthorized IP:', clientIp);
       return NextResponse.json(
         { error: 'Unauthorized IP address' },
         { status: 403 }
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const validationResult = yatcoLeadPayloadSchema.safeParse(body);
 
     if (!validationResult.success) {
-      console.error('[Yatco Webhook] Validation failed:', validationResult.error.errors);
+      console.error('[BOats group Webhook] Validation failed:', validationResult.error.errors);
       return NextResponse.json(
         { 
           error: 'Invalid payload',
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const payload: YatcoLeadPayload = validationResult.data;
-    console.log('[Yatco Webhook] Valid payload received - Lead ID:', payload.lead.id);
+    console.log('[BOats group Webhook] Valid payload received - Lead ID:', payload.lead.id);
 
     // Initialize Supabase admin client
     const supabase = createAdminClient();
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingLead) {
-      console.log('[Yatco Webhook] Duplicate lead detected:', payload.lead.id);
+      console.log('[BOats group Webhook] Duplicate lead detected:', payload.lead.id);
       return NextResponse.json(
         {
           message: 'Lead already exists',
@@ -154,15 +154,15 @@ export async function POST(request: NextRequest) {
 
     // If still no broker found, try to find a default broker for the office
     if (!broker) {
-      console.warn('[Yatco Webhook] Broker not found for:', recipientContactName, '-> email:', brokerEmail);
+      console.warn('[BOats group Webhook] Broker not found for:', recipientContactName, '-> email:', brokerEmail);
       // Log all available brokers for debugging
       const { data: allBrokers } = await supabase
         .from('brokers')
         .select('id, broker_name, email')
         .limit(10);
-      console.log('[Yatco Webhook] Available brokers:', allBrokers?.map(b => `${b.broker_name} (${b.email})`));
+      console.log('[BOats group Webhook] Available brokers:', allBrokers?.map(b => `${b.broker_name} (${b.email})`));
     } else {
-      console.log('[Yatco Webhook] Broker matched:', recipientContactName, '->', broker.broker_name, `(${broker.email})`);
+      console.log('[BOats group Webhook] Broker matched:', recipientContactName, '->', broker.broker_name, `(${broker.email})`);
     }
 
     // Transform payload to database format
@@ -215,14 +215,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error('[Yatco Webhook] Database insert error:', insertError);
+      console.error('[BOats group Webhook] Database insert error:', insertError);
       return NextResponse.json(
         { error: 'Failed to store lead', details: insertError.message },
         { status: 500 }
       );
     }
 
-    console.log('[Yatco Webhook] Lead created successfully:', newLead.id);
+    console.log('[BOats group Webhook] Lead created successfully:', newLead.id);
 
     // Success response
     return NextResponse.json(
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error) {
-    console.error('[Yatco Webhook] Unexpected error:', error);
+    console.error('[BOats group Webhook] Unexpected error:', error);
     return NextResponse.json(
       { 
         error: 'Internal server error',
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    endpoint: 'Yatco LeadFlow Webhook',
+    endpoint: 'BOats group LeadFlow Webhook',
     whitelisted_ips: YATCO_IPS,
     ip_whitelist_disabled: IP_WHITELIST_DISABLED
   });

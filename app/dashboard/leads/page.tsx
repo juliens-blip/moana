@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Inbox, LayoutGrid, List } from 'lucide-react';
-import { Loading, SkeletonGrid } from '@/components/ui';
-import { LeadCard, LeadFilters, LeadDetailModal, LeadStats, LeadTable } from '@/components/leads';
+import { Inbox, LayoutGrid, List, Plus } from 'lucide-react';
+import { Button, SkeletonGrid } from '@/components/ui';
+import { LeadCard, LeadCreateModal, LeadFilters, LeadDetailModal, LeadStats, LeadTable } from '@/components/leads';
 import type { LeadWithBroker } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
@@ -32,6 +32,7 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<LeadWithBroker | null>(null);
   const [sources, setSources] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Refs for filter values
   const filtersRef = useRef({
@@ -158,33 +159,43 @@ export default function LeadsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Leads CRM</h1>
               <p className="text-gray-600 mt-1">
-                {leads.length} lead{leads.length !== 1 ? 's' : ''} Yatco
+                {leads.length} lead{leads.length !== 1 ? 's' : ''} BOats group
               </p>
             </div>
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
-                ${viewMode === 'cards'
-                  ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCreateModalOpen(true)}
             >
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Cards</span>
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
-                ${viewMode === 'table'
-                  ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
-            >
-              <List className="h-4 w-4" />
-              <span className="hidden sm:inline">Table</span>
-            </button>
+              <Plus className="h-4 w-4" />
+              Nouveau lead
+            </Button>
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
+                  ${viewMode === 'cards'
+                    ? 'bg-white text-primary-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
+                  ${viewMode === 'table'
+                    ? 'bg-white text-primary-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+              >
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -224,7 +235,7 @@ export default function LeadsPage() {
           <p className="text-gray-400 text-sm mt-2">
             {search || status || source
               ? 'Essayez de modifier vos filtres'
-              : 'Les leads Yatco apparaîtront ici'}
+              : 'Les leads BOats group apparaîtront ici'}
           </p>
         </div>
       ) : viewMode === 'cards' ? (
@@ -252,6 +263,15 @@ export default function LeadsPage() {
         isOpen={!!selectedLead}
         onClose={() => setSelectedLead(null)}
         onLeadUpdated={handleLeadUpdated}
+      />
+
+      <LeadCreateModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onCreated={() => {
+          setLoading(true);
+          fetchLeads();
+        }}
       />
     </div>
   );

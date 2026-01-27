@@ -18,6 +18,18 @@ const parseIntInput = (value: unknown) => {
   return Number.isNaN(parsed) ? value : parsed;
 };
 
+const normalizeOptionalText = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
+const optionalText = (max: number) =>
+  z.preprocess(normalizeOptionalText, z.string().max(max).optional());
+
+const optionalEmail = () =>
+  z.preprocess(normalizeOptionalText, z.string().email('Email invalide').optional());
+
 // Listing Validation Schema
 export const listingSchema = z.object({
   nomBateau: z.string().min(1, 'Le nom du bateau est requis').max(100, 'Le nom est trop long'),
@@ -75,7 +87,7 @@ export const listingFiltersSchema = z.object({
   etoile: z.boolean().optional()
 });
 
-// Yatco LeadFlow Validation Schema
+// BOats group LeadFlow Validation Schema
 // Conforme à la documentation LeadFlow: https://www.boatsgroup.com/leadflow
 // Note: La plupart des champs sont optionnels selon la doc (page 1: "Most fields are optional")
 export const yatcoLeadPayloadSchema = z.object({
@@ -152,6 +164,34 @@ export const yatcoLeadPayloadSchema = z.object({
   }).optional()
 });
 
+// Manual Lead Creation Schema
+export const manualLeadSchema = z.object({
+  contact_display_name: z.string().trim().min(1, 'Nom du contact requis').max(120, 'Nom trop long'),
+  contact_first_name: optionalText(60),
+  contact_last_name: optionalText(60),
+  contact_email: optionalEmail(),
+  contact_phone: optionalText(40),
+  contact_country: optionalText(80),
+  boat_make: optionalText(80),
+  boat_model: optionalText(120),
+  boat_year: optionalText(10),
+  boat_condition: optionalText(40),
+  boat_length_value: optionalText(20),
+  boat_length_units: optionalText(20),
+  boat_price_amount: optionalText(30),
+  boat_price_currency: optionalText(10),
+  boat_url: optionalText(500),
+  customer_comments: optionalText(2000),
+  lead_comments: optionalText(2000),
+  source: optionalText(80),
+  detailed_source: optionalText(120),
+  detailed_source_summary: optionalText(120),
+  request_type: optionalText(120),
+  recipient_office_name: optionalText(120),
+  recipient_office_id: optionalText(80),
+  recipient_contact_name: optionalText(120)
+});
+
 // Lead Update Schema
 export const leadUpdateSchema = z.object({
   status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'CONVERTED', 'LOST']).optional(),
@@ -165,4 +205,5 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type PartialListingInput = z.infer<typeof partialListingSchema>;
 export type ListingFiltersInput = z.infer<typeof listingFiltersSchema>;
 export type YatcoLeadPayloadInput = z.infer<typeof yatcoLeadPayloadSchema>;
+export type ManualLeadInput = z.infer<typeof manualLeadSchema>;
 export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>;

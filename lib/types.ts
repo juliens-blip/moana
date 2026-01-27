@@ -137,10 +137,10 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 }
 
 // ============================================
-// YATCO LEADFLOW TYPES
+// BOats group LEADFLOW TYPES
 // ============================================
 
-// Conforme à la documentation LeadFlow de Boats Group
+// Conforme à la documentation LeadFlow de BOats group
 // Note: La plupart des champs sont optionnels selon la doc
 export interface YatcoLeadPayload {
   lead: {
