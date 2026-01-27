@@ -43,8 +43,12 @@ export function Header() {
           {/* Logo & Navigation */}
           <div className="flex items-center gap-10">
             <Link href="/dashboard" className="flex items-center gap-3 group">
-              <div className="p-2 rounded-full border border-secondary-500/30 group-hover:border-secondary-500 transition-colors">
-                <Anchor className="h-6 w-6 text-secondary-500" />
+              <div className="relative h-10 w-10 overflow-hidden rounded-full border border-secondary-500/30 group-hover:border-secondary-500 transition-colors">
+                <img 
+                  src="/moana-logo.jpg" 
+                  alt="Moana Logo" 
+                  className="h-full w-full object-cover"
+                />
               </div>
               <div className="hidden sm:block">
                 <h1 className="text-lg font-heading font-bold text-white tracking-wider">MOANA</h1>
