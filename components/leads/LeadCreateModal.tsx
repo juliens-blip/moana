@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import type { Lead } from '@/lib/types';
@@ -9,6 +9,7 @@ interface LeadCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated?: (lead: Lead) => void;
+  mode?: 'lead' | 'contact';
 }
 
 interface ManualLeadForm {
@@ -32,7 +33,7 @@ interface ManualLeadForm {
   lead_comments: string;
 }
 
-const defaultForm: ManualLeadForm = {
+const createDefaultForm = (mode: 'lead' | 'contact'): ManualLeadForm => ({
   contact_display_name: '',
   contact_first_name: '',
   contact_last_name: '',
@@ -40,7 +41,7 @@ const defaultForm: ManualLeadForm = {
   contact_phone: '',
   contact_country: '',
   source: 'Manual',
-  request_type: 'Manual',
+  request_type: mode === 'contact' ? 'Contact' : 'Manual',
   boat_make: '',
   boat_model: '',
   boat_year: '',
@@ -51,7 +52,7 @@ const defaultForm: ManualLeadForm = {
   boat_url: '',
   customer_comments: '',
   lead_comments: ''
-};
+});
 
 const lengthUnitOptions = [
   { value: 'ft', label: 'ft' },
@@ -72,7 +73,8 @@ const sourceOptions = [
   { value: 'Website', label: 'Site web' }
 ];
 
-export function LeadCreateModal({ isOpen, onClose, onCreated }: LeadCreateModalProps) {
+export function LeadCreateModal({ isOpen, onClose, onCreated, mode = 'lead' }: LeadCreateModalProps) {
+  const defaultForm = useMemo(() => createDefaultForm(mode), [mode]);
   const [form, setForm] = useState<ManualLeadForm>(defaultForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -135,12 +137,26 @@ export function LeadCreateModal({ isOpen, onClose, onCreated }: LeadCreateModalP
     }
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      setForm(defaultForm);
+      setErrors({});
+    }
+  }, [isOpen, defaultForm]);
+
+  const title = mode === 'contact' ? 'Nouveau contact' : 'Nouveau lead';
+  const description =
+    mode === 'contact'
+      ? 'Ajoutez un contact manuellement dans le CRM'
+      : 'Ajoutez un lead manuellement dans le CRM';
+  const submitLabel = mode === 'contact' ? 'Créer le contact' : 'Créer le lead';
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Nouveau lead"
-      description="Ajoutez un lead manuellement dans le CRM"
+      title={title}
+      description={description}
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -197,79 +213,83 @@ export function LeadCreateModal({ isOpen, onClose, onCreated }: LeadCreateModalP
               value={form.source}
               onChange={handleChange('source')}
             />
-            <Input
-              label="Type de demande"
-              placeholder="Contact"
-              value={form.request_type}
-              onChange={handleChange('request_type')}
-              error={errors.request_type}
-            />
+            {mode === 'lead' && (
+              <Input
+                label="Type de demande"
+                placeholder="Contact"
+                value={form.request_type}
+                onChange={handleChange('request_type')}
+                error={errors.request_type}
+              />
+            )}
           </div>
         </section>
 
-        <section className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Bateau</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Marque"
-              placeholder="Sunseeker"
-              value={form.boat_make}
-              onChange={handleChange('boat_make')}
-              error={errors.boat_make}
-            />
-            <Input
-              label="Modèle"
-              placeholder="76 Yacht"
-              value={form.boat_model}
-              onChange={handleChange('boat_model')}
-              error={errors.boat_model}
-            />
-            <Input
-              label="Année"
-              placeholder="2020"
-              value={form.boat_year}
-              onChange={handleChange('boat_year')}
-              error={errors.boat_year}
-            />
-            <div className="grid grid-cols-2 gap-3">
+        {mode === 'lead' && (
+          <section className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Bateau</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
-                label="Longueur"
-                placeholder="23.5"
-                value={form.boat_length_value}
-                onChange={handleChange('boat_length_value')}
-                error={errors.boat_length_value}
+                label="Marque"
+                placeholder="Sunseeker"
+                value={form.boat_make}
+                onChange={handleChange('boat_make')}
+                error={errors.boat_make}
               />
-              <Select
-                label="Unité"
-                options={lengthUnitOptions}
-                value={form.boat_length_units}
-                onChange={handleChange('boat_length_units')}
+              <Input
+                label="Modèle"
+                placeholder="76 Yacht"
+                value={form.boat_model}
+                onChange={handleChange('boat_model')}
+                error={errors.boat_model}
+              />
+              <Input
+                label="Année"
+                placeholder="2020"
+                value={form.boat_year}
+                onChange={handleChange('boat_year')}
+                error={errors.boat_year}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Longueur"
+                  placeholder="23.5"
+                  value={form.boat_length_value}
+                  onChange={handleChange('boat_length_value')}
+                  error={errors.boat_length_value}
+                />
+                <Select
+                  label="Unité"
+                  options={lengthUnitOptions}
+                  value={form.boat_length_units}
+                  onChange={handleChange('boat_length_units')}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Prix"
+                  placeholder="2500000"
+                  value={form.boat_price_amount}
+                  onChange={handleChange('boat_price_amount')}
+                  error={errors.boat_price_amount}
+                />
+                <Select
+                  label="Devise"
+                  options={currencyOptions}
+                  value={form.boat_price_currency}
+                  onChange={handleChange('boat_price_currency')}
+                />
+              </div>
+              <Input
+                label="Lien annonce"
+                placeholder="https://..."
+                value={form.boat_url}
+                onChange={handleChange('boat_url')}
+                error={errors.boat_url}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Prix"
-                placeholder="2500000"
-                value={form.boat_price_amount}
-                onChange={handleChange('boat_price_amount')}
-                error={errors.boat_price_amount}
-              />
-              <Select
-                label="Devise"
-                options={currencyOptions}
-                value={form.boat_price_currency}
-                onChange={handleChange('boat_price_currency')}
-              />
-            </div>
-            <Input
-              label="Lien annonce"
-              placeholder="https://..."
-              value={form.boat_url}
-              onChange={handleChange('boat_url')}
-              error={errors.boat_url}
-            />
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="space-y-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Commentaires</h3>
@@ -310,7 +330,7 @@ export function LeadCreateModal({ isOpen, onClose, onCreated }: LeadCreateModalP
             Annuler
           </Button>
           <Button type="submit" loading={submitting}>
-            Créer le lead
+            {submitLabel}
           </Button>
         </div>
       </form>
