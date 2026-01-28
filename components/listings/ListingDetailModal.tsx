@@ -104,7 +104,7 @@ export function ListingDetailModal({
   };
 
   const handleImageDelete = async () => {
-    if (!listing.image_url) return;
+    if (!listing || !listing.image_url) return;
 
     setUploading(true);
 
