@@ -160,7 +160,7 @@ export default function LeadsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Leads CRM</h1>
               <p className="text-gray-600 mt-1">
-                {leads.length} lead{leads.length !== 1 ? 's' : ''} BOats Group
+                {leads.length} lead{leads.length !== 1 ? 's' : ''} Boats group
               </p>
             </div>
           </div>
@@ -256,7 +256,7 @@ export default function LeadsPage() {
           <p className="text-gray-400 text-sm mt-2">
             {search || status || source
               ? 'Essayez de modifier vos filtres'
-              : 'Les leads BOats Group apparaîtront ici'}
+              : 'Les leads Boats group apparaîtront ici'}
           </p>
         </div>
       ) : viewMode === 'cards' ? (

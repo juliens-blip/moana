@@ -66,7 +66,7 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
 
       {listing.image_url && (
         <div className="px-6 pt-4">
-          <div className="relative rounded-lg border border-primary-100 overflow-hidden shadow-sm bg-white">
+          <div className="relative h-40 rounded-lg border border-primary-100 overflow-hidden shadow-sm bg-white">
             <Image
               src={listing.image_url}
               alt={`Bateau ${listing.nom_bateau}`}

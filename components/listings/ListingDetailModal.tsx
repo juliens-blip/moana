@@ -187,7 +187,7 @@ export function ListingDetailModal({
                     <h3 className="font-semibold text-gray-900 text-lg">Photo du bateau</h3>
                     {uploading && <span className="text-sm text-gray-500">Upload en cours...</span>}
                   </div>
-                  <div className="relative rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                  <div className="relative h-48 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
                     {previewUrl ? (
                       <Image
                         src={previewUrl}

@@ -348,7 +348,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                         className="inline-flex items-center gap-1 mt-3 text-sm text-primary-600 hover:text-primary-800 transition-colors"
                       >
                         <ExternalLink className="h-4 w-4" />
-                        Voir l&apos;annonce sur BOats Group
+                        Voir l&apos;annonce sur Boats group
                       </a>
                     )}
                   </div>
