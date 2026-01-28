@@ -62,7 +62,7 @@ export function InstallPrompt() {
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900 mb-1">
-            Installer l'application
+            Installer l&apos;application
           </h3>
           <p className="text-sm text-gray-600 mb-3">
             Installez Moana Yachting sur votre appareil pour un accès rapide

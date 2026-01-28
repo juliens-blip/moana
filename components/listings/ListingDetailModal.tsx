@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Anchor, Calendar, MapPin, User, Euro, TrendingDown, MessageSquare, FileText, BedDouble } from 'lucide-react';
+import { X, Euro, TrendingDown, MessageSquare, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Listing } from '@/lib/types';
 import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
+import { MoanaLogoIcon } from './MoanaLogoIcon';
 
 interface ListingDetailModalProps {
   listing: Listing | null;
@@ -21,18 +23,21 @@ export function ListingDetailModal({
   onClose,
   onListingUpdated
 }: ListingDetailModalProps) {
-  if (!listing) return null;
-
   const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(listing.image_url || null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(listing?.image_url || null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (!listing) return;
     setPreviewUrl(listing.image_url || null);
-  }, [listing.id, listing.image_url]);
+  }, [listing]);
 
   const handleImageUpload = async (file: File | null, source: 'gallery' | 'camera' = 'gallery') => {
+    if (!listing) {
+      console.warn('[Mobile Upload] No listing selected');
+      return;
+    }
     if (!file) {
       console.warn('[Mobile Upload] No file selected');
       return;
@@ -124,6 +129,8 @@ export function ListingDetailModal({
     }
   };
 
+  if (!listing) return null;
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -149,6 +156,14 @@ export function ListingDetailModal({
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto">
               {/* Header with gradient */}
               <div className="bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-6 rounded-t-2xl relative">
+                <Image
+                  src="/branding/moana-logo.jpg"
+                  alt=""
+                  aria-hidden
+                  width={56}
+                  height={56}
+                  className="pointer-events-none absolute right-6 top-1/2 h-14 w-14 -translate-y-1/2 rounded-full object-cover opacity-20"
+                />
                 <button
                   onClick={onClose}
                   className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-all hover:rotate-90 duration-300"
@@ -172,18 +187,31 @@ export function ListingDetailModal({
                     <h3 className="font-semibold text-gray-900 text-lg">Photo du bateau</h3>
                     {uploading && <span className="text-sm text-gray-500">Upload en cours...</span>}
                   </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                  <div className="relative rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
                     {previewUrl ? (
-                      <img
+                      <Image
                         src={previewUrl}
                         alt={`Photo ${listing.nom_bateau}`}
-                        className="h-48 w-full object-cover"
+                        fill
+                        sizes="(min-width: 768px) 600px, 90vw"
+                        className="object-cover"
+                        unoptimized
                       />
                     ) : (
                       <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
                         Aucune image pour ce bateau
                       </div>
                     )}
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <Image
+                        src="/branding/moana-logo.jpg"
+                        alt=""
+                        aria-hidden
+                        width={96}
+                        height={96}
+                        className="h-24 w-24 rounded-full object-cover opacity-20"
+                      />
+                    </div>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     {/* Input pour galerie - invisible mais accessible pour iOS */}
@@ -284,7 +312,7 @@ export function ListingDetailModal({
                 >
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-primary-500 mb-1">
-                      <Anchor className="h-5 w-5" />
+                      <MoanaLogoIcon className="h-5 w-5" />
                       <span className="font-semibold">Longueur</span>
                     </div>
                     <p className="text-xl font-bold text-gray-900">{formatNumberFlexible(listing.longueur_m, 2)} m</p>
@@ -292,7 +320,7 @@ export function ListingDetailModal({
 
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-primary-500 mb-1">
-                      <Calendar className="h-5 w-5" />
+                      <MoanaLogoIcon className="h-5 w-5" />
                       <span className="font-semibold">Année</span>
                     </div>
                     <p className="text-xl font-bold text-gray-900">{listing.annee}</p>
@@ -300,7 +328,7 @@ export function ListingDetailModal({
 
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-primary-500 mb-1">
-                      <MapPin className="h-5 w-5" />
+                      <MoanaLogoIcon className="h-5 w-5" />
                       <span className="font-semibold">Localisation</span>
                     </div>
                     <p className="text-lg font-medium text-gray-900">{listing.localisation}</p>
@@ -308,7 +336,7 @@ export function ListingDetailModal({
 
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-primary-500 mb-1">
-                      <User className="h-5 w-5" />
+                      <MoanaLogoIcon className="h-5 w-5" />
                       <span className="font-semibold">Broker</span>
                     </div>
                     <p className="text-lg font-medium text-gray-900">{(listing as any).brokers?.broker_name || 'N/A'}</p>
@@ -317,7 +345,7 @@ export function ListingDetailModal({
                   {listing.nombre_cabines && (
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex items-center gap-2 text-primary-500 mb-1">
-                        <BedDouble className="h-5 w-5" />
+                        <MoanaLogoIcon className="h-5 w-5" />
                         <span className="font-semibold">Cabines</span>
                       </div>
                       <p className="text-xl font-bold text-gray-900">{listing.nombre_cabines}</p>

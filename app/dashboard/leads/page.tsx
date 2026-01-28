@@ -33,6 +33,7 @@ export default function LeadsPage() {
   const [sources, setSources] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createContactModalOpen, setCreateContactModalOpen] = useState(false);
 
   // Refs for filter values
   const filtersRef = useRef({
@@ -159,7 +160,7 @@ export default function LeadsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Leads CRM</h1>
               <p className="text-gray-600 mt-1">
-                {leads.length} lead{leads.length !== 1 ? 's' : ''} BOats group
+                {leads.length} lead{leads.length !== 1 ? 's' : ''} BOats Group
               </p>
             </div>
           </div>
@@ -172,6 +173,14 @@ export default function LeadsPage() {
             >
               <Plus className="h-4 w-4" />
               Nouveau lead
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCreateContactModalOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Nouveau contact
             </Button>
             {/* View Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
@@ -223,6 +232,18 @@ export default function LeadsPage() {
         />
       </div>
 
+      <LeadCreateModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onCreated={handleLeadUpdated}
+      />
+      <LeadCreateModal
+        isOpen={createContactModalOpen}
+        onClose={() => setCreateContactModalOpen(false)}
+        onCreated={handleLeadUpdated}
+        mode="contact"
+      />
+
       {/* Leads Display */}
       {loading ? (
         <SkeletonGrid count={6} />
@@ -235,7 +256,7 @@ export default function LeadsPage() {
           <p className="text-gray-400 text-sm mt-2">
             {search || status || source
               ? 'Essayez de modifier vos filtres'
-              : 'Les leads BOats group apparaîtront ici'}
+              : 'Les leads BOats Group apparaîtront ici'}
           </p>
         </div>
       ) : viewMode === 'cards' ? (

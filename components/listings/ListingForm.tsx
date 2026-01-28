@@ -55,9 +55,9 @@ export function ListingForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 animate-fade-in">
-      {/* Nom du Bateau */}
+      {/* Modèle / constructeur */}
       <Input
-        label="Nom du Bateau"
+        label="Modèle / constructeur"
         placeholder="Ex: Sunseeker 76"
         error={errors.nomBateau?.message}
         required

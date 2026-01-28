@@ -75,7 +75,7 @@ export function LoginForm() {
             </span>
           </h1>
           <p className="text-lg text-primary-200/80 max-w-md mx-auto lg:mx-0 font-light leading-relaxed">
-            Plateforme exclusive de gestion de flotte pour courtiers d'élite. Accédez à vos listings et opportunités en temps réel.
+            Plateforme exclusive de gestion de flotte pour courtiers d&apos;élite. Accédez à vos listings et opportunités en temps réel.
           </p>
           
           <div className="mt-8 flex items-center justify-center lg:justify-start gap-4 text-sm text-primary-300/60 font-medium">

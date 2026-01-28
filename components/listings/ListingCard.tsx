@@ -2,11 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Edit2, Trash2, MapPin, Calendar, Anchor, User, Euro, BedDouble, Star } from 'lucide-react';
+import { Edit2, Trash2, Star } from 'lucide-react';
 import type { Listing } from '@/lib/types';
 import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
+import { MoanaLogoIcon } from './MoanaLogoIcon';
 
 interface ListingCardProps {
   listing: Listing;
@@ -39,7 +41,15 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
                  transition-shadow duration-300 cursor-pointer group"
     >
       {/* Header with gradient */}
-      <div className="bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-4 transition-smooth group-hover:from-primary-700 group-hover:to-secondary-700">
+      <div className="relative bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-4 transition-smooth group-hover:from-primary-700 group-hover:to-secondary-700">
+        <Image
+          src="/branding/moana-logo.jpg"
+          alt=""
+          aria-hidden
+          width={48}
+          height={48}
+          className="pointer-events-none absolute right-4 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full object-cover opacity-20"
+        />
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{listing.nom_bateau}</h3>
@@ -56,13 +66,26 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
 
       {listing.image_url && (
         <div className="px-6 pt-4">
-          <div className="rounded-lg border border-primary-100 overflow-hidden shadow-sm bg-white">
-            <img
+          <div className="relative rounded-lg border border-primary-100 overflow-hidden shadow-sm bg-white">
+            <Image
               src={listing.image_url}
               alt={`Bateau ${listing.nom_bateau}`}
-              className="h-40 w-full object-cover"
+              fill
+              sizes="(min-width: 768px) 40vw, 100vw"
+              className="object-cover"
               loading="lazy"
+              unoptimized
             />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <Image
+                src="/branding/moana-logo.jpg"
+                alt=""
+                aria-hidden
+                width={96}
+                height={96}
+                className="h-24 w-24 rounded-full object-cover opacity-20"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -79,26 +102,26 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         {/* Specs Grid */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-center gap-2 text-gray-600">
-            <Anchor className="h-4 w-4 text-primary-500" />
+            <MoanaLogoIcon className="h-4 w-4" />
             <span className="text-sm">
               {formatNumberFlexible(listing.longueur_m, 2)} m
             </span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
-            <Calendar className="h-4 w-4 text-primary-500" />
+            <MoanaLogoIcon className="h-4 w-4" />
             <span className="text-sm">{listing.annee}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
-            <MapPin className="h-4 w-4 text-primary-500" />
+            <MoanaLogoIcon className="h-4 w-4" />
             <span className="text-sm">{listing.localisation}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
-            <User className="h-4 w-4 text-primary-500" />
+            <MoanaLogoIcon className="h-4 w-4" />
             <span className="text-sm">{(listing as any).brokers?.broker_name || 'N/A'}</span>
           </div>
           {listing.nombre_cabines && (
             <div className="flex items-center gap-2 text-gray-600">
-              <BedDouble className="h-4 w-4 text-primary-500" />
+              <MoanaLogoIcon className="h-4 w-4" />
               <span className="text-sm">{listing.nombre_cabines} cabine{listing.nombre_cabines > 1 ? 's' : ''}</span>
             </div>
           )}

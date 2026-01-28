@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { Anchor, LogOut, User, Ship, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui';
@@ -44,10 +45,12 @@ export function Header() {
           <div className="flex items-center gap-10">
             <Link href="/dashboard" className="flex items-center gap-3 group">
               <div className="relative h-10 w-10 overflow-hidden rounded-full border border-secondary-500/30 group-hover:border-secondary-500 transition-colors">
-                <img 
-                  src="/moana-logo.jpg" 
-                  alt="Moana Logo" 
-                  className="h-full w-full object-cover"
+                <Image
+                  src="/moana-logo.jpg"
+                  alt="Moana Logo"
+                  fill
+                  sizes="40px"
+                  className="object-cover"
                 />
               </div>
               <div className="hidden sm:block">

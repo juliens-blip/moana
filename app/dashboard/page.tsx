@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 // Force dynamic rendering to avoid SSR errors
 export const dynamic = 'force-dynamic';
@@ -61,39 +61,13 @@ export default function DashboardPage() {
     };
   }, [search, broker, localisation, minLength, maxLength, minPrix, maxPrix, minCabines, maxCabines, etoileOnly]);
 
-  // Déclencher le fetch quand sortBy change
-  useEffect(() => {
-    if (listings.length > 0) {
-      // Re-trier les listings existants
-      let sorted = [...listings];
-      if (sortBy === 'size-desc') {
-        sorted = sorted.sort((a, b) => b.longueur_m - a.longueur_m);
-      } else if (sortBy === 'size-asc') {
-        sorted = sorted.sort((a, b) => a.longueur_m - b.longueur_m);
-      } else if (sortBy === 'price-desc') {
-        sorted = sorted.sort((a, b) => {
-          const prixA = parsePrix(a.prix_actuel) || 0;
-          const prixB = parsePrix(b.prix_actuel) || 0;
-          return prixB - prixA;
-        });
-      } else if (sortBy === 'price-asc') {
-        sorted = sorted.sort((a, b) => {
-          const prixA = parsePrix(a.prix_actuel) || 0;
-          const prixB = parsePrix(b.prix_actuel) || 0;
-          return prixA - prixB;
-        });
-      }
-      setListings(sorted);
-    }
-  }, [sortBy]);
-
   /**
    * Parse le prix depuis une chaîne formatée en nombre
    * Gère les formats: "1,850,000 €", "$2,500,000", "1.5M €", "2M$", "750000"
    * @param prixStr - La chaîne contenant le prix
    * @returns Le prix en nombre ou null si impossible à parser
    */
-  const parsePrix = (prixStr: string | undefined | null): number | null => {
+  const parsePrix = useCallback((prixStr: string | undefined | null): number | null => {
     if (!prixStr || typeof prixStr !== 'string') return null;
 
     try {
@@ -162,7 +136,7 @@ export default function DashboardPage() {
       console.warn('Erreur parsing prix:', prixStr, error);
       return null;
     }
-  };
+  }, []);
 
   // Fonction de fetch stable qui lit les valeurs depuis la ref
   const fetchListings = useCallback(async () => {
@@ -265,20 +239,21 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []); // Pas de dépendances !
+  }, [parsePrix, sortBy]);
 
-  // Créer une fonction debounce stable avec useRef
-  const debouncedFetchRef = useRef(
-    debounce(() => {
-      setLoading(true);
-      fetchListings();
-    }, 300)
+  const debouncedFetch = useMemo(
+    () =>
+      debounce(() => {
+        setLoading(true);
+        fetchListings();
+      }, 300),
+    [fetchListings]
   );
 
-  // Initial fetch
+  // Initial fetch + re-fetch on sort changes
   useEffect(() => {
     fetchListings();
-  }, []); // Une seule fois au montage
+  }, [fetchListings]);
 
   // Fetch brokers list for filter dropdown
   useEffect(() => {
@@ -300,58 +275,58 @@ export default function DashboardPage() {
   // Handle search change
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle broker change
   const handleBrokerChange = (value: string) => {
     setBroker(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle localisation change
   const handleLocalisationChange = (value: string) => {
     setLocalisation(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle length filters change
   const handleMinLengthChange = (value: string) => {
     setMinLength(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   const handleMaxLengthChange = (value: string) => {
     setMaxLength(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle price filters change
   const handleMinPrixChange = (value: string) => {
     setMinPrix(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   const handleMaxPrixChange = (value: string) => {
     setMaxPrix(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle cabines filters change
   const handleMinCabinesChange = (value: string) => {
     setMinCabines(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   const handleMaxCabinesChange = (value: string) => {
     setMaxCabines(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle etoile filter change
   const handleEtoileOnlyChange = (value: boolean) => {
     setEtoileOnly(value);
-    debouncedFetchRef.current();
+    debouncedFetch();
   };
 
   // Handle clear filters

@@ -114,7 +114,7 @@ export function LeadCard({ lead, onClick, index = 0 }: LeadCardProps) {
                 className="inline-flex items-center gap-1 mt-2 text-xs text-primary-600 hover:text-primary-800 transition-colors"
               >
                 <ExternalLink className="h-3 w-3" />
-                Voir l'annonce
+                Voir l&apos;annonce
               </a>
             )}
           </div>
@@ -124,7 +124,7 @@ export function LeadCard({ lead, onClick, index = 0 }: LeadCardProps) {
         {lead.customer_comments && (
           <div className="pt-3 border-t border-gray-100">
             <p className="text-sm text-gray-600 line-clamp-2">
-              "{lead.customer_comments}"
+              &quot;{lead.customer_comments}&quot;
             </p>
           </div>
         )}
