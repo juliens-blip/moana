@@ -55,19 +55,19 @@ export function ListingForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 animate-fade-in">
-      {/* Modèle / constructeur */}
+      {/* Nom du bateau */}
       <Input
-        label="Modèle / constructeur"
-        placeholder="Ex: Sunseeker 76"
+        label="Nom du bateau"
+        placeholder="Ex: Lady Fortuna"
         error={errors.nomBateau?.message}
         required
         {...register('nomBateau')}
       />
 
-      {/* Nom du bateau */}
+      {/* Modèle / constructeur */}
       <Input
-        label="Nom du bateau"
-        placeholder="Ex: Lady Fortuna"
+        label="Modèle / constructeur"
+        placeholder="Ex: Sunseeker 76"
         error={errors.constructeur?.message}
         required
         {...register('constructeur')}
