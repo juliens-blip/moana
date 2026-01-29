@@ -1166,4 +1166,3 @@ L'implémentation actuelle est une bonne base. Les améliorations recommandées 
 - Supabase/PostgREST: après ajout colonne `nombre_cabines`, exécuter `NOTIFY pgrst, 'reload schema';` pour rafraîchir le cache et permettre l'enregistrement/affichage.
 - Skill ajoutée: `feature-stability-guard` pour encadrer les ajouts/modifs de features et limiter les régressions.
 - Skill `feature-stability-guard` créée dans `/home/julien/.codex/skills/feature-stability-guard/SKILL.md`.
-- Brokers: si `JMO` n'apparaît pas dans `/api/brokers` alors qu'il existe en base, vérifier l'environnement Supabase utilisé par Vercel. Cas vu: `JMO` existait par email mais pas par `broker_name` → l'API listait sans JMO. Solution: garantir `broker_name='JMO'` dans la base prod ou inclure la recherche par email.

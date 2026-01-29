@@ -1,0 +1,27 @@
+
+> moana-yachting-saas@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.33
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 8.3s
+ ○ Compiling /api/leads/yatco ...
+ ✓ Compiled /api/leads/yatco in 1671ms (141 modules)
+ GET /api/leads/yatco 200 in 2334ms
+[Yatco Webhook] Received request from IP: ::ffff:127.0.0.1
+[Yatco Webhook] Valid payload received - Lead ID: TEST-NO-WHITELIST-001
+[Yatco Webhook] Broker not found for: Julien -> email: julien@moana-yachting.com
+[Yatco Webhook] Available brokers: [
+  'Charles (charles@moana-yachting.com)',
+  'Foulques (foulques@moana-yachting.com)',
+  'Marc (marc@moana-yachting.com)',
+  'Bart (bart@moana-yachting.com)',
+  'Aldric (aldric@moana-yachting.com)',
+  'PE (pe@moana-yachting.com)',
+  'Cedric (cedric@moana-yachting.com)'
+]
+[Yatco Webhook] Lead created successfully: c4798d63-d545-4441-a5dc-b68ea1ae1e4f
+ POST /api/leads/yatco 201 in 2301ms

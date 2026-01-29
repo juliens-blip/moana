@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Search, X, Anchor, Euro, MapPin, User, BedDouble, Star } from 'lucide-react';
+import { Search, X, Euro, Star } from 'lucide-react';
+import { MoanaLogoIcon } from './MoanaLogoIcon';
 import { Select, Button } from '@/components/ui';
 
 interface ListingFiltersProps {
@@ -89,7 +90,7 @@ export function ListingFilters({
         {/* Broker Filter */}
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 transition-smooth">
-            <User className="h-4 w-4 text-gray-400" />
+            <MoanaLogoIcon className="h-4 w-4 opacity-70" />
           </div>
           <Select
             value={broker}
@@ -118,7 +119,7 @@ export function ListingFilters({
         {/* Localisation Filter (now free text) */}
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 transition-smooth">
-            <MapPin className="h-4 w-4 text-gray-400" />
+            <MoanaLogoIcon className="h-4 w-4 opacity-70" />
           </div>
           <input
             type="text"
@@ -136,7 +137,7 @@ export function ListingFilters({
         {/* Length Range */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
-            <Anchor className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-smooth" />
+            <MoanaLogoIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-70 transition-smooth" />
             <input
               type="number"
               placeholder="Min (m)"
@@ -208,7 +209,7 @@ export function ListingFilters({
         {/* Cabines Range */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
-            <BedDouble className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-smooth" />
+            <MoanaLogoIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-70 transition-smooth" />
             <input
               type="number"
               placeholder="Min cabines"
