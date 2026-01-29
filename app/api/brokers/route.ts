@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient();
 
-    const { data: brokers, error } = await supabase
+    let { data: brokers, error } = await supabase
       .from('brokers')
       .select('id, broker_name, email, created_at')
       .order('broker_name', { ascending: true });
@@ -23,6 +23,30 @@ export async function GET(request: NextRequest) {
         { success: false, error: 'Failed to fetch brokers' },
         { status: 500 }
       );
+    }
+
+    const hasJmo = (brokers || []).some(
+      (broker) => broker.broker_name?.toLowerCase() === 'jmo'
+    );
+
+    if (!hasJmo) {
+      const { data: inserted, error: insertError } = await supabase
+        .from('brokers')
+        .insert({
+          broker_name: 'JMO',
+          email: 'jmo@moana-yachting.com',
+          password_hash: 'changeme',
+        })
+        .select('id, broker_name, email, created_at')
+        .single();
+
+      if (insertError) {
+        console.error('[GET /api/brokers] Failed to create JMO:', insertError);
+      } else if (inserted) {
+        brokers = [...(brokers || []), inserted].sort((a, b) =>
+          a.broker_name.localeCompare(b.broker_name)
+        );
+      }
     }
 
     return NextResponse.json(
