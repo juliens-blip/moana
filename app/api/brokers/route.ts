@@ -25,10 +25,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: brokers || [],
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: brokers || [],
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      }
+    );
   } catch (error) {
     console.error('[GET /api/brokers] Exception:', error);
     return NextResponse.json(

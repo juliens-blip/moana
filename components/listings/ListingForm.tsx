@@ -35,7 +35,7 @@ export function ListingForm({
   useEffect(() => {
     const fetchBrokers = async () => {
       try {
-        const response = await fetch('/api/brokers');
+        const response = await fetch('/api/brokers', { cache: 'no-store' });
         const data = await response.json();
         if (data.success) {
           setBrokers(data.data || []);
