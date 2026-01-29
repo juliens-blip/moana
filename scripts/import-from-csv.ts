@@ -84,7 +84,7 @@ async function importBrokers() {
   }
 
   // Ajouter les brokers manquants trouvés dans les listings
-  const additionalBrokers = ['Charles', 'Foulques', 'Marc', 'Bart', 'Aldric'];
+  const additionalBrokers = ['Charles', 'Foulques', 'JMO', 'Marc', 'Bart', 'Aldric'];
 
   for (const broker of additionalBrokers) {
     const { data, error } = await supabase

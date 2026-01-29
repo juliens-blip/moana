@@ -64,10 +64,10 @@ export function ListingForm({
         {...register('nomBateau')}
       />
 
-      {/* Constructeur */}
+      {/* Nom du bateau */}
       <Input
-        label="Constructeur"
-        placeholder="Ex: Sunseeker"
+        label="Nom du bateau"
+        placeholder="Ex: Lady Fortuna"
         error={errors.constructeur?.message}
         required
         {...register('constructeur')}

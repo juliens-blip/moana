@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
       'foulques': 'foulques@moana-yachting.com',
       'foulques de raigniac': 'foulques@moana-yachting.com',
       'foulques de reigniac': 'foulques@moana-yachting.com',
-      'marc': 'jm@moanayachting.com',
+      'marc': 'jmo@moana-yachting.com',
+      'jmo': 'jmo@moana-yachting.com',
       'julien': 'julien@moana-yachting.com'
     };
 
