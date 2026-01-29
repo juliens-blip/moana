@@ -30,22 +30,38 @@ export async function GET(request: NextRequest) {
     );
 
     if (!hasJmo) {
-      const { data: inserted, error: insertError } = await supabase
+      const { data: existingJmoByEmail, error: existingError } = await supabase
         .from('brokers')
-        .insert({
-          broker_name: 'JMO',
-          email: 'jmo@moana-yachting.com',
-          password_hash: 'changeme',
-        })
         .select('id, broker_name, email, created_at')
-        .single();
+        .ilike('email', 'jmo@moana-yachting.com')
+        .maybeSingle();
 
-      if (insertError) {
-        console.error('[GET /api/brokers] Failed to create JMO:', insertError);
-      } else if (inserted) {
-        brokers = [...(brokers || []), inserted].sort((a, b) =>
+      if (existingError) {
+        console.error('[GET /api/brokers] Failed to check JMO email:', existingError);
+      }
+
+      if (existingJmoByEmail) {
+        brokers = [...(brokers || []), existingJmoByEmail].sort((a, b) =>
           a.broker_name.localeCompare(b.broker_name)
         );
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from('brokers')
+          .insert({
+            broker_name: 'JMO',
+            email: 'jmo@moana-yachting.com',
+            password_hash: 'changeme',
+          })
+          .select('id, broker_name, email, created_at')
+          .single();
+
+        if (insertError) {
+          console.error('[GET /api/brokers] Failed to create JMO:', insertError);
+        } else if (inserted) {
+          brokers = [...(brokers || []), inserted].sort((a, b) =>
+            a.broker_name.localeCompare(b.broker_name)
+          );
+        }
       }
     }
 
