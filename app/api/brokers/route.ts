@@ -65,6 +65,38 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const forceIncludeEmails = [
+      'emrea@moana-yachting.com',
+      'new-broker@moana-yachting.com',
+    ];
+
+    for (const email of forceIncludeEmails) {
+      const alreadyIncluded = (brokers || []).some(
+        (broker) => broker.email?.toLowerCase() === email
+      );
+      if (alreadyIncluded) continue;
+
+      const { data: brokerByEmail, error: brokerByEmailError } = await supabase
+        .from('brokers')
+        .select('id, broker_name, email, created_at')
+        .ilike('email', email)
+        .maybeSingle();
+
+      if (brokerByEmailError) {
+        console.error('[GET /api/brokers] Failed to fetch broker by email:', {
+          email,
+          error: brokerByEmailError,
+        });
+        continue;
+      }
+
+      if (brokerByEmail) {
+        brokers = [...(brokers || []), brokerByEmail].sort((a, b) =>
+          a.broker_name.localeCompare(b.broker_name)
+        );
+      }
+    }
+
     const supabaseRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(
       /https?:\/\/([a-z0-9-]+)\.supabase\.co/i
     )?.[1];
