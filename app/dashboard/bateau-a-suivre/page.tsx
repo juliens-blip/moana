@@ -13,6 +13,21 @@ import { debounce } from '@/lib/utils';
 
 // Bateaux à suivre prédéfinis
 const BATEAUX_A_SUIVRE = [
+  { nom: 'Eclat', annee: null },
+  { nom: 'Friday', annee: null, etoile: true },
+  { nom: 'Explorer Motor Yacht', annee: 2005 },
+  { nom: 'Milena', annee: null },
+  { nom: 'Deramor', annee: null, etoile: true },
+  { nom: 'Loyh', annee: null, etoile: true },
+  { nom: 'Sunseeker Manhattan', annee: 2007 },
+  { nom: 'Ladenstaien', annee: 2004 },
+  { nom: 'Gecua Riva 88', annee: 2021 },
+  { nom: 'Petit Bouille', annee: null },
+  { nom: 'Custom Chinese Wood', annee: null },
+  { nom: 'Lady G', annee: null },
+  { nom: 'Sanloranzo SL 62', annee: 1998 },
+  { nom: 'Kayan', annee: null },
+  { nom: 'Azimut Atlantis 51', annee: null, etoile: true },
   { nom: 'Prestige 550', annee: 2015 },
   { nom: 'Beneteau Gran Turismo', annee: 2016 },
   { nom: 'Invictus', annee: 2023 },
@@ -27,9 +42,28 @@ const BATEAUX_A_SUIVRE = [
   { nom: 'Fjord 36', annee: null },
   { nom: 'Leader 36', annee: 2015 },
   { nom: 'Axopar 37 Sun-Top', annee: null },
-  { nom: 'Saxdor 320 GTC', annee: null }, // x2 charles
+  { nom: 'Saxdor 320 GTC (Charles 1)', annee: null },
+  { nom: 'Saxdor 320 GTC (Charles 2)', annee: null },
   { nom: 'Statement PTS 26', annee: null },
 ];
+
+const normalizeString = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const createVirtualListing = (boat: { nom: string; annee: number | null; etoile?: boolean }, index: number): Listing => ({
+  id: `virtual-suivre-${normalizeString(boat.nom).replace(/\s+/g, '-')}-${index}`,
+  nom_bateau: boat.nom,
+  constructeur: '—',
+  longueur_m: 0,
+  annee: boat.annee ?? 0,
+  proprietaire: 'N/A',
+  capitaine: 'N/A',
+  broker_id: '',
+  localisation: 'N/A',
+  etoile: boat.etoile ?? false,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 
 export default function BateauASuivrePage() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -153,6 +187,21 @@ export default function BateauASuivrePage() {
             return nomMatch && anneeMatch;
           });
         });
+
+        const normalizedExisting = new Set(
+          filtered.map((listing) => normalizeString(listing.nom_bateau || ''))
+        );
+
+        const virtualListings = BATEAUX_A_SUIVRE.filter((boat) => {
+          const normalizedBoat = normalizeString(boat.nom);
+          if (normalizedExisting.has(normalizedBoat)) return false;
+          if (filters.search && !normalizedBoat.includes(normalizeString(filters.search))) return false;
+          if (filters.etoileOnly && !boat.etoile) return false;
+          if (filters.broker || filters.localisation || filters.minLength || filters.maxLength) return false;
+          return true;
+        }).map((boat, index) => createVirtualListing(boat, index));
+
+        filtered = [...filtered, ...virtualListings];
 
         // Filtrage côté client pour les prix
         if (filters.minPrix || filters.maxPrix) {
@@ -368,6 +417,12 @@ export default function BateauASuivrePage() {
             {listings.length} bateau{listings.length !== 1 ? 'x' : ''} à suivre
           </p>
         </div>
+        <Link href="/dashboard/listings/create" className="animate-fade-in" style={{ animationDelay: '150ms' }}>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter un bateau
+          </Button>
+        </Link>
       </div>
 
       {/* Sort Controls */}

@@ -17,6 +17,24 @@ const BATEAUX_CHANTIER = [
   { nom: 'Custom RK18', annee: null },
 ];
 
+const normalizeString = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const createVirtualListing = (boat: { nom: string; annee: number | null }, index: number): Listing => ({
+  id: `virtual-chantier-${normalizeString(boat.nom).replace(/\s+/g, '-')}-${index}`,
+  nom_bateau: boat.nom,
+  constructeur: '—',
+  longueur_m: 0,
+  annee: boat.annee ?? 0,
+  proprietaire: 'N/A',
+  capitaine: 'N/A',
+  broker_id: '',
+  localisation: 'N/A',
+  etoile: false,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
+
 export default function BateauChantierPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +157,20 @@ export default function BateauChantierPage() {
             return nomMatch && anneeMatch;
           });
         });
+
+        const normalizedExisting = new Set(
+          filtered.map((listing) => normalizeString(listing.nom_bateau || ''))
+        );
+
+        const virtualListings = BATEAUX_CHANTIER.filter((boat) => {
+          const normalizedBoat = normalizeString(boat.nom);
+          if (normalizedExisting.has(normalizedBoat)) return false;
+          if (filters.search && !normalizedBoat.includes(normalizeString(filters.search))) return false;
+          if (filters.broker || filters.localisation || filters.minLength || filters.maxLength) return false;
+          return true;
+        }).map((boat, index) => createVirtualListing(boat, index));
+
+        filtered = [...filtered, ...virtualListings];
 
         // Filtrage côté client pour les prix
         if (filters.minPrix || filters.maxPrix) {
@@ -354,6 +386,12 @@ export default function BateauChantierPage() {
             {listings.length} bateau{listings.length !== 1 ? 'x' : ''} en chantier
           </p>
         </div>
+        <Link href="/dashboard/listings/create" className="animate-fade-in" style={{ animationDelay: '150ms' }}>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter un bateau
+          </Button>
+        </Link>
       </div>
 
       {/* Sort Controls */}

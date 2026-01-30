@@ -104,12 +104,12 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
           <div className="flex items-center gap-2 text-gray-600">
             <MoanaLogoIcon className="h-4 w-4" />
             <span className="text-sm">
-              {formatNumberFlexible(listing.longueur_m, 2)} m
+              {listing.longueur_m ? `${formatNumberFlexible(listing.longueur_m, 2)} m` : '—'}
             </span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <MoanaLogoIcon className="h-4 w-4" />
-            <span className="text-sm">{listing.annee}</span>
+            <span className="text-sm">{listing.annee ? listing.annee : '—'}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <MoanaLogoIcon className="h-4 w-4" />
