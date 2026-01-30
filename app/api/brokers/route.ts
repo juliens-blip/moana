@@ -65,6 +65,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const supabaseRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(
+      /https?:\/\/([a-z0-9-]+)\.supabase\.co/i
+    )?.[1];
+
     return NextResponse.json(
       {
         success: true,
@@ -73,6 +77,7 @@ export async function GET(request: NextRequest) {
       {
         headers: {
           'Cache-Control': 'no-store, max-age=0',
+          ...(supabaseRef ? { 'X-Supabase-Ref': supabaseRef } : {}),
         },
       }
     );
