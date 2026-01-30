@@ -176,7 +176,7 @@ export default function BateauASuivrePage() {
         let filtered = data.data;
 
         const normalizedExisting = new Set(
-          filtered.map((listing) => normalizeString(listing.nom_bateau || ''))
+          filtered.map((listing: Listing) => normalizeString(listing.nom_bateau || ''))
         );
 
         const virtualListings = BATEAUX_A_SUIVRE.filter((boat) => {
