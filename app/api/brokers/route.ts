@@ -68,6 +68,18 @@ export async function GET(request: NextRequest) {
     const supabaseRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(
       /https?:\/\/([a-z0-9-]+)\.supabase\.co/i
     )?.[1];
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseRole = (() => {
+      if (!serviceRoleKey) return undefined;
+      const parts = serviceRoleKey.split('.');
+      if (parts.length < 2) return undefined;
+      try {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+        return payload?.role as string | undefined;
+      } catch {
+        return undefined;
+      }
+    })();
 
     return NextResponse.json(
       {
@@ -78,6 +90,7 @@ export async function GET(request: NextRequest) {
         headers: {
           'Cache-Control': 'no-store, max-age=0',
           ...(supabaseRef ? { 'X-Supabase-Ref': supabaseRef } : {}),
+          ...(supabaseRole ? { 'X-Supabase-Role': supabaseRole } : {}),
         },
       }
     );
