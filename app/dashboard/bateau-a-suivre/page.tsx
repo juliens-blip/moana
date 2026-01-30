@@ -7,7 +7,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
 import { Button, Loading, SkeletonGrid } from '@/components/ui';
-import { ListingCard, ListingFilters } from '@/components/listings';
+import { ListingCard, ListingFilters, ListingDetailModal, DeleteConfirmModal } from '@/components/listings';
 import type { Listing } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
@@ -68,6 +68,7 @@ const createVirtualListing = (boat: { nom: string; annee: number | null; etoile?
 export default function BateauASuivrePage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [broker, setBroker] = useState('');
   const [brokers, setBrokers] = useState<Array<{ id: string; broker_name: string }>>([]);
@@ -80,6 +81,8 @@ export default function BateauASuivrePage() {
   const [maxCabines, setMaxCabines] = useState('');
   const [etoileOnly, setEtoileOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
+  const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const filtersRef = useRef({
     search: '',
@@ -262,7 +265,7 @@ export default function BateauASuivrePage() {
   useEffect(() => {
     const fetchBrokers = async () => {
       try {
-        const response = await fetch('/api/brokers');
+        const response = await fetch('/api/brokers', { cache: 'no-store' });
         const data = await response.json();
         if (data.success) {
           setBrokers(data.data);
@@ -360,6 +363,32 @@ export default function BateauASuivrePage() {
     ],
     [brokers]
   );
+
+  const handleDelete = async () => {
+    if (!listingToDelete) return;
+    setDeleteLoading(true);
+
+    try {
+      const response = await fetch(`/api/bateaux-a-suivre/${listingToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Bateau supprimé avec succès');
+        setListings((prev) => prev.filter((l) => l.id !== listingToDelete.id));
+        setListingToDelete(null);
+      } else {
+        toast.error(data.error || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error('Error deleting tracked listing:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -472,12 +501,36 @@ export default function BateauASuivrePage() {
             <ListingCard
               key={listing.id}
               listing={listing}
-              canEdit={false}
+              onClick={(value) => setSelectedListing(value)}
+              onDelete={(id) => {
+                const target = listings.find((l) => l.id === id);
+                if (target) setListingToDelete(target);
+              }}
+              canEdit
+              editHref={`/dashboard/bateau-a-suivre/${listing.id}/edit`}
               index={index}
             />
           ))}
         </div>
       )}
+
+      <ListingDetailModal
+        listing={selectedListing}
+        isOpen={!!selectedListing}
+        onClose={() => setSelectedListing(null)}
+        onListingUpdated={(updated) => {
+          setListings((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+        }}
+        apiBasePath="/api/bateaux-a-suivre"
+      />
+
+      <DeleteConfirmModal
+        isOpen={!!listingToDelete}
+        onClose={() => setListingToDelete(null)}
+        onConfirm={handleDelete}
+        listing={listingToDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

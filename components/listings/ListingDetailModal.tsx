@@ -15,13 +15,15 @@ interface ListingDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onListingUpdated?: (listing: Listing) => void;
+  apiBasePath?: string;
 }
 
 export function ListingDetailModal({
   listing,
   isOpen,
   onClose,
-  onListingUpdated
+  onListingUpdated,
+  apiBasePath = '/api/listings'
 }: ListingDetailModalProps) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(listing?.image_url || null);
@@ -72,7 +74,7 @@ export function ListingDetailModal({
     try {
       console.log('[Mobile Upload] Sending request to:', `/api/listings/${listing.id}/image`);
 
-      const response = await fetch(`/api/listings/${listing.id}/image`, {
+      const response = await fetch(`${apiBasePath}/${listing.id}/image`, {
         method: 'POST',
         body: formData,
       });
@@ -109,7 +111,7 @@ export function ListingDetailModal({
     setUploading(true);
 
     try {
-      const response = await fetch(`/api/listings/${listing.id}/image`, {
+      const response = await fetch(`${apiBasePath}/${listing.id}/image`, {
         method: 'DELETE',
       });
       const data = await response.json();

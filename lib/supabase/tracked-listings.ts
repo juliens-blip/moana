@@ -66,6 +66,107 @@ export async function getTrackedListings(table: TrackedTable, filters?: ListingF
   return data || [];
 }
 
+export async function getTrackedListing(table: TrackedTable, id: string): Promise<Listing | null> {
+  const supabase = createAdminClient();
+  const targetTable = getTrackedTable(table);
+
+  const { data, error } = await supabase
+    .from(targetTable)
+    .select(`
+      *,
+      brokers:broker_id (
+        broker_name,
+        email
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('[getTrackedListing] Error:', error);
+    return null;
+  }
+
+  return data as Listing;
+}
+
+export async function updateTrackedListing(
+  table: TrackedTable,
+  id: string,
+  data: Partial<TrackedListingInput>
+): Promise<Listing> {
+  const supabase = createAdminClient();
+  const targetTable = getTrackedTable(table);
+
+  let brokerId: string | null | undefined = undefined;
+  if (data.broker !== undefined) {
+    brokerId = data.broker ? await resolveBrokerNameToId(data.broker) : null;
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (data.nomBateau !== undefined) updates.nom_bateau = data.nomBateau;
+  if (data.constructeur !== undefined) updates.constructeur = data.constructeur ?? null;
+  if (data.longueur !== undefined) updates.longueur_m = data.longueur ?? null;
+  if (data.annee !== undefined) updates.annee = data.annee ?? null;
+  if (data.localisation !== undefined) updates.localisation = data.localisation ?? 'N/A';
+  if (data.etoile !== undefined) updates.etoile = data.etoile ?? false;
+  if (data.commentaire !== undefined) updates.commentaire = data.commentaire ?? null;
+  if (brokerId !== undefined) updates.broker_id = brokerId;
+
+  const { data: listing, error } = await supabase
+    .from(targetTable)
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error || !listing) {
+    console.error('[updateTrackedListing] Error:', error);
+    throw new Error(error?.message || 'Failed to update tracked listing');
+  }
+
+  return listing as Listing;
+}
+
+export async function deleteTrackedListing(table: TrackedTable, id: string): Promise<void> {
+  const supabase = createAdminClient();
+  const targetTable = getTrackedTable(table);
+
+  const { error } = await supabase
+    .from(targetTable)
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[deleteTrackedListing] Error:', error);
+    throw new Error(error.message);
+  }
+}
+
+export async function updateTrackedListingImage(
+  table: TrackedTable,
+  id: string,
+  imageUrl: string | null
+): Promise<Listing> {
+  const supabase = createAdminClient();
+  const targetTable = getTrackedTable(table);
+
+  const { data: listing, error } = await supabase
+    .from(targetTable)
+    .update({ image_url: imageUrl })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error || !listing) {
+    console.error('[updateTrackedListingImage] Error:', error);
+    throw new Error(error?.message || 'Failed to update tracked listing image');
+  }
+
+  return listing as Listing;
+}
+
 export async function createTrackedListing(table: TrackedTable, data: TrackedListingInput, fallbackBrokerId?: string | null): Promise<Listing> {
   const supabase = createAdminClient();
   const targetTable = getTrackedTable(table);
