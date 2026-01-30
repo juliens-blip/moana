@@ -92,7 +92,7 @@ export function Header() {
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
                 <Ship className="h-4 w-4" />
-                <span className="uppercase tracking-wide">Bateau à Suivre</span>
+                <span className="uppercase tracking-wide">Bateaux à Suivre</span>
               </Link>
               <Link
                 href="/dashboard/bateau-chantier"
@@ -102,7 +102,7 @@ export function Header() {
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
                 <Ship className="h-4 w-4" />
-                <span className="uppercase tracking-wide">Bateau Chantier</span>
+                <span className="uppercase tracking-wide">Bateaux Chantier</span>
               </Link>
               <Link
                 href="/dashboard/leads"
@@ -209,7 +209,7 @@ export function Header() {
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
                     <Ship className="h-5 w-5" />
-                    <span>Bateau à Suivre</span>
+                    <span>Bateaux à Suivre</span>
                   </Link>
 
                   <Link
@@ -221,7 +221,7 @@ export function Header() {
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
                     <Ship className="h-5 w-5" />
-                    <span>Bateau Chantier</span>
+                    <span>Bateaux Chantier</span>
                   </Link>
 
                   <Link
