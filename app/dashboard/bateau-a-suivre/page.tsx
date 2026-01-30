@@ -7,7 +7,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
 import { Button, Loading, SkeletonGrid } from '@/components/ui';
-import { ListingCard, ListingFilters, DeleteConfirmModal, ListingDetailModal } from '@/components/listings';
+import { ListingCard, ListingFilters } from '@/components/listings';
 import type { Listing } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
@@ -68,7 +68,6 @@ const createVirtualListing = (boat: { nom: string; annee: number | null; etoile?
 export default function BateauASuivrePage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [broker, setBroker] = useState('');
   const [brokers, setBrokers] = useState<Array<{ id: string; broker_name: string }>>([]);
@@ -81,8 +80,6 @@ export default function BateauASuivrePage() {
   const [maxCabines, setMaxCabines] = useState('');
   const [etoileOnly, setEtoileOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
-  const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
-  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const filtersRef = useRef({
     search: '',
@@ -172,21 +169,11 @@ export default function BateauASuivrePage() {
       if (filters.maxLength) params.append('maxLength', filters.maxLength);
       if (filters.etoileOnly) params.append('etoile', 'true');
 
-      const response = await fetch(`/api/listings?${params.toString()}`);
+      const response = await fetch(`/api/bateaux-a-suivre?${params.toString()}`);
       const data = await response.json();
 
       if (data.success) {
         let filtered = data.data;
-
-        // Filtrer pour ne garder que les bateaux à suivre
-        filtered = filtered.filter((listing: Listing) => {
-          return BATEAUX_A_SUIVRE.some(bateau => {
-            const nomMatch = listing.nom_bateau?.toLowerCase().includes(bateau.nom.toLowerCase()) ||
-                           listing.constructeur?.toLowerCase().includes(bateau.nom.toLowerCase());
-            const anneeMatch = !bateau.annee || listing.annee === bateau.annee;
-            return nomMatch && anneeMatch;
-          });
-        });
 
         const normalizedExisting = new Set(
           filtered.map((listing) => normalizeString(listing.nom_bateau || ''))
@@ -366,39 +353,6 @@ export default function BateauASuivrePage() {
     fetchListings();
   };
 
-  const handleDelete = async () => {
-    if (!listingToDelete) return;
-    setDeleteLoading(true);
-
-    try {
-      const response = await fetch(`/api/listings/${listingToDelete.id}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Bateau supprimé avec succès');
-        setListings((prev) => prev.filter((l) => l.id !== listingToDelete.id));
-        setListingToDelete(null);
-      } else {
-        toast.error(data.error || 'Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('Error deleting listing:', error);
-      toast.error('Erreur de connexion');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  const handleListingUpdated = (updated: Listing) => {
-    setListings((prev) =>
-      prev.map((listing) => (listing.id === updated.id ? updated : listing))
-    );
-    setSelectedListing(updated);
-  };
-
   const brokerOptions = useMemo(
     () => [
       { value: '', label: 'Tous les brokers' },
@@ -417,7 +371,7 @@ export default function BateauASuivrePage() {
             {listings.length} bateau{listings.length !== 1 ? 'x' : ''} à suivre
           </p>
         </div>
-        <Link href="/dashboard/listings/create" className="animate-fade-in" style={{ animationDelay: '150ms' }}>
+        <Link href="/dashboard/bateau-a-suivre/create" className="animate-fade-in" style={{ animationDelay: '150ms' }}>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Ajouter un bateau
@@ -518,31 +472,12 @@ export default function BateauASuivrePage() {
             <ListingCard
               key={listing.id}
               listing={listing}
-              onClick={(listing) => setSelectedListing(listing)}
-              onDelete={(id) => setListingToDelete(listing)}
-              canEdit={true}
+              canEdit={false}
               index={index}
             />
           ))}
         </div>
       )}
-
-      {/* Detail Modal */}
-      <ListingDetailModal
-        listing={selectedListing}
-        isOpen={!!selectedListing}
-        onClose={() => setSelectedListing(null)}
-        onListingUpdated={handleListingUpdated}
-      />
-
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
-        isOpen={!!listingToDelete}
-        onClose={() => setListingToDelete(null)}
-        onConfirm={handleDelete}
-        listing={listingToDelete}
-        loading={deleteLoading}
-      />
     </div>
   );
 }

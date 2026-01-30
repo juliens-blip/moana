@@ -15,11 +15,13 @@ interface ListingCardProps {
   onDelete?: (id: string) => void;
   onClick?: (listing: Listing) => void;
   canEdit?: boolean;
+  editHref?: string;
   index?: number;
 }
 
-export function ListingCard({ listing, onDelete, onClick, canEdit = true, index = 0 }: ListingCardProps) {
+export function ListingCard({ listing, onDelete, onClick, canEdit = true, editHref, index = 0 }: ListingCardProps) {
   const { id } = listing;
+  const listingEditHref = editHref || `/dashboard/listings/${id}/edit`;
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't trigger card click if clicking on buttons
@@ -143,7 +145,7 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, index 
         {canEdit && (
           <div className="flex gap-2 pt-4 border-t border-gray-200">
             <Link 
-              href={`/dashboard/listings/${id}/edit`} 
+              href={listingEditHref} 
               className="flex-1"
               onClick={(e) => e.stopPropagation()}
             >

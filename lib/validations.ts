@@ -64,6 +64,26 @@ export const listingSchema = z.object({
   commentaire: z.string().max(2000, 'Le commentaire est trop long').optional().or(z.literal('')).transform(val => val === '' ? undefined : val)
 });
 
+// Tracked Listing Validation Schema (bateaux à suivre / chantier)
+export const trackedListingSchema = z.object({
+  nomBateau: z.string().min(1, 'Le nom du bateau est requis').max(100, 'Le nom est trop long'),
+  constructeur: optionalText(100),
+  longueur: z.preprocess(
+    parseNumberInput,
+    z.number().positive('La longueur doit être positive').max(200, 'Longueur invalide').optional()
+  ),
+  annee: z.preprocess(
+    parseIntInput,
+    z.number().int('L\'année doit être un nombre entier').min(1900, 'Année invalide').max(new Date().getFullYear() + 2, 'Année invalide').optional()
+  ),
+  broker: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  localisation: optionalText(100),
+  etoile: z.boolean().optional().default(false),
+  commentaire: optionalText(2000),
+});
+
+export type TrackedListingInput = z.infer<typeof trackedListingSchema>;
+
 // Login Validation Schema
 export const loginSchema = z.object({
   broker: z.string().min(1, 'Le nom d\'utilisateur est requis').max(50, 'Nom d\'utilisateur trop long'),
