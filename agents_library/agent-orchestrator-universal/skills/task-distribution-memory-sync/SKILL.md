@@ -29,11 +29,18 @@ description: Distribute tasks with IDs across LLM workers and keep progress sync
 5) Poll CLAUDE.md and redistribute as soon as workers finish.
 6) Mark blocked tasks and reassign or unblock.
 7) After feature tasks, spawn test tasks and run Ralph cycles.
+8) If all tasks are IN_PROGRESS or waiting on the user, do not stop.
+   - Sleep 60-90s, poll CLAUDE.md again, and continue the loop.
+   - Do not message the user just to say you are waiting.
 
 ## Common Failure: Prompt Not Submitted
 - If a prompt is visible in the pane but no activity starts, it is **not submitted**.
 - Run `scripts/verify-submit.sh` (or `agents_library/agent-orchestrator-universal/skills/communication-inter-agents/scripts/send-verified.sh`).
 - If still idle, send `C-c`, then re-send the full prompt.
+
+## Common Failure: Orchestrator Stalls After Dispatch
+- If the orchestrator says it will sleep but stops updating, run:
+  `agents_library/agent-orchestrator-universal/skills/communication-inter-agents/scripts/orchestrator-keepalive.sh <session> <window> [interval_sec]`
 
 ## Examples
 

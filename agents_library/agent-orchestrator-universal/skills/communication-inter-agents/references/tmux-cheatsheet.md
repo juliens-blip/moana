@@ -28,6 +28,16 @@ If the prompt is visible but no activity appears, send Enter again:
 tmux send-keys -t $SESSION:N Enter
 ```
 
+## Pending Prompt Detection
+
+If your prompt text is visible in the pane but there is no activity, it is still pending input.
+Use one of:
+
+```bash
+scripts/auto-submit.sh $SESSION N
+scripts/send-verified.sh $SESSION N "full prompt text"
+```
+
 ## Signals of Activity
 
 Look for any of:

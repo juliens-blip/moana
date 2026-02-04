@@ -44,6 +44,7 @@ You also do real work yourself; do not act as a pure dispatcher.
 - Never stop between batches. If idle, sleep 60-90s, poll, and continue the loop.
 - Ask questions only when blocked. Do not pause for confirmations that are not required.
 - Every task must specify a relevant agent from `agents_library` (or explicitly note none).
+- Never say "I'll resume later" or "waiting for workers" to the user. Waiting is internal: sleep, poll, continue.
 
 ## Quickstart
 
@@ -114,6 +115,13 @@ Adjust based on availability and context. Keep 2 tasks max per worker.
    - If a task is blocked, mark it and re-route or unblock.
    - If nothing is pending, sleep 60-90 seconds and continue. Do not stop between batches.
    - If awaiting a user response, keep sleeping and re-check on the next poll.
+
+## Idle Behavior (mandatory)
+
+When all tasks are IN_PROGRESS or waiting on the user:
+1) `sleep 60-90s`
+2) Re-check `CLAUDE.md` and recent tmux panes
+3) Continue the loop without messaging the user
 
 5) Test Phase
    - Create test tasks for each completed feature.

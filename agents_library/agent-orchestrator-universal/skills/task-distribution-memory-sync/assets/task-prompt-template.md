@@ -1,5 +1,7 @@
 Task T-XXX: <clear description>
 
+Load agent: @agents_library/<agent-name>.md
+
 Context: <only the minimum needed>
 Constraints: <files, conventions, limits>
 
