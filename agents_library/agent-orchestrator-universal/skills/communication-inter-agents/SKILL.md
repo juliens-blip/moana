@@ -35,6 +35,10 @@ description: Coordinate multiple LLMs via tmux. Use when sending prompts to work
 - If the orchestrator says it will sleep but stops updating, launch keepalive:
   `scripts/orchestrator-keepalive.sh <session> <window> [interval_sec]`
 
+## Activity Detection
+The default activity pattern includes `Working`, `Thinking`, `Explored`, `Read`, `Running`,
+`Processing`, `Galloping`, and `Gitifying`. Override via `ACTIVE_PATTERN`.
+
 ## Examples
 
 Send a task and verify submission (preferred):

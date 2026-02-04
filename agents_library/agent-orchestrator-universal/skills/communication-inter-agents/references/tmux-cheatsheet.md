@@ -38,6 +38,9 @@ scripts/auto-submit.sh $SESSION N
 scripts/send-verified.sh $SESSION N "full prompt text"
 ```
 
+Activity indicators include: Working, Thinking, Explored, Read, Running, Processing, Galloping, Gitifying.
+Override via `ACTIVE_PATTERN` if your UI uses different terms.
+
 ## Signals of Activity
 
 Look for any of:

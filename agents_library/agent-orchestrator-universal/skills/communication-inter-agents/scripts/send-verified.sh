@@ -12,12 +12,18 @@ if [[ -z "$MESSAGE" ]]; then
 fi
 
 DELAY="${DELAY_SEC:-3}"
+ACTIVE_PATTERN="${ACTIVE_PATTERN:-Working|Thinking|Explored|Read\\(|Tool|Running|Processing|Galloping|Gitifying}"
+
+if ! [[ "$DELAY" =~ ^[0-9]+$ ]]; then
+  echo "WARN: invalid delay '$DELAY', defaulting to 3" >&2
+  DELAY=3
+fi
 
 tmux send-keys -t "$SESSION:$WINDOW" "$MESSAGE" Enter
 sleep "$DELAY"
 
 output=$(tmux capture-pane -t "$SESSION:$WINDOW" -p | tail -10)
-if echo "$output" | grep -qE "Working|Thinking|Explored|Read"; then
+if echo "$output" | grep -qE "$ACTIVE_PATTERN"; then
   echo "OK: worker active ($SESSION:$WINDOW)"
   exit 0
 fi
@@ -26,7 +32,7 @@ fi
 tmux send-keys -t "$SESSION:$WINDOW" Enter
 sleep 2
 output2=$(tmux capture-pane -t "$SESSION:$WINDOW" -p | tail -10)
-if echo "$output2" | grep -qE "Working|Thinking|Explored|Read"; then
+if echo "$output2" | grep -qE "$ACTIVE_PATTERN"; then
   echo "OK: worker active after retry ($SESSION:$WINDOW)"
   exit 0
 fi
@@ -37,7 +43,7 @@ sleep 1
 tmux send-keys -t "$SESSION:$WINDOW" "$MESSAGE" Enter
 sleep "$DELAY"
 output3=$(tmux capture-pane -t "$SESSION:$WINDOW" -p | tail -10)
-if echo "$output3" | grep -qE "Working|Thinking|Explored|Read"; then
+if echo "$output3" | grep -qE "$ACTIVE_PATTERN"; then
   echo "OK: worker active after resend ($SESSION:$WINDOW)"
   exit 0
 fi

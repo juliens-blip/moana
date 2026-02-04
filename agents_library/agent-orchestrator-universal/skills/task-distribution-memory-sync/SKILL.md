@@ -37,6 +37,10 @@ description: Distribute tasks with IDs across LLM workers and keep progress sync
 - If a prompt is visible in the pane but no activity starts, it is **not submitted**.
 - Run `scripts/verify-submit.sh` (or `agents_library/agent-orchestrator-universal/skills/communication-inter-agents/scripts/send-verified.sh`).
 - If still idle, send `C-c`, then re-send the full prompt.
+ - If using send-verified and still idle, follow the manual sequence:
+   1) `tmux send-keys -t $SESSION:N Enter`
+   2) `sleep 3`
+   3) `tmux capture-pane -t $SESSION:N -p | tail -10`
 
 ## Common Failure: Orchestrator Stalls After Dispatch
 - If the orchestrator says it will sleep but stops updating, run:
