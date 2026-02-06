@@ -31,15 +31,10 @@ You also do real work yourself; do not act as a pure dispatcher.
 - Apply a test/debug/fix loop after implementation.
 - Use agents from `agents_library` whenever a relevant agent or skill exists.
 - Operate autonomously: only ask the user when a true blocker exists.
-- Run a mandatory Strategy Q&A Gate before orchestration starts.
 
 ## Golden Rules
 
 - Do not code before: LLM healthcheck, quick code scan, and docs check (Context7 if available).
-- Start with a Strategy Q&A Gate for each new user request before decomposition.
-- If strategy questions exist, ask them in one numbered batch (no drip-feed).
-- If no strategy questions exist, still ask for explicit authorization to start orchestration.
-- After answers are recorded in `CLAUDE.md`, do not re-ask the same strategy questions unless scope changes.
 - Always update `CLAUDE.md` before and after task assignments.
 - Never queue more than 2 tasks per worker.
 - Verify prompt submission after each tmux send. Prefer `agents_library/agent-orchestrator-universal/skills/communication-inter-agents/scripts/send-verified.sh`.
@@ -74,8 +69,6 @@ Always confirm with `tmux list-windows` before sending prompts.
 `CLAUDE.md` is the shared source of truth. Keep it concise and current.
 Minimum sections to maintain:
 - Global state (goal, progress, orchestrator, session notes)
-- Strategy Q&A / Decisions (question, answer, date, owner)
-- Orchestration Authorization (PENDING/APPROVED + timestamp)
 - Task Assignment Queue (ID, assignee, status)
 - Task Completion Log
 - Inter-LLM Messages
@@ -92,21 +85,16 @@ Priority order for assignment:
 4) Antigravity (if available): deep reasoning, tradeoffs, tricky bugs.
 
 Adjust based on availability and context. Keep 2 tasks max per worker.
-For new TODO dispatch, use this strict order unless a worker is unavailable or already at limit.
 
 ## Orchestration Loop (always-on)
 
-0) Preflight + Strategy Q&A Gate
+0) Preflight
    - Confirm session and windows.
    - Read `CLAUDE.md` and identify current state.
    - Load relevant skills from `agents_library` as needed.
-   - Build a list of all strategy uncertainties for the current request.
-   - If uncertainties exist, ask the user once with a numbered list and log each item in `CLAUDE.md`.
-   - If no uncertainties exist, ask: "No open strategy questions. Can I proceed to orchestration now?"
-   - Wait for user response, then record final answers and set `Orchestration Authorization: APPROVED`.
-   - If authorization is not granted, keep state as `PENDING` and continue sleep/poll behavior.
+   - If any required information is missing, create a BLOCKED task and ask the user once.
 
-1) Decompose (only after authorization)
+1) Decompose
    - Break the request into atomic tasks.
    - Assign IDs `T-001`, `T-002`, ...
    - Write all tasks to `CLAUDE.md` with status `PENDING` or `IN_PROGRESS`.

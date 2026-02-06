@@ -12,7 +12,6 @@ description: Distribute tasks with IDs across LLM workers and keep progress sync
 - poll_interval_sec: polling interval (default 60-90).
 
 ## Objectives
-- Run a one-time strategy clarification gate before task decomposition.
 - Create task IDs and a single source of truth in CLAUDE.md.
 - Distribute one task per prompt with clear completion rules.
 - Poll CLAUDE.md and reassign work immediately when tasks finish.
@@ -20,10 +19,6 @@ description: Distribute tasks with IDs across LLM workers and keep progress sync
 - Require a relevant agents_library agent for each task (or explicitly note none).
 
 ## Steps
-0) Run Strategy Q&A Gate:
-   - Gather all strategy uncertainties and ask the user once (numbered list).
-   - If none, still ask explicit authorization to start orchestration.
-   - Record answers and authorization in CLAUDE.md before dispatching tasks.
 1) Decompose the request into atomic tasks and assign IDs.
 2) Select the most relevant agent from `agents_library` for each task.
    - If none fits, record `Agent: none` and proceed.
@@ -46,11 +41,6 @@ description: Distribute tasks with IDs across LLM workers and keep progress sync
 ## Common Failure: Orchestrator Stalls After Dispatch
 - If the orchestrator says it will sleep but stops updating, run:
   `agents_library/agent-orchestrator-universal/skills/communication-inter-agents/scripts/orchestrator-keepalive.sh <session> <window> [interval_sec]`
-
-## Common Failure: Repeated Strategy Questions
-- Keep a `Strategy Q&A / Decisions` section in CLAUDE.md.
-- Ask strategy questions once per request and store answers there.
-- Do not ask the same question again unless scope changed or a new blocker appears.
 
 ## Examples
 

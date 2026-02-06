@@ -6,15 +6,6 @@
 - **Orchestrator:** Codex
 - **Session notes:** <optional>
 
-## Strategy Q&A / Decisions
-| Date | Question | Answer | Owner |
-|------|----------|--------|-------|
-| <date> | <strategy question> | <final answer> | User |
-
-## Orchestration Authorization
-- **Status:** PENDING / APPROVED
-- **Approved at:** <timestamp>
-
 ## Task Assignment Queue
 | ID | Task | Agent | Assigned To | Priority | Status | Created |
 |----|------|-------|-------------|----------|--------|---------|

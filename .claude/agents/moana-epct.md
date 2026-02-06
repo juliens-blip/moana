@@ -1,5 +1,5 @@
 ---
-description: Execute EPCT workflow (Explore, Plan, Code, Test) pour Moana Yachting SaaS avec intégration Airtable
+description: Execute EPCT workflow (Explore, Plan, Code, Test) pour Moana Yachting SaaS avec integration Supabase (MCP)
 allowed-tools: [WebSearch, WebFetch, Task, Grep, Glob, Read, Write, Edit, TodoWrite, Bash]
 argument-hint: <feature description>
 model: sonnet
@@ -7,10 +7,10 @@ model: sonnet
 
 # EPCT Workflow: Moana Yachting Edition
 
-Workflow spécialisé pour le développement de fonctionnalités du SaaS Moana Yachting.
+Workflow specialise pour le developpement de fonctionnalites du SaaS Moana Yachting.
 
 **Projet:** SaaS de gestion de listings de bateaux pour Moana Yachting
-**Stack:** Next.js 14, React 19, TypeScript, Airtable, NextAuth.js, Tailwind CSS
+**Stack:** Next.js 14, React 19, TypeScript, Supabase, NextAuth.js, Tailwind CSS
 
 ---
 
@@ -18,50 +18,40 @@ Workflow spécialisé pour le développement de fonctionnalités du SaaS Moana Y
 
 ### Contexte Projet Moana
 
-#### Base Airtable
-- **Base ID**: `appNyZVynxa8shk4c`
-- **Listings Table**: `tblxxQhUvQd2Haztz`
-- **Broker Table**: `tbl9dTwK6RfutmqVY`
-
-#### Champs Listings
-- Nom du Bateau (fld6d7lSBboRKmnuj)
-- Constructeur (fldc7YcGLAfQi6qhr)
-- Longueur M/pieds (fldg1Sj70TTkAsGqr)
-- Année (fldL3ig1rDH70lbis)
-- Propriétaire (fldAoxfgKKeEHeD9S)
-- Capitaine (fldY9RXNPnV5xLgcg)
-- Broker (fldgftA1xTZBnMuPZ)
-- Localisation (fldlys06AjtMRcOmB)
+#### Backend Supabase
+- Env vars requises (server/MCP) : `NEXT_PUBLIC_SUPABASE_URL` (ou `SUPABASE_URL`), `SUPABASE_SERVICE_ROLE_KEY` (service role, ne jamais exposer cote client). Voir `.env.local` (non committe).
+- MCP Server : `supabase-moana-mcp` (chemin `mcp/supabase-moana-mcp`, commande `node dist/index.js` ; charge les env vars ci-dessus). Tools MCP : `list_listings`, `get_listing`, `create_listing`, `update_listing`, `delete_listing`, `list_brokers`, `authenticate_broker`.
+- Schema : tables `brokers`, `listings`, vue `listings_with_broker`. Les requetes MCP utilisent la service role key (RLS contourne pour ops backoffice).
 
 #### Architecture Actuelle
-- `lib/airtable/` - Client et opérations Airtable
+- `lib/supabase/` - Client Supabase (si present) et types associes
 - `app/api/` - API Routes Next.js
-- `components/` - Composants React réutilisables
+- `components/` - Composants React reutilisables
 - `app/` - Pages et layouts Next.js 14 App Router
 
 ### Step 1.1: Recherche Externe
 Rechercher:
-- Best practices Airtable API avec Next.js 14
+- Bonnes pratiques Supabase (RLS, service role) avec Next.js 14 / MCP
 - Patterns d'authentification NextAuth.js avec providers custom
 - UI/UX pour dashboards de gestion de listings
-- Performance optimization pour requêtes Airtable
-- Gestion d'état React pour CRUD operations
+- Performance sur requetes Supabase (filtres, indexes)
+- Gestion d'etat React pour CRUD operations
 
 ### Step 1.2: Exploration Codebase
 Utiliser Task agent (Explore) pour analyser:
 - Structure actuelle des composants
-- Patterns de gestion d'état existants
-- Intégrations Airtable existantes
+- Patterns de gestion d'etat existants
+- Integrations Supabase/MCP existantes
 - Architecture des API routes
-- Composants UI réutilisables disponibles
+- Composants UI reutilisables disponibles
 
-### Step 1.3: Résumé de Contexte
+### Step 1.3: Resume de Contexte
 Fournir:
-- Patterns Airtable découverts
+- Patterns Supabase/MCP decouverts
 - Composants UI disponibles
 - API routes existantes
-- Contraintes techniques identifiées
-- Recommandations d'implémentation
+- Contraintes techniques identifiees
+- Recommandations d'implementation
 
 ---
 
@@ -69,39 +59,39 @@ Fournir:
 
 ### Step 2.1: TodoWrite Plan
 
-Créer un plan détaillé incluant:
+Creer un plan detaille incluant:
 
 **Backend/API:**
-- Nouvelles API routes si nécessaires
-- Modifications des opérations Airtable
-- Gestion des erreurs et validation
+- Nouvelles API routes si necessaires
+- Integrations Supabase/MCP (CRUD listings/brokers)
+- Validation (Zod) et gestion des erreurs Supabase
 - Tests API
 
 **Frontend:**
 - Nouveaux composants UI
 - Modifications de pages existantes
-- Intégration d'état (React hooks)
+- Integration d'etat (React hooks)
 - Gestion des formulaires (react-hook-form)
 - Toast notifications (react-hot-toast)
 
-**Intégration:**
-- Connexion frontend-backend
+**Integration:**
+- Connexion frontend-backend ou via MCP
 - Gestion du cache
 - Loading states
 - Error handling
 
 **Tests:**
 - Tests unitaires des composants
-- Tests d'intégration API
+- Tests d'integration API
 - Tests E2E des flows utilisateur
 
 ### Step 2.2: Revue du Plan
 
-Présenter:
-- Architecture proposée
+Presenter:
+- Architecture proposee
 - Choix techniques et justifications
 - Impacts sur le code existant
-- Risques identifiés
+- Risques identifies
 
 **ATTENDRE APPROBATION UTILISATEUR**
 
@@ -109,27 +99,27 @@ Présenter:
 
 ## Phase 3: CODE
 
-### Guidelines Spécifiques Moana
+### Guidelines Specifiques Moana
 
 #### Backend (API Routes)
 ```typescript
-// Toujours vérifier l'authentification
+// Toujours verifier l'authentification
 const session = await getServerSession(authOptions);
 if (!session) {
-  return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 });
+  return NextResponse.json({ success: false, error: 'Non authentifie' }, { status: 401 });
 }
 
 // Toujours valider avec Zod
 const validation = schema.safeParse(body);
 if (!validation.success) {
-  return NextResponse.json({ success: false, error: 'Données invalides' }, { status: 400 });
+  return NextResponse.json({ success: false, error: 'Donnees invalides' }, { status: 400 });
 }
 
-// Toujours gérer les erreurs Airtable
+// Toujours gerer les erreurs Supabase
 try {
-  // Opération Airtable
+  // Operation Supabase (via client ou MCP)
 } catch (error) {
-  console.error('Airtable error:', error);
+  console.error('Supabase error:', error);
   return NextResponse.json({ success: false, error: 'Erreur serveur' }, { status: 500 });
 }
 ```
@@ -142,11 +132,11 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 
-// Toujours gérer loading states
+// Toujours gerer loading states
 const [loading, setLoading] = useState(false);
 
 // Toujours afficher feedback utilisateur
-toast.success('Opération réussie');
+toast.success('Operation reussie');
 toast.error('Une erreur est survenue');
 
 // Toujours typer avec TypeScript
@@ -158,7 +148,7 @@ interface Props {
 
 #### Styles Tailwind
 ```typescript
-// Utiliser les couleurs du thème
+// Utiliser les couleurs du theme
 className="bg-primary-600 hover:bg-primary-700"
 className="text-secondary-500"
 
@@ -169,10 +159,10 @@ className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
 className="disabled:opacity-50 disabled:cursor-not-allowed"
 ```
 
-### Step 3.1: Implémentation
+### Step 3.1: Implementation
 
 1. Suivre strictement le plan TodoWrite
-2. Marquer chaque tâche as in_progress puis completed
+2. Marquer chaque tache as in_progress puis completed
 3. Utiliser les patterns existants du projet
 4. Commenter le code complexe uniquement
 5. Valider avec TypeScript (pas d'any)
@@ -181,11 +171,11 @@ className="disabled:opacity-50 disabled:cursor-not-allowed"
 
 - [ ] TypeScript compile sans erreurs
 - [ ] Pas de console.log en production
-- [ ] Gestion d'erreurs complète
+- [ ] Gestion d'erreurs complete
 - [ ] Loading states sur toutes les actions async
-- [ ] Feedback utilisateur (toasts) sur succès/erreur
+- [ ] Feedback utilisateur (toasts) sur succes/erreur
 - [ ] Responsive design mobile-first
-- [ ] Accessibilité (labels, ARIA)
+- [ ] Accessibilite (labels, ARIA)
 
 ---
 
@@ -193,7 +183,7 @@ className="disabled:opacity-50 disabled:cursor-not-allowed"
 
 ### Step 4.1: Tests Disponibles
 
-Vérifier dans package.json:
+Verifier dans package.json:
 ```bash
 npm run type-check  # TypeScript
 npm run lint        # ESLint
@@ -210,50 +200,49 @@ npm run dev         # Dev server
 - [ ] Messages d'erreur clairs
 - [ ] Loading states visibles
 - [ ] Responsive sur mobile/tablet/desktop
-- [ ] Pas de fuites de données sensibles (API keys, passwords)
+- [ ] Pas de fuites de donnees sensibles (API keys, passwords)
 
-**Checklist Airtable:**
-- [ ] Données correctement formatées
-- [ ] Champs requis validés
-- [ ] Rate limiting respecté (5 req/s)
-- [ ] Erreurs Airtable gérées gracieusement
+**Checklist Supabase:**
+- [ ] Donnees correctement formattees
+- [ ] Champs requis valides
+- [ ] Erreurs Supabase gerees gracieusement (code/message)
+- [ ] Service role key jamais exposee cote client
 
 ### Step 4.3: Validation Finale
 
-**Résumé:**
-- ✅ Tous les todos complétés
-- ✅ TypeScript compile
-- ✅ Pas d'erreurs console
-- ✅ Tests manuels passés
-- ✅ Performance acceptable (<3s load time)
+**Resume:**
+- ?? Tous les todos completes
+- ?? TypeScript compile
+- ?? Pas d'erreurs console
+- ?? Tests manuels passes
+- ?? Performance acceptable (<3s load time)
 
-**Fichiers Modifiés:**
+**Fichiers Modifies:**
 - Liste des fichiers avec liens (file:line)
 
 **Instructions Utilisateur:**
 ```bash
-# Installer les dépendances
+# Installer les dependances
 npm install
 
-# Configurer .env.local (déjà fait)
+# Configurer .env.local (Supabase URL + service role key)
 
 # Lancer le dev server
 npm run dev
 
-# Accéder à http://localhost:3000
+# Acceder a http://localhost:3000
 ```
 
 ---
 
-## Règles Spécifiques Moana
+## Regles Specifiques Moana
 
-1. **Sécurité:**
-   - Ne JAMAIS exposer AIRTABLE_API_KEY côté client
-   - Toujours vérifier session avant opérations sensibles
-   - Vérifier ownership des listings (broker match)
+1. **Securite:**
+   - Ne JAMAIS exposer SUPABASE_SERVICE_ROLE_KEY cote client
+   - Toujours verifier session avant operations sensibles
+   - Verifier ownership des listings (broker match) si necessaire
 
 2. **Performance:**
-   - Cache les données Airtable côté client
    - Debounce les recherches (300ms)
    - Lazy load les composants lourds
    - Optimiser les images
@@ -262,16 +251,16 @@ npm run dev
    - Loading states sur toutes actions
    - Toasts pour feedback utilisateur
    - Modales de confirmation pour delete
-   - Messages d'erreur en français
-   - Design cohérent avec charte yacht de luxe
+   - Messages d'erreur en francais
+   - Design coherent avec charte yacht de luxe
 
 4. **Code:**
    - Types TypeScript stricts (no any)
-   - Composants réutilisables dans components/
+   - Composants reutilisables dans components/
    - API routes suivent pattern REST
-   - Validation Zod systématique
+   - Validation Zod systematique
    - Error handling complet
 
 ---
 
-**Prêt à développer des fonctionnalités de qualité pour Moana Yachting! ⛵**
+**Pret a developper des fonctionnalites de qualite pour Moana Yachting !**
