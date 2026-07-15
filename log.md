@@ -36,6 +36,8 @@
 
 [2026-07-16] Correction de l’authentification KYC inter-fonctions | Endpoint Python, appel Node, tests et bugs | Jeton interne dérivé dans un en-tête privé; suppression du 401 transformé en 500 côté CRM
 
+[2026-07-16] Correction du routage KYC Vercel | `lib/supabase/kyc.ts`, bugs et log | Alias Production prioritaire; évite le 401 de protection sur l’URL unique du déploiement
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].

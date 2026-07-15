@@ -107,7 +107,7 @@ function crawl4AiEndpoint(): string {
   const configured = process.env.KYC_CRAWL_URL?.trim();
   if (configured) return configured;
 
-  const host = process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
   if (host) return `https://${host.replace(/^https?:\/\//, '')}/api/kyc-crawl`;
   return 'http://127.0.0.1:3000/api/kyc-crawl';
 }
