@@ -8,7 +8,7 @@ import {
   CheckCircle, XCircle, PhoneCall, Trophy, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import type { LeadWithBroker, LeadStatus } from '@/lib/types';
-import type { KycSummary } from '@/lib/kyc/types';
+import type { KycReport, KycSummary } from '@/lib/kyc/types';
 import { LeadStatusBadge, LeadStatusSelect } from './LeadStatusBadge';
 import { Button } from '@/components/ui';
 import { formatRelativeTime } from '@/lib/utils';
@@ -28,17 +28,41 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
   const [kyc, setKyc] = useState<KycSummary | undefined>();
+  const [kycReport, setKycReport] = useState<KycReport | undefined>();
   const [kycLoading, setKycLoading] = useState(false);
 
   useEffect(() => {
     if (!lead) {
       setNotes('');
       setKyc(undefined);
+      setKycReport(undefined);
       return;
     }
     setNotes(lead.lead_comments || '');
     setKyc(lead.kyc);
+    setKycReport(undefined);
   }, [lead]);
+
+  useEffect(() => {
+    const leadId = lead?.id;
+    if (!leadId || !isOpen) return;
+
+    const controller = new AbortController();
+    void fetch(`/api/leads/${leadId}/kyc`, { signal: controller.signal })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.success) return;
+        setKyc(data.data?.summary as KycSummary | undefined);
+        setKycReport(data.data?.report as KycReport | undefined);
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error loading KYC report:', error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [lead?.id, isOpen]);
 
   if (!lead) return null;
 
@@ -158,7 +182,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
       }
 
       const summary = data.data?.summary as KycSummary | undefined;
+      const report = data.data?.report as KycReport | undefined;
       setKyc(summary);
+      setKycReport(report);
       if (summary) onLeadUpdated?.({ ...lead, kyc: summary });
       toast.success('Contrôle KYC terminé');
     } catch (error) {
@@ -185,6 +211,31 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
       : kyc?.overall_risk === 'high'
         ? 'Élevé'
         : 'Indéterminé';
+
+  const selectedPerson = kycReport?.identity_resolution.matched_persons[0];
+  const profileLinks = kycReport ? [
+    { label: 'LinkedIn', url: kycReport.person_profile.profiles.linkedin },
+    { label: 'Profil entreprise', url: kycReport.person_profile.profiles.company_profile },
+    ...kycReport.person_profile.profiles.other.map((url, index) => ({ label: `Profil ${index + 1}`, url })),
+    ...kycReport.person_profile.websites.map((url, index) => ({ label: `Site ${index + 1}`, url })),
+  ].filter((link, index, links) => link.url && links.findIndex((item) => item.url === link.url) === index) : [];
+  const screeningLabel: Record<string, string> = {
+    clear: 'Aucun résultat exact',
+    possible_homonym: 'Homonyme possible',
+    hit: 'Correspondance',
+    not_enough_data: 'Non conclusif',
+  };
+  const sourceTypeLabel: Record<KycReport['sources'][number]['type'], string> = {
+    official_registry: 'Registre officiel',
+    company_website: 'Site entreprise',
+    linkedin: 'LinkedIn',
+    sanctions_db: 'Sanctions',
+    pep_db: 'PEP',
+    news: 'Presse',
+    court_record: 'Justice',
+    maritime_db: 'Maritime',
+    other: 'Source publique',
+  };
 
   return (
     <AnimatePresence>
@@ -387,6 +438,116 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                             <ul className="space-y-1 text-sm text-gray-700 list-disc pl-4">
                               {kyc.key_reasons.map((reason) => <li key={reason}>{reason}</li>)}
                             </ul>
+                          )}
+                          {kycReport && (
+                            <div className="space-y-3 border-t border-slate-200 pt-3">
+                              {(selectedPerson || kycReport.person_profile.current_title || kycReport.person_profile.current_company) && (
+                                <div className="rounded-md bg-white p-3 border border-slate-200">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                                    Profil retenu
+                                  </p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {selectedPerson?.name || kycReport.person_profile.full_name || lead.contact_display_name}
+                                  </p>
+                                  {(selectedPerson?.headline || kycReport.person_profile.current_title) && (
+                                    <p className="text-sm text-gray-700">
+                                      {selectedPerson?.headline || kycReport.person_profile.current_title}
+                                    </p>
+                                  )}
+                                  {(selectedPerson?.company || kycReport.person_profile.current_company) && (
+                                    <p className="text-sm text-gray-600">
+                                      {selectedPerson?.company || kycReport.person_profile.current_company}
+                                    </p>
+                                  )}
+                                  {kycReport.identity_resolution.selected_profile_rationale && (
+                                    <p className="text-xs text-gray-500 mt-2">
+                                      {kycReport.identity_resolution.selected_profile_rationale}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {profileLinks.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-600 mb-1">Profils et sites</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {profileLinks.map((link) => (
+                                      <a
+                                        key={link.url}
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-sm text-primary-700 hover:underline"
+                                      >
+                                        {link.label}<ExternalLink className="h-3.5 w-3.5" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {(kycReport.company_profile.company_name || kycReport.company_profile.website) && (
+                                <div className="rounded-md bg-white p-3 border border-slate-200">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                                    Entreprise
+                                  </p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {kycReport.company_profile.company_name || 'Entreprise associée'}
+                                  </p>
+                                  {kycReport.company_profile.industry && (
+                                    <p className="text-sm text-gray-600">{kycReport.company_profile.industry}</p>
+                                  )}
+                                  {kycReport.company_profile.website && (
+                                    <a
+                                      href={kycReport.company_profile.website}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-sm text-primary-700 hover:underline mt-1"
+                                    >
+                                      Site officiel <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="rounded-md bg-white p-2 border border-slate-200">
+                                  <span className="text-gray-500">Sanctions : </span>
+                                  <span className="font-medium text-gray-800">
+                                    {screeningLabel[kycReport.risk_screening.sanctions.status]}
+                                  </span>
+                                </div>
+                                <div className="rounded-md bg-white p-2 border border-slate-200">
+                                  <span className="text-gray-500">PEP : </span>
+                                  <span className="font-medium text-gray-800">
+                                    {screeningLabel[kycReport.risk_screening.pep.status]}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {kycReport.sources.length > 0 && (
+                                <details className="rounded-md bg-white border border-slate-200 p-3" open>
+                                  <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+                                    Sources consultées ({kycReport.sources.length})
+                                  </summary>
+                                  <div className="mt-2 space-y-2">
+                                    {kycReport.sources.map((source) => (
+                                      <div key={source.url} className="text-sm border-t border-slate-100 pt-2 first:border-0 first:pt-0">
+                                        <a
+                                          href={source.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline break-all"
+                                        >
+                                          {sourceTypeLabel[source.type]} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                        </a>
+                                        {source.note && <p className="text-xs text-gray-500 mt-0.5">{source.note}</p>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
                           )}
                           <p className="text-xs text-gray-500">
                             Aide à la décision uniquement. Revue humaine requise avant toute décision de conformité.

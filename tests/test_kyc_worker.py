@@ -99,6 +99,26 @@ class KycWorkerTests(unittest.TestCase):
         self.assertEqual(report["identity_resolution"]["status"], "confirmed")
         self.assertEqual(report["person_profile"]["emails"], ["person@example.com"])
 
+    def test_yachting_candidate_is_ranked_without_confirming_identity(self):
+        documents = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/example-person",
+                text="Example Person works in a general professional role.",
+                source_type="linkedin",
+            ),
+            EvidenceDocument(
+                url="https://broker.example.org/example-person",
+                text="Example Person is a yacht charter broker and company founder.",
+                source_type="company_website",
+            ),
+        ]
+        report = deterministic_report(QUERY, documents)
+        selected = report["identity_resolution"]["matched_persons"][0]
+        rationale = report["identity_resolution"]["selected_profile_rationale"]
+        self.assertIn("yacht charter broker", selected["headline"].lower())
+        self.assertIn("proximité yachting", rationale)
+        self.assertIn(report["identity_resolution"]["status"], {"probable", "ambiguous"})
+
     def test_vercel_worker_token_is_stable_and_not_the_secret(self):
         module_path = Path(__file__).parents[1] / "api" / "kyc-crawl.py"
         spec = importlib.util.spec_from_file_location("kyc_crawl_api", module_path)

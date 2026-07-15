@@ -733,6 +733,40 @@ def evidence_signals(
     if city and city in text:
         score += 4
         signals.append("ville")
+    if any(
+        term in text
+        for term in (
+            "yacht",
+            "yachting",
+            "superyacht",
+            "charter",
+            "marina",
+            "maritime",
+            "naval",
+            "vessel",
+        )
+    ):
+        score += 8
+        signals.append("proximité yachting")
+    if any(
+        term in text
+        for term in (
+            "chief executive",
+            "ceo",
+            "founder",
+            "owner",
+            "chairman",
+            "managing director",
+            "entrepreneur",
+            "investor",
+            "family office",
+            "dirigeant",
+            "fondateur",
+            "investisseur",
+        )
+    ):
+        score += 4
+        signals.append("profil économique documenté")
     if document.source_type in {"official_registry", "company_website", "linkedin"}:
         score += 5
     return score, unique_strings(signals)
@@ -790,6 +824,18 @@ def deterministic_report(
     )
     if named_docs:
         primary = max(named_docs, key=lambda item: item[1])
+        priority_signals = [
+            signal
+            for signal in ("proximité yachting", "profil économique documenté")
+            if signal in primary[2]
+        ]
+        if priority_signals:
+            rationale += (
+                " Candidat priorisé pour revue selon "
+                + " et ".join(priority_signals)
+                + "; ces indices ne confirment pas seuls l’identité."
+            )
+            report["identity_resolution"]["selected_profile_rationale"] = rationale
         report["identity_resolution"]["matched_persons"] = [
             {
                 "name": query["full_name"],

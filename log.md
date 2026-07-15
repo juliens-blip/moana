@@ -38,6 +38,8 @@
 
 [2026-07-16] Correction du routage KYC Vercel | `lib/supabase/kyc.ts`, bugs et log | Alias Production prioritaire; évite le 401 de protection sur l’URL unique du déploiement
 
+[2026-07-16] Affichage du dossier KYC détaillé et classement prudent des homonymes | Fiche client, worker, tests et mémoire KYC | Profil, entreprise, contrôles et sources cliquables; proximité yachting priorisée sans confirmer l’identité
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].

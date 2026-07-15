@@ -43,6 +43,8 @@ Optionnelles : `company_name`, `country`, `phone`, `city`, `yacht_name`, `websit
 7. Ne pas utiliser un profil social isolé comme preuve finale.
 8. Si le lien personne–entreprise reste faible, ne pas le créer artificiellement.
 9. Si personne et entreprise restent non résolues, rendre un dossier minimal et silencieux.
+10. En cas d’homonymes persistants, classer en premier pour revue le candidat dont les sources vérifiables montrent une proximité avec le yachting ou un profil économique substantiel.
+11. Ne jamais utiliser une richesse supposée comme preuve d’identité; ce classement commercial reste `non confirmé` sans attributs forts convergents.
 
 Signaux d’attribution :
 
