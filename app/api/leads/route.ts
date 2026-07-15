@@ -3,10 +3,12 @@ import { getSession } from '@/lib/supabase/auth';
 import { createManualLead, getLeadsByBroker, getLeadStats, purgeTestLeads } from '@/lib/supabase/leads';
 import { manualLeadSchema } from '@/lib/validations';
 import type { ApiResponse, LeadWithBroker } from '@/lib/types';
+import { processLeadKycSafely } from '@/lib/supabase/kyc';
 
 // Force dynamic rendering - required for cookies()
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 /**
  * GET /api/leads
@@ -133,11 +135,12 @@ export async function POST(request: NextRequest) {
     }
 
     const lead = await createManualLead(session.brokerId, validation.data);
+    const kyc = await processLeadKycSafely(lead.id);
 
     return NextResponse.json<ApiResponse>(
       {
         success: true,
-        data: lead,
+        data: { ...lead, kyc },
         message: 'Lead créé avec succès'
       },
       { status: 201 }

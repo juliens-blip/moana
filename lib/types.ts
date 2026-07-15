@@ -253,6 +253,7 @@ export interface Lead {
 export interface LeadWithBroker extends Lead {
   broker_name?: string;
   broker_email?: string;
+  kyc?: import('@/lib/kyc/types').KycSummary;
 }
 
 // ============================================

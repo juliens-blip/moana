@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { yatcoLeadPayloadSchema } from '@/lib/validations';
 import { YatcoLeadPayload } from '@/lib/types';
+import { processLeadKycSafely } from '@/lib/supabase/kyc';
 
 // BOats group IP whitelist
 const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
 // Temporary bypass for testing: set YATCO_IP_WHITELIST_DISABLED=true
 const IP_WHITELIST_DISABLED = process.env.YATCO_IP_WHITELIST_DISABLED === 'true';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 /**
  * POST /api/leads/yatco
@@ -224,6 +228,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[BOats group Webhook] Lead created successfully:', newLead.id);
+    const kyc = await processLeadKycSafely(newLead.id);
 
     // Success response
     return NextResponse.json(
@@ -231,7 +236,8 @@ export async function POST(request: NextRequest) {
         success: true,
         lead_id: newLead.id,
         broker_assigned: !!broker,
-        broker_name: broker?.broker_name
+        broker_name: broker?.broker_name,
+        kyc_status: kyc?.status ?? 'unavailable'
       },
       { status: 201 }
     );

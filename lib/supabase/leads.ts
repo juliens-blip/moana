@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Lead, LeadWithBroker, LeadStatus } from '@/lib/types';
 import { ManualLeadInput } from '@/lib/validations';
+import { getLatestKycSummaries } from '@/lib/supabase/kyc';
 
 /**
  * Get all leads for a specific broker
@@ -19,7 +20,9 @@ export async function getLeadsByBroker(brokerId: string): Promise<LeadWithBroker
     throw new Error(`Failed to fetch leads: ${error.message}`);
   }
 
-  return data as LeadWithBroker[];
+  const leads = data as LeadWithBroker[];
+  const kycByLead = await getLatestKycSummaries(leads.map((lead) => lead.id));
+  return leads.map((lead) => ({ ...lead, kyc: kycByLead.get(lead.id) }));
 }
 
 /**
@@ -43,7 +46,9 @@ export async function getLeadById(leadId: string, brokerId: string): Promise<Lea
     throw new Error(`Failed to fetch lead: ${error.message}`);
   }
 
-  return data as LeadWithBroker;
+  const lead = data as LeadWithBroker;
+  const kycByLead = await getLatestKycSummaries([lead.id]);
+  return { ...lead, kyc: kycByLead.get(lead.id) };
 }
 
 /**
