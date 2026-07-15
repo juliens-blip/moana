@@ -30,7 +30,7 @@
 
 [2026-07-15] Activation du KYC déterministe Vercel sans LLM | Backend leads, `/api/leads/[id]/kyc`, fiche CRM, tests et wiki | Nouveau lead contrôlé automatiquement; résumé prudent stocké dans Supabase et visible avec la demande
 
-[2026-07-15] Correction de la collecte KYC sans source | `lib/kyc/deterministic.ts`, tests et mémoire KYC | Nom exact, moteurs publics de repli, séparation stricte des sources et panne fournisseur visible
+[2026-07-15] Stabilisation de la collecte KYC Vercel | `lib/kyc/deterministic.ts`, tests et mémoire KYC | Mojeek retiré; sources structurées, filtre exact, requêtes séquentielles et panne fournisseur visible
 
 ## Historique condensé
 

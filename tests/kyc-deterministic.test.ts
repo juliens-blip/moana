@@ -3,7 +3,8 @@ import test from 'node:test';
 import {
   buildDeterministicKycReport,
   parseDuckDuckGoResults,
-  parseMojeekResults,
+  parseGoogleNewsRssResults,
+  parseWikipediaOpenSearchResults,
 } from '../lib/kyc/deterministic';
 
 test('keeps risk undetermined while resolving converging public identity evidence', async () => {
@@ -111,21 +112,37 @@ test('does not borrow a snippet from the next search result', () => {
   assert.equal(hits[1].snippet, 'Second Person second@example.com');
 });
 
-test('parses Mojeek results without crossing their list-item boundary', () => {
-  const html = `
-    <li class="r1">
-      <h2><a class="title" href="https://first.example/profile">First Person</a></h2>
-    </li>
-    <li class="r2">
-      <h2><a href="https://second.example/profile" class="title">Second Person</a></h2>
-      <p class="s">Second Person second@example.com</p>
-    </li>
-  `;
+test('parses structured Wikipedia OpenSearch results', () => {
+  const hits = parseWikipediaOpenSearchResults(JSON.stringify([
+    'Jane Doe',
+    ['Jane Doe'],
+    ['Managing director at Example Yachting.'],
+    ['https://en.wikipedia.org/wiki/Jane_Doe'],
+  ]));
 
-  const hits = parseMojeekResults(html);
+  assert.deepEqual(hits, [{
+    url: 'https://en.wikipedia.org/wiki/Jane_Doe',
+    title: 'Jane Doe',
+    snippet: 'Managing director at Example Yachting.',
+  }]);
+});
 
-  assert.equal(hits[0].snippet, '');
-  assert.equal(hits[1].snippet, 'Second Person second@example.com');
+test('parses Google News RSS items and rejects unsafe links', () => {
+  const hits = parseGoogleNewsRssResults(`
+    <rss><channel>
+      <item>
+        <title><![CDATA[Jane Doe joins Example Yachting]]></title>
+        <link>https://news.google.com/rss/articles/example</link>
+        <description><![CDATA[<a href="https://publisher.example">Jane Doe profile</a>]]></description>
+      </item>
+      <item><title>Unsafe</title><link>http://127.0.0.1/admin</link></item>
+    </channel></rss>
+  `);
+
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].url, 'https://news.google.com/rss/articles/example');
+  assert.match(hits[0].title, /Jane Doe/);
+  assert.equal(hits[0].snippet, 'Jane Doe profile');
 });
 
 test('searches a public-email lead by exact name without adding a generic company term', async () => {
@@ -189,4 +206,29 @@ test('never crawls an email domain unless search returned it as a source', async
 
   assert.equal(crawlCalls, 0);
   assert.equal(report.sources.length, 0);
+});
+
+test('runs lead search queries sequentially to reduce provider throttling', async () => {
+  let activeSearches = 0;
+  let peakSearches = 0;
+
+  await buildDeterministicKycReport(
+    {
+      full_name: 'Jane Doe',
+      email: 'jane@example.net',
+      company_name: 'Example Yachting',
+      country: '',
+      city: '',
+    },
+    async () => {
+      activeSearches += 1;
+      peakSearches = Math.max(peakSearches, activeSearches);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeSearches -= 1;
+      return [];
+    },
+    async () => null,
+  );
+
+  assert.equal(peakSearches, 1);
 });

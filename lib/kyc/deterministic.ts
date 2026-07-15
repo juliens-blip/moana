@@ -191,45 +191,44 @@ export function parseDuckDuckGoResults(html: string): SearchHit[] {
   return hits;
 }
 
-export function parseMojeekResults(html: string): SearchHit[] {
-  const hits: SearchHit[] = [];
-  const seen = new Set<string>();
-  const anchorPattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
-  const resultAnchors: Array<{ start: number; end: number; url: string | null; title: string }> = [];
-  let anchor: RegExpExecArray | null;
-
-  while ((anchor = anchorPattern.exec(html)) !== null) {
-    const attributes = anchor[1];
-    const className = readHtmlAttribute(attributes, 'class');
-    if (!/(?:^|\s)title(?:\s|$)/i.test(className)) continue;
-
-    resultAnchors.push({
-      start: anchor.index,
-      end: anchorPattern.lastIndex,
-      url: safePublicUrl(readHtmlAttribute(attributes, 'href')),
-      title: decodeHtml(anchor[2]).slice(0, 240),
-    });
+export function parseWikipediaOpenSearchResults(body: string): SearchHit[] {
+  const parsed: unknown = JSON.parse(body);
+  if (!Array.isArray(parsed) || !Array.isArray(parsed[1]) || !Array.isArray(parsed[2]) || !Array.isArray(parsed[3])) {
+    throw new Error('Invalid Wikipedia OpenSearch response');
   }
 
-  for (const [index, resultAnchor] of resultAnchors.entries()) {
-    const url = resultAnchor.url;
+  const titles = parsed[1] as unknown[];
+  const descriptions = parsed[2] as unknown[];
+  const urls = parsed[3] as unknown[];
+
+  return urls.flatMap((rawUrl, index) => {
+    if (typeof rawUrl !== 'string') return [];
+    const url = safePublicUrl(rawUrl);
+    if (!url) return [];
+    return [{
+      url,
+      title: decodeHtml(typeof titles[index] === 'string' ? titles[index] : '').slice(0, 240),
+      snippet: decodeHtml(typeof descriptions[index] === 'string' ? descriptions[index] : '').slice(0, 500),
+    }];
+  });
+}
+
+export function parseGoogleNewsRssResults(xml: string): SearchHit[] {
+  const hits: SearchHit[] = [];
+  const seen = new Set<string>();
+
+  for (const match of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const item = match[1];
+    const rawUrl = item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? '';
+    const url = safePublicUrl(decodeHtml(rawUrl.replace(/^<!\[CDATA\[|\]\]>$/g, '')));
     if (!url || seen.has(url)) continue;
 
-    const boundary = Math.min(
-      resultAnchor.end + 2_500,
-      resultAnchors[index + 1]?.start ?? html.length,
-    );
-    const followingHtml = html.slice(resultAnchor.end, boundary);
-    const resultEnd = followingHtml.search(/<\/li>/i);
-    const resultHtml = resultEnd >= 0 ? followingHtml.slice(0, resultEnd) : followingHtml;
-    const snippetMatch = resultHtml.match(
-      /<p\b[^>]*class\s*=\s*["'][^"']*\bs\b[^"']*["'][^>]*>([\s\S]*?)<\/p>/i,
-    );
-
+    const rawTitle = item.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? '';
+    const rawDescription = item.match(/<description>([\s\S]*?)<\/description>/i)?.[1] ?? '';
     hits.push({
       url,
-      title: resultAnchor.title,
-      snippet: decodeHtml(snippetMatch?.[1] ?? '').slice(0, 500),
+      title: decodeHtml(rawTitle.replace(/^<!\[CDATA\[|\]\]>$/g, '')).slice(0, 240),
+      snippet: decodeHtml(decodeHtml(rawDescription.replace(/^<!\[CDATA\[|\]\]>$/g, ''))).slice(0, 500),
     });
     seen.add(url);
   }
@@ -237,22 +236,52 @@ export function parseMojeekResults(html: string): SearchHit[] {
   return hits;
 }
 
+function primaryQuotedTerm(query: string): string {
+  return normalizeText(query.match(/"([^"]+)"/)?.[1] ?? query);
+}
+
+function matchesPrimaryQuery(hit: SearchHit, query: string): boolean {
+  const required = primaryQuotedTerm(query);
+  if (!required) return false;
+  return normalizeText(`${hit.title} ${hit.snippet} ${hit.url}`).includes(required);
+}
+
 async function defaultSearch(query: string): Promise<SearchHit[]> {
   const endpoints = [
     {
+      name: 'wikipedia-opensearch',
+      url: `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=5&namespace=0&format=json`,
+      parse: parseWikipediaOpenSearchResults,
+      valid: (body: string) => {
+        try {
+          const parsed: unknown = JSON.parse(body);
+          return Array.isArray(parsed) && parsed.length >= 4;
+        } catch {
+          return false;
+        }
+      },
+    },
+    {
+      name: 'google-news-rss',
+      url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en&gl=US&ceid=US:en`,
+      parse: parseGoogleNewsRssResults,
+      valid: (body: string) => /<rss\b[\s\S]*<channel\b/i.test(body),
+    },
+    {
+      name: 'duckduckgo-html',
       url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
       parse: parseDuckDuckGoResults,
+      valid: (body: string) => /result__a|no results|result--no-result/i.test(body),
     },
     {
-      url: `https://www.mojeek.com/search?q=${encodeURIComponent(query)}`,
-      parse: parseMojeekResults,
-    },
-    {
+      name: 'duckduckgo-lite',
       url: `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
       parse: parseDuckDuckGoResults,
+      valid: (body: string) => /result-link|no results/i.test(body),
     },
   ];
   let validResponseReceived = false;
+  const failures: string[] = [];
 
   for (const endpoint of endpoints) {
     try {
@@ -264,22 +293,29 @@ async function defaultSearch(query: string): Promise<SearchHit[]> {
         cache: 'no-store',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      if (!response.ok) continue;
+      if (!response.ok) {
+        failures.push(`${endpoint.name}:http-${response.status}`);
+        continue;
+      }
 
       const html = await readLimitedText(response);
-      if (/anomaly|challenge|bots use duckduckgo/i.test(html)) continue;
+      if (/anomaly|challenge|bots use duckduckgo/i.test(html)) {
+        failures.push(`${endpoint.name}:anti-bot`);
+        continue;
+      }
 
       const hits = endpoint.parse(html);
-      if (hits.length > 0) return hits;
-      if (/no results|result--no-result|did not match any documents/i.test(html)) {
-        validResponseReceived = true;
-      }
-    } catch {
+      if (endpoint.valid(html)) validResponseReceived = true;
+      const relevantHits = hits.filter((hit) => matchesPrimaryQuery(hit, query));
+      if (relevantHits.length > 0) return relevantHits;
+    } catch (error) {
+      failures.push(`${endpoint.name}:${error instanceof Error ? error.name : 'error'}`);
       // Try the next public search endpoint before reporting an outage.
     }
   }
 
   if (validResponseReceived) return [];
+  console.warn('[KYC search] Public providers unavailable', { failures });
   throw new Error('Public search provider unavailable');
 }
 
@@ -373,9 +409,9 @@ function buildQueries(input: KycQueryInput): string[] {
   const context = input.company_name.trim() || input.country.trim();
   const professionalDomain = domain && !PUBLIC_EMAIL_DOMAINS.has(domain) ? domain : '';
   const queries = [
-    email ? `"${email}"` : '',
     name && (context || professionalDomain) ? `"${name}" "${context || professionalDomain}"` : '',
     name ? `"${name}"` : '',
+    email ? `"${email}"` : '',
   ];
 
   return [...new Set(queries.filter(Boolean))].slice(0, MAX_SEARCH_QUERIES);
@@ -457,20 +493,21 @@ export async function buildDeterministicKycReport(
     return report;
   }
 
-  const settled = await Promise.allSettled(buildQueries(input).map((query) => search(query)));
   const uniqueHits = new Map<string, SearchHit>();
   let successfulSearches = 0;
   let failedSearches = 0;
-  for (const result of settled) {
-    if (result.status !== 'fulfilled') {
-      failedSearches += 1;
-      continue;
-    }
-    successfulSearches += 1;
-    for (const hit of result.value) {
-      const safeUrl = safePublicUrl(hit.url);
-      if (safeUrl && !uniqueHits.has(safeUrl)) uniqueHits.set(safeUrl, { ...hit, url: safeUrl });
+  for (const query of buildQueries(input)) {
+    try {
+      const hits = await search(query);
+      successfulSearches += 1;
+      for (const hit of hits) {
+        const safeUrl = safePublicUrl(hit.url);
+        if (safeUrl && !uniqueHits.has(safeUrl)) uniqueHits.set(safeUrl, { ...hit, url: safeUrl });
+        if (uniqueHits.size >= MAX_SOURCES) break;
+      }
       if (uniqueHits.size >= MAX_SOURCES) break;
+    } catch {
+      failedSearches += 1;
     }
   }
 

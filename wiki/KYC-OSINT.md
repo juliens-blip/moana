@@ -297,7 +297,7 @@ Script : `scripts/kyc-enrichment-schema.sql`.
 Fichiers principaux : `lib/kyc/deterministic.ts`, `lib/supabase/kyc.ts`, `/api/leads/[id]/kyc` et `components/leads/LeadDetailModal.tsx`.
 
 - Chaque création manuelle ou Boats Group lance une collecte publique courte après insertion du lead.
-- La recherche essaie l’email exact, le nom avec contexte fiable, puis le nom exact; DuckDuckGo HTML/Lite et Mojeek servent de variantes bornées.
+- La recherche essaie le nom contextualisé, le nom exact, puis l’email; Wikipedia OpenSearch et Google News RSS sont prioritaires, DuckDuckGo HTML/Lite reste un repli sans garantie.
 - Une indisponibilité du moteur est distinguée d’une recherche valide sans source.
 - L’échec de collecte ne supprime pas le lead et reste visible comme échec technique.
 - Sans registre officiel intégré, sanctions/PEP restent `not_enough_data` et le risque `undetermined`.

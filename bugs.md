@@ -14,4 +14,4 @@ Format : `[YYYY-MM-DD] | Problème | Cause | Solution | #tags`
 
 [2026-07-15] | Les routes `/api/debug/env` et `/api/debug/auth` exposent des informations sensibles | Des endpoints de diagnostic non protégés sont restés dans l’application | Les supprimer ou les restreindre strictement hors production | #backend #api #bug #todo
 
-[2026-07-15] | Le KYC retournait zéro source pour des contacts publics avec email générique | Le parseur DuckDuckGo était fragile et la requête ajoutait le terme générique `company` | Chercher le nom exact, ajouter un moteur de repli, borner les sources et signaler les pannes | #backend #ai #bug #fix #done
+[2026-07-15] | Le KYC Vercel retournait une panne fournisseur et zéro source | DuckDuckGo servait une page anti-bot et Mojeek ne permet pas ce scraping automatisé | Prioriser Wikipedia OpenSearch et Google News RSS, filtrer le terme exact et sérialiser les requêtes | #backend #ai #bug #fix #done
