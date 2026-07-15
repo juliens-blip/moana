@@ -1,6 +1,6 @@
 # Crawl4AI
 
-## État validé — 2026-07-15
+## État validé — 2026-07-16
 
 - Version stable : `0.9.2`.
 - Interpréteur : Python 3.11, `C:\Users\beatr\AppData\Local\Programs\Python\Python311\python.exe`.
@@ -67,4 +67,4 @@ Cas d’usage principal prévu : enrichissement [[KYC-OSINT]] des nouvelles dema
 4. Supprimer rapidement le dump brut et tracer l’action dans `log.md`.
 5. Ne jamais crawler, stocker ou committer de secrets ou de données personnelles inutiles.
 
-Crawl4AI est installé au niveau utilisateur; aucune dépendance Python n’est ajoutée au dépôt.
+Crawl4AI est installé localement et épinglé dans `requirements.txt` pour la fonction Python Vercel `api/kyc-crawl.py`. Vercel utilise le moteur HTTP sans navigateur; `KYC_USE_BROWSER=true` reste réservé à un environnement disposant de Chromium.

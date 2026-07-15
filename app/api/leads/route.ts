@@ -8,7 +8,7 @@ import { processLeadKycSafely } from '@/lib/supabase/kyc';
 // Force dynamic rendering - required for cookies()
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * GET /api/leads

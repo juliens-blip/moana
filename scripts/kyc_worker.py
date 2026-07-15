@@ -20,6 +20,8 @@ import os
 import re
 import socket
 import sys
+import unicodedata
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,7 +31,14 @@ from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 import httpx
 import litellm
 from bs4 import BeautifulSoup
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CacheMode,
+    CrawlerRunConfig,
+    HTTPCrawlerConfig,
+)
+from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from dotenv import load_dotenv
 
 
@@ -386,8 +395,11 @@ def build_search_queries(query: dict[str, str]) -> list[str]:
     candidates = [
         f'"{name}" "{email}"',
         f'"{name}" {context}',
+        f'"{name}" LinkedIn',
         f'"{name}" company director biography',
         f'"{name}" sanctions PEP watchlist',
+        f'"{name}" site:opensanctions.org',
+        f'"{name}" site:offshoreleaks.icij.org',
         f'"{name}" lawsuit fraud bankruptcy regulatory',
         f'"{name}" yacht vessel charter owner',
     ]
@@ -448,6 +460,35 @@ async def search_duckduckgo(
     return unique_strings(urls)[:limit]
 
 
+async def search_bing_rss(
+    client: httpx.AsyncClient,
+    query: str,
+    limit: int,
+) -> list[str]:
+    url = f"https://www.bing.com/search?format=rss&q={quote_plus(query)}"
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+    except (httpx.HTTPError, ET.ParseError) as exc:
+        LOGGER.warning("RSS search failed: %s", sanitize_error(exc))
+        return []
+
+    quoted = re.search(r'"([^"]+)"', query)
+    required = comparable_text(quoted.group(1) if quoted else query)
+    urls: list[str] = []
+    for item in root.findall(".//item"):
+        title = comparable_text(item.findtext("title") or "")
+        description = comparable_text(item.findtext("description") or "")
+        value = canonical_url(item.findtext("link") or "")
+        if not value or (required and required not in f"{title} {description} {value}"):
+            continue
+        urls.append(value)
+        if len(unique_strings(urls)) >= limit:
+            break
+    return unique_strings(urls)[:limit]
+
+
 def infer_source_type(url: str, company_domain: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     path = urlparse(url).path.lower()
@@ -481,25 +522,50 @@ def infer_source_type(url: str, company_domain: str) -> str:
 
 async def discover_urls(query: dict[str, str], settings: Settings) -> list[str]:
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "en,fr;q=0.8"}
-    timeout = httpx.Timeout(20.0)
+    timeout = httpx.Timeout(10.0)
     discovered: list[str] = []
     domain = email_domain(query["email"])
 
     async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False) as client:
         if domain and domain not in FREE_EMAIL_DOMAINS:
             discovered.append(f"https://{domain}")
-        for search_query in build_search_queries(query):
-            discovered.extend(
-                await search_duckduckgo(client, search_query, settings.max_search_results)
-            )
 
-        safe_urls: list[str] = []
-        for value in unique_strings(discovered):
-            resolved = await follow_safe_redirects(client, value)
-            if resolved:
-                safe_urls.append(resolved)
-            if len(unique_strings(safe_urls)) >= settings.max_sources:
-                break
+        search_semaphore = asyncio.Semaphore(2)
+
+        async def search_one(search_query: str) -> list[str]:
+            async with search_semaphore:
+                try:
+                    urls = await asyncio.wait_for(
+                        search_duckduckgo(client, search_query, settings.max_search_results),
+                        timeout=12,
+                    )
+                    if not urls:
+                        urls = await asyncio.wait_for(
+                            search_bing_rss(client, search_query, settings.max_search_results),
+                            timeout=12,
+                        )
+                    return urls
+                except TimeoutError:
+                    LOGGER.warning("One public search query timed out")
+                    return []
+
+        search_results = await asyncio.gather(
+            *(search_one(search_query) for search_query in build_search_queries(query))
+        )
+        for urls in search_results:
+            discovered.extend(urls)
+
+        redirect_semaphore = asyncio.Semaphore(4)
+
+        async def resolve_one(value: str) -> str:
+            async with redirect_semaphore:
+                try:
+                    return await asyncio.wait_for(follow_safe_redirects(client, value), timeout=12)
+                except TimeoutError:
+                    return ""
+
+        candidates = unique_strings(discovered)[: settings.max_sources * 2]
+        safe_urls = [value for value in await asyncio.gather(*(resolve_one(url) for url in candidates)) if value]
     return unique_strings(safe_urls)[: settings.max_sources]
 
 
@@ -518,18 +584,11 @@ async def crawl_sources(
     if not urls:
         return []
 
-    browser_config = BrowserConfig(
-        headless=True,
-        text_mode=True,
-        java_script_enabled=False,
-        accept_downloads=False,
-        verbose=False,
-        user_agent=USER_AGENT,
-    )
+    use_browser = env_bool("KYC_USE_BROWSER", False)
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         check_robots_txt=True,
-        user_agent=USER_AGENT,
+        user_agent=USER_AGENT if use_browser else None,
         word_count_threshold=5,
         excluded_tags=["script", "style", "nav", "footer", "form"],
         remove_forms=True,
@@ -544,11 +603,47 @@ async def crawl_sources(
 
     documents: list[EvidenceDocument] = []
     company_domain = email_domain(query["email"])
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        results = await crawler.arun_many(urls=urls, config=run_config)
+    if use_browser:
+        crawler = AsyncWebCrawler(
+            config=BrowserConfig(
+                headless=True,
+                text_mode=True,
+                java_script_enabled=False,
+                accept_downloads=False,
+                verbose=False,
+                user_agent=USER_AGENT,
+            )
+        )
+    else:
+        http_config = HTTPCrawlerConfig(
+            method="GET",
+            headers={"User-Agent": USER_AGENT, "Accept-Language": "en,fr;q=0.8"},
+            follow_redirects=False,
+            verify_ssl=True,
+        )
+        crawler = AsyncWebCrawler(
+            crawler_strategy=AsyncHTTPCrawlerStrategy(browser_config=http_config)
+        )
+
+    async with crawler:
+        crawl_semaphore = asyncio.Semaphore(3)
+
+        async def crawl_one(url: str) -> Any:
+            async with crawl_semaphore:
+                try:
+                    return await asyncio.wait_for(crawler.arun(url=url, config=run_config), timeout=35)
+                except TimeoutError:
+                    LOGGER.info("Crawl timed out for %s", urlparse(url).hostname or "unknown-host")
+                    return None
+
+        results = await asyncio.gather(*(crawl_one(url) for url in urls))
         for result in results:
+            if result is None:
+                continue
             if not result.success:
-                LOGGER.info("Crawl skipped/failed for one source")
+                host = urlparse(result.url or "").hostname or "unknown-host"
+                error = sanitize_error(RuntimeError(result.error_message or "unknown crawl error"))
+                LOGGER.info("Crawl skipped/failed for %s: %s", host, error)
                 continue
             final_url = await safe_public_url(result.url)
             text = markdown_text(result.markdown).strip()
@@ -591,6 +686,202 @@ Empty arrays/strings are preferred to unsupported content.
 """
 
 
+def comparable_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    ascii_text = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9@.-]+", " ", ascii_text).strip()
+
+
+def meaningful_name_tokens(full_name: str) -> list[str]:
+    return [token for token in comparable_text(full_name).split() if len(token) >= 2]
+
+
+def evidence_signals(
+    document: EvidenceDocument,
+    query: dict[str, str],
+) -> tuple[int, list[str]]:
+    text = comparable_text(document.text)
+    full_name = comparable_text(query["full_name"])
+    email = query["email"].casefold().strip()
+    company = comparable_text(query["company_name"])
+    country = comparable_text(query["country"])
+    city = comparable_text(query["city"])
+    domain = email_domain(query["email"])
+    host = (urlparse(document.url).hostname or "").lower()
+    tokens = meaningful_name_tokens(query["full_name"])
+
+    score = 0
+    signals: list[str] = []
+    if email and email in document.text.casefold():
+        score += 55
+        signals.append("email exact")
+    if full_name and full_name in text:
+        score += 35
+        signals.append("nom exact")
+    elif len(tokens) >= 2 and all(token in text for token in tokens):
+        score += 22
+        signals.append("nom complet")
+    if company and company in text:
+        score += 15
+        signals.append("entreprise")
+    if domain and (host == domain or host.endswith("." + domain)):
+        score += 25
+        signals.append("domaine email professionnel")
+    if country and country in text:
+        score += 4
+        signals.append("pays")
+    if city and city in text:
+        score += 4
+        signals.append("ville")
+    if document.source_type in {"official_registry", "company_website", "linkedin"}:
+        score += 5
+    return score, unique_strings(signals)
+
+
+def document_headline(document: EvidenceDocument) -> str:
+    for raw_line in document.text.splitlines()[:30]:
+        line = re.sub(r"^[#>*_`\s-]+", "", raw_line).strip()
+        if 8 <= len(line) <= 180 and not line.lower().startswith(("cookie", "javascript")):
+            return line
+    return ""
+
+
+def deterministic_report(
+    query: dict[str, str],
+    documents: list[EvidenceDocument],
+) -> dict[str, Any]:
+    report = blank_report(query)
+    scored = [(document, *evidence_signals(document, query)) for document in documents]
+    relevant = [(document, score, signals) for document, score, signals in scored if score >= 20]
+
+    if not relevant:
+        return blank_report(query, "Aucune source publique attribuable avec suffisamment de confiance.")
+
+    exact_email_docs = [item for item in relevant if "email exact" in item[2]]
+    named_docs = [
+        item for item in relevant if "nom exact" in item[2] or "nom complet" in item[2]
+    ]
+    linkedin_docs = [item for item in named_docs if item[0].source_type == "linkedin"]
+    company_docs = [
+        item
+        for item in relevant
+        if item[0].source_type in {"company_website", "official_registry"}
+    ]
+
+    if exact_email_docs:
+        identity_status, confidence = "confirmed", 95
+        rationale = "Email exact et nom reliés à au moins une source publique collectée."
+    elif len(named_docs) >= 2 or (linkedin_docs and company_docs):
+        identity_status, confidence = "probable", 75
+        rationale = "Nom relié à plusieurs sources professionnelles convergentes."
+    elif named_docs:
+        identity_status, confidence = "ambiguous", 45
+        rationale = "Nom trouvé, mais les attributs disponibles ne suffisent pas à exclure un homonyme."
+    else:
+        identity_status, confidence = "unresolved", 20
+        rationale = "Domaine professionnel trouvé, sans rattachement public robuste à la personne."
+
+    report["identity_resolution"].update(
+        {
+            "status": identity_status,
+            "confidence_score": confidence,
+            "selected_profile_rationale": rationale,
+        }
+    )
+    if named_docs:
+        primary = max(named_docs, key=lambda item: item[1])
+        report["identity_resolution"]["matched_persons"] = [
+            {
+                "name": query["full_name"],
+                "headline": document_headline(primary[0]),
+                "location": query["city"] if "ville" in primary[2] else "",
+                "company": query["company_name"] if "entreprise" in primary[2] else "",
+                "evidence": [item[0].url for item in named_docs[:5]],
+            }
+        ]
+
+    person = report["person_profile"]
+    if identity_status in {"confirmed", "probable"}:
+        person["full_name"] = query["full_name"]
+        person["current_company"] = query["company_name"] if company_docs else ""
+        person["country"] = query["country"] if any("pays" in item[2] for item in named_docs) else ""
+        person["location"] = query["city"] if any("ville" in item[2] for item in named_docs) else ""
+    if exact_email_docs:
+        person["emails"] = [query["email"]]
+    if linkedin_docs:
+        person["profiles"]["linkedin"] = linkedin_docs[0][0].url
+
+    domain = email_domain(query["email"])
+    domain_documents = [
+        item
+        for item in company_docs
+        if domain
+        and ((urlparse(item[0].url).hostname or "").lower() in {domain, "www." + domain})
+    ]
+    if domain_documents:
+        report["company_profile"]["website"] = domain_documents[0][0].url
+        person["profiles"]["company_profile"] = domain_documents[0][0].url
+    if query["company_name"] and company_docs:
+        report["company_profile"]["company_name"] = query["company_name"]
+
+    for document, _score, signals in relevant:
+        note = "Indices concordants: " + ", ".join(signals) + "."
+        report["sources"].append(
+            {"type": document.source_type, "url": document.url, "note": note[:500]}
+        )
+
+    sanctions_matches = [
+        item for item in named_docs if item[0].source_type == "sanctions_db"
+    ]
+    pep_matches = [item for item in named_docs if item[0].source_type == "pep_db"]
+    if sanctions_matches:
+        report["risk_screening"]["sanctions"] = {
+            "status": "possible_homonym",
+            "details": [
+                "Correspondance textuelle à vérifier manuellement: " + item[0].url
+                for item in sanctions_matches[:3]
+            ],
+        }
+    if pep_matches:
+        report["risk_screening"]["pep"] = {
+            "status": "possible_homonym",
+            "details": [
+                "Correspondance textuelle à vérifier manuellement: " + item[0].url
+                for item in pep_matches[:3]
+            ],
+        }
+
+    if identity_status in {"confirmed", "probable"} and company_docs:
+        report["economic_coherence"] = {
+            "level": "medium",
+            "indicators": [
+                "Présence professionnelle publique cohérente; ne constitue pas une preuve de source des fonds."
+            ],
+        }
+
+    reasons = [
+        f"{len(relevant)} source(s) publique(s) pertinente(s) collectée(s) par Crawl4AI.",
+        rationale,
+    ]
+    if sanctions_matches or pep_matches:
+        reasons.append("Correspondance sanctions/PEP textuelle uniquement; homonyme possible à vérifier.")
+    else:
+        reasons.append("Contrôles sanctions/PEP non conclusifs sans registre officiel exhaustif intégré.")
+    report["kyc_assessment"].update(
+        {
+            "overall_risk": "undetermined",
+            "recommended_review": (
+                "manual_review" if identity_status != "unresolved" else "insufficient_data"
+            ),
+            "key_reasons": reasons,
+            "missing_critical_items": [
+                field for field in ("full_name", "email") if not query[field]
+            ],
+        }
+    )
+    return normalize_report(report, query, [item[0] for item in relevant])
+
+
 async def synthesize_report(
     query: dict[str, str],
     documents: list[EvidenceDocument],
@@ -599,7 +890,7 @@ async def synthesize_report(
     if not documents:
         return blank_report(query, "No sufficiently reliable public source was crawled.")
     if not settings.llm_model:
-        raise ConfigurationError("KYC_LLM_MODEL is required for synthesis")
+        return deterministic_report(query, documents)
 
     contract = json.dumps(REPORT_TEMPLATE, ensure_ascii=False, indent=2)
     evidence = evidence_prompt(documents, settings.max_total_chars)
@@ -1027,7 +1318,7 @@ async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
     LOGGER.info("Claimed KYC job %s", job["id"])
     try:
         query = normalized_query(job.get("query_input") or {})
-        if not query["full_name"] or not query["email"]:
+        if not query["full_name"]:
             report = blank_report(query, "Required identity inputs are missing.")
             await store.complete(job["id"], report, "insufficient_data")
             return True
@@ -1118,18 +1409,18 @@ def check_configuration() -> int:
         "llm_base_url": settings.llm_base_url or "provider default",
     }
     print(json.dumps(checks, indent=2))
-    return 0 if checks["supabase_url"] and checks["supabase_service_key"] and settings.llm_model else 1
+    return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1
 
 
 async def async_main(args: argparse.Namespace) -> int:
     if args.command == "check":
         return check_configuration()
     if args.command == "dry-run":
-        settings = Settings.from_env(require_database=False, require_llm=not args.discover_only)
+        settings = Settings.from_env(require_database=False, require_llm=False)
         await run_dry(args, settings)
         return 0
 
-    settings = Settings.from_env(require_database=True, require_llm=True)
+    settings = Settings.from_env(require_database=True, require_llm=False)
     if args.command == "once":
         await run_once(settings)
         return 0

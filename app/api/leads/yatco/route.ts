@@ -10,7 +10,7 @@ const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
 const IP_WHITELIST_DISABLED = process.env.YATCO_IP_WHITELIST_DISABLED === 'true';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * POST /api/leads/yatco

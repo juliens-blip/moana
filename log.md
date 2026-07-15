@@ -32,6 +32,8 @@
 
 [2026-07-15] Stabilisation de la collecte KYC Vercel | `lib/kyc/deterministic.ts`, tests et mémoire KYC | Mojeek retiré; sources structurées, filtre exact, requêtes séquentielles et panne fournisseur visible
 
+[2026-07-16] Activation de Crawl4AI dans Vercel | `api/kyc-crawl.py`, worker Python, backend KYC, configuration Vercel, tests et wiki | Collecte HTTP bornée sans Render ni LLM obligatoire; rapport sourcé stocké dans Supabase
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].

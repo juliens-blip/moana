@@ -292,30 +292,23 @@ Script : `scripts/kyc-enrichment-schema.sql`.
 - `anon` et `authenticated` n’ont aucun accès direct; seul le backend `service_role` lit et écrit.
 - Le trigger SQL ne crawle rien; le backend Vercel ou le worker Python doit réclamer les lignes `pending`.
 
-### Backend Vercel actif — sans LLM
+### Backend Vercel actif — Crawl4AI sans LLM obligatoire
 
-Fichiers principaux : `lib/kyc/deterministic.ts`, `lib/supabase/kyc.ts`, `/api/leads/[id]/kyc` et `components/leads/LeadDetailModal.tsx`.
+Fichiers principaux : `api/kyc-crawl.py`, `scripts/kyc_worker.py`, `lib/supabase/kyc.ts`, `/api/leads/[id]/kyc` et `vercel.json`.
 
-- Chaque création manuelle ou Boats Group lance une collecte publique courte après insertion du lead.
-- La recherche essaie le nom contextualisé, le nom exact, puis l’email; Wikipedia OpenSearch et Google News RSS sont prioritaires, DuckDuckGo HTML/Lite reste un repli sans garantie.
-- Une indisponibilité du moteur est distinguée d’une recherche valide sans source.
-- L’échec de collecte ne supprime pas le lead et reste visible comme échec technique.
-- Sans registre officiel intégré, sanctions/PEP restent `not_enough_data` et le risque `undetermined`.
-- La fiche CRM affiche statut, résolution d’identité, niveau de risque, nombre de sources et raisons clés.
-- Le bouton « Revérifier » crée une tentative versionnée et relance le traitement.
-- Aucun fournisseur LLM, clé LLM ou serveur permanent n’est requis.
+- La fonction Python Vercel utilise Crawl4AI `AsyncHTTPCrawlerStrategy`; aucun Render ni Chromium n’est requis.
+- DuckDuckGo est tenté puis Bing RSS sert de repli. Recherche, redirections et crawls sont bornés.
+- La synthèse déterministe conserve uniquement les sources attribuables; un LLM LiteLLM reste optionnel.
+- L’endpoint Python exige le `SUPABASE_SERVICE_ROLE_KEY` déjà présent côté serveur.
+- Création manuelle, webhook Boats Group et bouton « Revérifier » enregistrent le rapport dans Supabase.
+- Sans registre officiel exhaustif, sanctions/PEP restent `not_enough_data` ou `possible_homonym`, jamais `clear`.
+- L’échec du KYC ne supprime pas le lead.
 
-### Worker Python optionnel
+### Worker CLI
 
-Fichiers : `scripts/kyc_worker.py`, `scripts/requirements-kyc.txt`, `tests/test_kyc_worker.py`.
+Fichiers : `scripts/kyc_worker.py`, `requirements.txt`, `tests/test_kyc_worker.py`.
 
-Configuration requise, sans valeur dans le dépôt :
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `KYC_LLM_MODEL` au format accepté par LiteLLM
-- clé du fournisseur LLM, ou `KYC_LLM_API_KEY`
-- optionnel : `KYC_LLM_BASE_URL` pour un modèle local/compatible
+Configuration Supabase requise seulement pour `once` et `watch` : `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. `KYC_LLM_MODEL`, sa clé et `KYC_LLM_BASE_URL` sont optionnels.
 
 Commandes :
 
@@ -332,4 +325,4 @@ rtk py -3.11 scripts/kyc_worker.py dry-run `
   --name "Example Domain" --email "info@example.com" --discover-only
 ```
 
-Garde-fous : exécution non automatique, claim conditionnel anti-concurrence, `robots.txt`, crawl borné, refus des hôtes privés, JavaScript et téléchargements désactivés, sources non crawlées supprimées, absence de résultat sanctions/PEP jamais traduite en `clear`, erreurs sans secrets. Ce worker avancé exige un fournisseur LLM explicitement approuvé; il n’est pas nécessaire au flux Vercel actif.
+Garde-fous : claim conditionnel anti-concurrence, `robots.txt`, limites de temps et de volume, refus des hôtes privés, sources non crawlées supprimées, absence de résultat sanctions/PEP jamais traduite en `clear`, erreurs sans secrets.

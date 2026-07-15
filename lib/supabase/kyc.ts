@@ -1,4 +1,3 @@
-import { buildDeterministicKycReport } from '@/lib/kyc/deterministic';
 import type { KycQueryInput, KycReport, KycSummary } from '@/lib/kyc/types';
 import { createAdminClient } from './admin';
 
@@ -103,20 +102,63 @@ function safeErrorMessage(error: unknown): string {
   return message.replace(/https?:\/\/[^\s]+/g, '[url]').slice(0, 300);
 }
 
+function crawl4AiEndpoint(): string {
+  const configured = process.env.KYC_CRAWL_URL?.trim();
+  if (configured) return configured;
+
+  const host = process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (host) return `https://${host.replace(/^https?:\/\//, '')}/api/kyc-crawl`;
+  return 'http://127.0.0.1:3000/api/kyc-crawl';
+}
+
+function isKycReport(value: unknown): value is KycReport {
+  if (!value || typeof value !== 'object') return false;
+  const report = value as Partial<KycReport>;
+  return Boolean(
+    report.query_input
+    && report.identity_resolution
+    && report.kyc_assessment
+    && Array.isArray(report.sources),
+  );
+}
+
+async function buildCrawl4AiReport(input: Partial<KycQueryInput>): Promise<KycReport> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) throw new Error('Missing Supabase service credential');
+
+  const response = await fetch(crawl4AiEndpoint(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query_input: input }),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(245_000),
+  });
+  if (!response.ok) throw new Error(`Crawl4AI HTTP ${response.status}`);
+
+  const payload = await response.json() as { success?: boolean; report?: unknown };
+  if (!payload.success || !isKycReport(payload.report)) {
+    throw new Error('Crawl4AI returned an invalid report');
+  }
+  return payload.report;
+}
+
 export async function processLeadKyc(leadId: string): Promise<KycSummary | null> {
   const job = await claimPendingKyc(leadId);
   if (!job) return (await getLatestKycReport(leadId))?.summary ?? null;
 
   const supabase = createAdminClient();
   try {
-    const report = await buildDeterministicKycReport(job.query_input);
+    const report = await buildCrawl4AiReport(job.query_input);
     const now = new Date().toISOString();
     const status = report.sources.length > 0 ? 'completed' : 'insufficient_data';
     const { error } = await supabase
       .from('lead_kyc_reports')
       .update({
         status,
-        engine: 'vercel_deterministic_osint',
+        engine: 'vercel_crawl4ai_http_osint',
         report,
         checked_at: now,
         completed_at: now,
@@ -132,7 +174,7 @@ export async function processLeadKyc(leadId: string): Promise<KycSummary | null>
       .from('lead_kyc_reports')
       .update({
         status: 'failed',
-        error_code: 'DETERMINISTIC_KYC_FAILED',
+        error_code: 'CRAWL4AI_KYC_FAILED',
         error_message: message,
         completed_at: new Date().toISOString(),
       })
@@ -159,7 +201,7 @@ export async function enqueueKycRecheck(leadId: string, input: KycQueryInput): P
     lead_id: leadId,
     status: 'pending',
     trigger_source: 'recheck',
-    engine: 'vercel_deterministic_osint',
+    engine: 'vercel_crawl4ai_http_osint',
     query_input: input,
   });
   if (error) throw new Error(`KYC enqueue failed: ${error.message}`);
