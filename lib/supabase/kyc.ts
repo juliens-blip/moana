@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { KycQueryInput, KycReport, KycSummary } from '@/lib/kyc/types';
 import { createAdminClient } from './admin';
 
@@ -129,7 +130,10 @@ async function buildCrawl4AiReport(input: Partial<KycQueryInput>): Promise<KycRe
   const response = await fetch(crawl4AiEndpoint(), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${serviceKey}`,
+      'X-Moana-KYC-Token': createHash('sha256')
+        .update('moana-kyc-worker-v1\0')
+        .update(serviceKey)
+        .digest('hex'),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query_input: input }),

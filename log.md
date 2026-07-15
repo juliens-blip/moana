@@ -34,6 +34,8 @@
 
 [2026-07-16] Activation de Crawl4AI dans Vercel | `api/kyc-crawl.py`, worker Python, backend KYC, configuration Vercel, tests et wiki | Collecte HTTP bornée sans Render ni LLM obligatoire; rapport sourcé stocké dans Supabase
 
+[2026-07-16] Correction de l’authentification KYC inter-fonctions | Endpoint Python, appel Node, tests et bugs | Jeton interne dérivé dans un en-tête privé; suppression du 401 transformé en 500 côté CRM
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].

@@ -1,4 +1,6 @@
 import unittest
+import importlib.util
+from pathlib import Path
 
 from scripts.kyc_worker import (
     EvidenceDocument,
@@ -96,6 +98,17 @@ class KycWorkerTests(unittest.TestCase):
         report = deterministic_report(QUERY, documents)
         self.assertEqual(report["identity_resolution"]["status"], "confirmed")
         self.assertEqual(report["person_profile"]["emails"], ["person@example.com"])
+
+    def test_vercel_worker_token_is_stable_and_not_the_secret(self):
+        module_path = Path(__file__).parents[1] / "api" / "kyc-crawl.py"
+        spec = importlib.util.spec_from_file_location("kyc_crawl_api", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        token = module.worker_token("example-service-secret")
+        self.assertEqual(len(token), 64)
+        self.assertNotIn("example-service-secret", token)
+        self.assertEqual(token, module.worker_token("example-service-secret"))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import os
@@ -19,6 +20,11 @@ from scripts.kyc_worker import (
 
 
 MAX_BODY_BYTES = 16_384
+WORKER_TOKEN_CONTEXT = b"moana-kyc-worker-v1\x00"
+
+
+def worker_token(secret: str) -> str:
+    return hashlib.sha256(WORKER_TOKEN_CONTEXT + secret.encode("utf-8")).hexdigest()
 
 
 def run_crawl(payload: dict[str, Any]) -> dict[str, Any]:
@@ -47,9 +53,8 @@ class handler(BaseHTTPRequestHandler):
 
     def authorized(self) -> bool:
         expected = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-        supplied = self.headers.get("Authorization", "")
-        expected_header = f"Bearer {expected}" if expected else ""
-        return bool(expected_header) and hmac.compare_digest(supplied, expected_header)
+        supplied = self.headers.get("X-Moana-KYC-Token", "")
+        return bool(expected) and hmac.compare_digest(supplied, worker_token(expected))
 
     def do_GET(self) -> None:
         self.send_json(405, {"success": False, "error": "Method not allowed"})
@@ -74,4 +79,3 @@ class handler(BaseHTTPRequestHandler):
         except Exception as error:
             print(f"[KYC Crawl4AI] {sanitize_error(error)}")
             self.send_json(500, {"success": False, "error": "Crawl4AI execution failed"})
-
