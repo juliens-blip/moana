@@ -297,6 +297,8 @@ Script : `scripts/kyc-enrichment-schema.sql`.
 Fichiers principaux : `lib/kyc/deterministic.ts`, `lib/supabase/kyc.ts`, `/api/leads/[id]/kyc` et `components/leads/LeadDetailModal.tsx`.
 
 - Chaque création manuelle ou Boats Group lance une collecte publique courte après insertion du lead.
+- La recherche essaie l’email exact, le nom avec contexte fiable, puis le nom exact; DuckDuckGo HTML/Lite et Mojeek servent de variantes bornées.
+- Une indisponibilité du moteur est distinguée d’une recherche valide sans source.
 - L’échec de collecte ne supprime pas le lead et reste visible comme échec technique.
 - Sans registre officiel intégré, sanctions/PEP restent `not_enough_data` et le risque `undetermined`.
 - La fiche CRM affiche statut, résolution d’identité, niveau de risque, nombre de sources et raisons clés.

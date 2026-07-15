@@ -1,11 +1,31 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import type { KycQueryInput, KycReport, KycSource } from './types';
 
 const MAX_SEARCH_QUERIES = 3;
 const MAX_SOURCES = 5;
 const REQUEST_TIMEOUT_MS = 6_000;
 const MAX_PAGE_CHARS = 250_000;
+const DNS_TIMEOUT_MS = 2_000;
+const CRAWL_DEADLINE_MS = 12_000;
+
+const BLOCKED_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24],
+  ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) {
+  BLOCKED_ADDRESSES.addSubnet(network, prefix, 'ipv4');
+}
+for (const [network, prefix] of [
+  ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['2001::', 32],
+  ['2001:db8::', 32], ['2002::', 16], ['64:ff9b:1::', 48],
+] as const) {
+  BLOCKED_ADDRESSES.addSubnet(network, prefix, 'ipv6');
+}
+BLOCKED_ADDRESSES.addAddress('::', 'ipv6');
+BLOCKED_ADDRESSES.addAddress('::1', 'ipv6');
 
 const PUBLIC_EMAIL_DOMAINS = new Set([
   'aol.com',
@@ -57,6 +77,10 @@ function safePublicUrl(rawUrl: string): string | null {
   try {
     const url = new URL(rawUrl.startsWith('//') ? `https:${rawUrl}` : rawUrl);
     if (!['http:', 'https:'].includes(url.protocol)) return null;
+    if (url.username || url.password) return null;
+    if (url.port && !((url.protocol === 'http:' && url.port === '80') || (url.protocol === 'https:' && url.port === '443'))) {
+      return null;
+    }
 
     const host = url.hostname.toLowerCase();
     const unwrappedHost = host.replace(/^\[|\]$/g, '');
@@ -88,70 +112,175 @@ function safePublicUrl(rawUrl: string): string | null {
 }
 
 function isPrivateAddress(address: string): boolean {
-  const value = address.toLowerCase();
-  return value === '::' ||
-    value === '::1' ||
-    value.startsWith('fc') ||
-    value.startsWith('fd') ||
-    value.startsWith('fe8') ||
-    value.startsWith('fe9') ||
-    value.startsWith('fea') ||
-    value.startsWith('feb') ||
-    /^127\./.test(value) ||
-    /^10\./.test(value) ||
-    /^192\.168\./.test(value) ||
-    /^169\.254\./.test(value) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(value) ||
-    value.startsWith('::ffff:127.') ||
-    value.startsWith('::ffff:10.') ||
-    value.startsWith('::ffff:192.168.') ||
-    /^::ffff:172\.(1[6-9]|2\d|3[01])\./.test(value);
+  const family = isIP(address);
+  if (family === 4) return BLOCKED_ADDRESSES.check(address, 'ipv4');
+  if (family !== 6) return true;
+
+  const mappedIpv4 = address.toLowerCase().match(/::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  return BLOCKED_ADDRESSES.check(address, 'ipv6') ||
+    Boolean(mappedIpv4 && BLOCKED_ADDRESSES.check(mappedIpv4, 'ipv4'));
 }
 
 async function resolvesPublicly(url: string): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const addresses = await lookup(new URL(url).hostname, { all: true, verbatim: true });
+    const addresses = await Promise.race([
+      lookup(new URL(url).hostname, { all: true, verbatim: true }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('DNS lookup timeout')), DNS_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
     return addresses.length > 0 && addresses.every(({ address }) => !isPrivateAddress(address));
   } catch {
     return false;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
-function parseDuckDuckGoResults(html: string): SearchHit[] {
+function readHtmlAttribute(attributes: string, name: string): string {
+  const match = attributes.match(
+    new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'),
+  );
+  return decodeHtml(match?.[1] ?? match?.[2] ?? match?.[3] ?? '');
+}
+
+export function parseDuckDuckGoResults(html: string): SearchHit[] {
   const hits: SearchHit[] = [];
-  const resultBlocks = html.match(/<div[^>]+class="[^"]*result[^"]*"[\s\S]*?<\/div>\s*<\/div>/gi) ?? [];
+  const seen = new Set<string>();
+  const anchorPattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  const resultAnchors: Array<{ start: number; end: number; url: string | null; title: string }> = [];
+  let anchor: RegExpExecArray | null;
 
-  for (const block of resultBlocks) {
-    const anchor = block.match(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
-      ?? block.match(/<a[^>]+href="([^"]+)"[^>]+class="[^"]*result__a[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
-    if (!anchor) continue;
+  while ((anchor = anchorPattern.exec(html)) !== null) {
+    const attributes = anchor[1];
+    const className = readHtmlAttribute(attributes, 'class');
+    if (!/(?:^|\s)(?:result__a|result-link)(?:\s|$)/i.test(className)) continue;
 
-    const url = safePublicUrl(decodeHtml(anchor[1]));
+    resultAnchors.push({
+      start: anchor.index,
+      end: anchorPattern.lastIndex,
+      url: safePublicUrl(readHtmlAttribute(attributes, 'href')),
+      title: decodeHtml(anchor[2]).slice(0, 240),
+    });
+  }
+
+  for (const [index, resultAnchor] of resultAnchors.entries()) {
+    const url = resultAnchor.url;
     if (!url) continue;
+    if (seen.has(url)) continue;
 
-    const snippetMatch = block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div)>/i);
+    const boundary = Math.min(
+      resultAnchor.end + 2_500,
+      resultAnchors[index + 1]?.start ?? html.length,
+    );
+    const resultHtml = html.slice(resultAnchor.end, boundary);
+    const snippetMatch = resultHtml.match(
+      /class\s*=\s*["'][^"']*(?:result__snippet|result-snippet)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div|td)>/i,
+    );
+
     hits.push({
       url,
-      title: decodeHtml(anchor[2]).slice(0, 240),
+      title: resultAnchor.title,
       snippet: decodeHtml(snippetMatch?.[1] ?? '').slice(0, 500),
     });
+    seen.add(url);
+  }
+
+  return hits;
+}
+
+export function parseMojeekResults(html: string): SearchHit[] {
+  const hits: SearchHit[] = [];
+  const seen = new Set<string>();
+  const anchorPattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  const resultAnchors: Array<{ start: number; end: number; url: string | null; title: string }> = [];
+  let anchor: RegExpExecArray | null;
+
+  while ((anchor = anchorPattern.exec(html)) !== null) {
+    const attributes = anchor[1];
+    const className = readHtmlAttribute(attributes, 'class');
+    if (!/(?:^|\s)title(?:\s|$)/i.test(className)) continue;
+
+    resultAnchors.push({
+      start: anchor.index,
+      end: anchorPattern.lastIndex,
+      url: safePublicUrl(readHtmlAttribute(attributes, 'href')),
+      title: decodeHtml(anchor[2]).slice(0, 240),
+    });
+  }
+
+  for (const [index, resultAnchor] of resultAnchors.entries()) {
+    const url = resultAnchor.url;
+    if (!url || seen.has(url)) continue;
+
+    const boundary = Math.min(
+      resultAnchor.end + 2_500,
+      resultAnchors[index + 1]?.start ?? html.length,
+    );
+    const followingHtml = html.slice(resultAnchor.end, boundary);
+    const resultEnd = followingHtml.search(/<\/li>/i);
+    const resultHtml = resultEnd >= 0 ? followingHtml.slice(0, resultEnd) : followingHtml;
+    const snippetMatch = resultHtml.match(
+      /<p\b[^>]*class\s*=\s*["'][^"']*\bs\b[^"']*["'][^>]*>([\s\S]*?)<\/p>/i,
+    );
+
+    hits.push({
+      url,
+      title: resultAnchor.title,
+      snippet: decodeHtml(snippetMatch?.[1] ?? '').slice(0, 500),
+    });
+    seen.add(url);
   }
 
   return hits;
 }
 
 async function defaultSearch(query: string): Promise<SearchHit[]> {
-  const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-    headers: {
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'Mozilla/5.0 (compatible; MoanaKYC/1.0; +https://moana-yachting.com)',
+  const endpoints = [
+    {
+      url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+      parse: parseDuckDuckGoResults,
     },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+    {
+      url: `https://www.mojeek.com/search?q=${encodeURIComponent(query)}`,
+      parse: parseMojeekResults,
+    },
+    {
+      url: `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+      parse: parseDuckDuckGoResults,
+    },
+  ];
+  let validResponseReceived = false;
 
-  if (!response.ok) return [];
-  return parseDuckDuckGoResults((await response.text()).slice(0, MAX_PAGE_CHARS));
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint.url, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': 'Mozilla/5.0 (compatible; MoanaKYC/1.0; +https://moana-yachting.com)',
+        },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) continue;
+
+      const html = await readLimitedText(response);
+      if (/anomaly|challenge|bots use duckduckgo/i.test(html)) continue;
+
+      const hits = endpoint.parse(html);
+      if (hits.length > 0) return hits;
+      if (/no results|result--no-result|did not match any documents/i.test(html)) {
+        validResponseReceived = true;
+      }
+    } catch {
+      // Try the next public search endpoint before reporting an outage.
+    }
+  }
+
+  if (validResponseReceived) return [];
+  throw new Error('Public search provider unavailable');
 }
 
 async function readLimitedText(response: Response): Promise<string> {
@@ -177,9 +306,12 @@ async function defaultCrawl(hit: SearchHit): Promise<SearchHit | null> {
   const initialUrl = safePublicUrl(hit.url);
   if (!initialUrl) return null;
   let currentUrl: string = initialUrl;
+  const deadline = Date.now() + CRAWL_DEADLINE_MS;
 
   let response: Response | null = null;
   for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return null;
     if (!(await resolvesPublicly(currentUrl))) return null;
     response = await fetch(currentUrl, {
       headers: {
@@ -188,7 +320,7 @@ async function defaultCrawl(hit: SearchHit): Promise<SearchHit | null> {
       },
       cache: 'no-store',
       redirect: 'manual',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(Math.min(REQUEST_TIMEOUT_MS, remainingMs)),
     });
 
     if (response.status < 300 || response.status >= 400) break;
@@ -238,10 +370,12 @@ function buildQueries(input: KycQueryInput): string[] {
   const name = input.full_name.trim();
   const email = input.email.trim().toLowerCase();
   const domain = email.split('@')[1] ?? '';
+  const context = input.company_name.trim() || input.country.trim();
+  const professionalDomain = domain && !PUBLIC_EMAIL_DOMAINS.has(domain) ? domain : '';
   const queries = [
     email ? `"${email}"` : '',
-    name && domain ? `"${name}" "${domain}"` : '',
-    name ? `"${name}" ${input.country || input.company_name || 'company'}` : '',
+    name && (context || professionalDomain) ? `"${name}" "${context || professionalDomain}"` : '',
+    name ? `"${name}"` : '',
   ];
 
   return [...new Set(queries.filter(Boolean))].slice(0, MAX_SEARCH_QUERIES);
@@ -325,8 +459,14 @@ export async function buildDeterministicKycReport(
 
   const settled = await Promise.allSettled(buildQueries(input).map((query) => search(query)));
   const uniqueHits = new Map<string, SearchHit>();
+  let successfulSearches = 0;
+  let failedSearches = 0;
   for (const result of settled) {
-    if (result.status !== 'fulfilled') continue;
+    if (result.status !== 'fulfilled') {
+      failedSearches += 1;
+      continue;
+    }
+    successfulSearches += 1;
     for (const hit of result.value) {
       const safeUrl = safePublicUrl(hit.url);
       if (safeUrl && !uniqueHits.has(safeUrl)) uniqueHits.set(safeUrl, { ...hit, url: safeUrl });
@@ -335,12 +475,6 @@ export async function buildDeterministicKycReport(
   }
 
   const emailDomain = input.email.split('@')[1] ?? '';
-  if (emailDomain && !PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
-    const companyUrl = safePublicUrl(`https://${emailDomain}`);
-    if (companyUrl && !uniqueHits.has(companyUrl)) {
-      uniqueHits.set(companyUrl, { url: companyUrl, title: '', snippet: '' });
-    }
-  }
 
   const seeds = [...uniqueHits.values()]
     .sort((left, right) => {
@@ -420,7 +554,11 @@ export async function buildDeterministicKycReport(
         `${hits.length} source(s) publique(s) collectée(s).`,
         'Contrôles sanctions/PEP non conclusifs sans registre officiel intégré.',
       ]
-    : ['Aucune source publique suffisamment robuste trouvée.'];
+    : successfulSearches === 0 && failedSearches > 0
+      ? ['Moteur de recherche publique temporairement indisponible. Réessayer plus tard.']
+      : failedSearches > 0
+        ? ['Aucune source publique suffisamment robuste trouvée; certaines recherches ont échoué.']
+        : ['Aucune source publique suffisamment robuste trouvée.'];
   report.kyc_assessment.recommended_review = hits.length > 0 ? 'manual_review' : 'insufficient_data';
 
   return report;

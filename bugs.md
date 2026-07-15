@@ -13,3 +13,5 @@ Format : `[YYYY-MM-DD] | Problème | Cause | Solution | #tags`
 [2026-07-15] | Le cookie de session peut être forgé côté client | La session est un JSON non signé stocké directement dans un cookie | Utiliser une session serveur ou un jeton signé et valider l’identité à chaque requête | #backend #bug #todo
 
 [2026-07-15] | Les routes `/api/debug/env` et `/api/debug/auth` exposent des informations sensibles | Des endpoints de diagnostic non protégés sont restés dans l’application | Les supprimer ou les restreindre strictement hors production | #backend #api #bug #todo
+
+[2026-07-15] | Le KYC retournait zéro source pour des contacts publics avec email générique | Le parseur DuckDuckGo était fragile et la requête ajoutait le terme générique `company` | Chercher le nom exact, ajouter un moteur de repli, borner les sources et signaler les pannes | #backend #ai #bug #fix #done

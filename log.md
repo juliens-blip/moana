@@ -30,6 +30,8 @@
 
 [2026-07-15] Activation du KYC déterministe Vercel sans LLM | Backend leads, `/api/leads/[id]/kyc`, fiche CRM, tests et wiki | Nouveau lead contrôlé automatiquement; résumé prudent stocké dans Supabase et visible avec la demande
 
+[2026-07-15] Correction de la collecte KYC sans source | `lib/kyc/deterministic.ts`, tests et mémoire KYC | Nom exact, moteurs publics de repli, séparation stricte des sources et panne fournisseur visible
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].
