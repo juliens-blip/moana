@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Mail, Phone, Globe, Anchor, Calendar, MapPin,
   ExternalLink, MessageSquare, User, Clock, Building2,
-  CheckCircle, XCircle, PhoneCall, Trophy
+  CheckCircle, XCircle, PhoneCall, Trophy, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import type { LeadWithBroker, LeadStatus } from '@/lib/types';
+import type { KycSummary } from '@/lib/kyc/types';
 import { LeadStatusBadge, LeadStatusSelect } from './LeadStatusBadge';
 import { Button } from '@/components/ui';
 import { formatRelativeTime } from '@/lib/utils';
@@ -26,13 +27,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
+  const [kyc, setKyc] = useState<KycSummary | undefined>();
+  const [kycLoading, setKycLoading] = useState(false);
 
   useEffect(() => {
     if (!lead) {
       setNotes('');
+      setKyc(undefined);
       return;
     }
     setNotes(lead.lead_comments || '');
+    setKyc(lead.kyc);
   }, [lead]);
 
   if (!lead) return null;
@@ -141,6 +146,45 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
   };
 
   const receivedDate = new Date(lead.received_at);
+
+  const handleKycRecheck = async () => {
+    setKycLoading(true);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/kyc`, { method: 'POST' });
+      const data = await response.json();
+      if (!data.success) {
+        toast.error(data.error || 'Contrôle KYC impossible');
+        return;
+      }
+
+      const summary = data.data?.summary as KycSummary | undefined;
+      setKyc(summary);
+      if (summary) onLeadUpdated?.({ ...lead, kyc: summary });
+      toast.success('Contrôle KYC terminé');
+    } catch (error) {
+      console.error('Error refreshing KYC:', error);
+      toast.error('Erreur de connexion KYC');
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
+  const kycStatusLabel: Record<KycSummary['status'], string> = {
+    pending: 'En attente',
+    running: 'Analyse en cours',
+    completed: 'Collecte terminée',
+    insufficient_data: 'Données insuffisantes',
+    failed: 'Échec technique',
+    cancelled: 'Annulé',
+  };
+
+  const riskLabel = kyc?.overall_risk === 'low'
+    ? 'Faible'
+    : kyc?.overall_risk === 'medium'
+      ? 'Moyen'
+      : kyc?.overall_risk === 'high'
+        ? 'Élevé'
+        : 'Indéterminé';
 
   return (
     <AnimatePresence>
@@ -294,6 +338,67 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* KYC summary */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                    Résumé KYC / OSINT
+                  </h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleKycRecheck}
+                    disabled={kycLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${kycLoading ? 'animate-spin' : ''}`} />
+                    {kyc ? 'Revérifier' : 'Lancer'}
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="h-5 w-5 text-primary-600 mt-0.5" />
+                    <div className="flex-1 space-y-3">
+                      {kyc ? (
+                        <>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div>
+                              <p className="text-xs text-gray-500">Statut</p>
+                              <p className="font-medium text-gray-900">{kycStatusLabel[kyc.status]}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Identité</p>
+                              <p className="font-medium text-gray-900">{kyc.identity_status || 'Non résolue'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Risque</p>
+                              <p className="font-medium text-gray-900">{riskLabel}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Sources</p>
+                              <p className="font-medium text-gray-900">{kyc.source_count}</p>
+                            </div>
+                          </div>
+                          {kyc.key_reasons.length > 0 && (
+                            <ul className="space-y-1 text-sm text-gray-700 list-disc pl-4">
+                              {kyc.key_reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                            </ul>
+                          )}
+                          <p className="text-xs text-gray-500">
+                            Aide à la décision uniquement. Revue humaine requise avant toute décision de conformité.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          Aucun contrôle KYC enregistré pour cette demande.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
