@@ -6,6 +6,7 @@
 - Tester OpenSanctions/Yente avec noms connus, homonymes, personne + pays/entreprise et entreprise seule. Sans clé, documenter `401` et ne pas scraper l’interface web comme API.
 - Tester `linkedin_scraper` sans session puis avec une session explicitement autorisée si l’utilisateur la fournit; mesurer erreurs et absence de données.
 - Installer `scrape-mcp` dans un environnement temporaire; valider les six outils, schémas MCP, timeouts, 403/429 et limites.
+- Tester `pratik-dani/LinkedIn-Scraper` dans `D:\temp` : clone, `npm install`, `npm run build`, inspection des scripts, smoke test sans token et mesure du processus.
 
 ## Phase 2 — Comparaison
 
@@ -14,6 +15,8 @@ Pour chaque moteur : précision d’attribution, sources directes, latence p50/p
 Résultat initial : Crawl4AI `usable` pour sites d’entreprise après BFS same-host; SearXNG `fallback` pour extraits; OpenSanctions `blocked_pending_license`; LinkedIn scraper et scrape-mcp `reject_as_anonymous_fallback`.
 
 Le parallélisme actuel double les requêtes SearXNG et peut saturer ses moteurs. Les recherches doivent être sérialisées ou protégées par un sémaphore global, avec métriques par étape. Les résultats PDF peuvent être conservés comme extraits de recherche bornés, même si Crawl4AI ne les ouvre pas.
+
+Le dépôt `pratik-dani/LinkedIn-Scraper` est classé `reject_as_worker` : installation des dépendances réussie dans un clone propre, build non reproductible sans corriger ses peer-dependencies et son prérendu React, absence de protocole MCP/HTTP documenté, session LinkedIn locale obligatoire. Aucun acteur distant ni proxy payant n’a été déclenché pendant l’audit.
 
 ## Phase 3 — Architecture cible
 

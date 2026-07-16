@@ -40,3 +40,9 @@ Le worker AWS sépare déjà la découverte SearXNG du crawl Crawl4AI. Il produi
 ## Décision provisoire
 
 Le premier gain fiable est le crawl same-host de l’entreprise liée au domaine email. OpenSanctions est bloqué jusqu’à obtention d’une clé/licence ou choix explicite d’un jeu de listes officielles auto-géré. LinkedIn reste un indice de recherche ou une source autorisée, jamais une preuve isolée.
+
+## Sous-audit `pratik-dani/LinkedIn-Scraper`
+
+Le dépôt annoncé est une application/client Open Source avec compilation npm et interface HTTP, nécessitant un compte LinkedIn valide. Il ne doit pas être confondu avec une API LinkedIn officielle ni avec un serveur MCP. L’audit vérifie les scripts réels, la licence, la présence d’un serveur HTTP/MCP, la gestion des cookies et le comportement sans token.
+
+Audit exécuté dans `D:\temp\linkedin-scraper-pratik-clean` : le dépôt est Electron/Nextron, sous licence AGPL-3.0, sans SDK MCP ni serveur HTTP de worker. Il appelle les endpoints LinkedIn Voyager et conserve des cookies/session dans une base SQLite locale. `npm install --ignore-scripts` a réussi après activation de la CA système; le build a atteint Next mais échoue sur des dépendances MUI absentes puis sur des erreurs React/prérendu. Aucun token ni compte n’a été utilisé. Classement : `reject_as_worker`, éventuellement utilisable comme application opérateur locale après revue de licence et session.
