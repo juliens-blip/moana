@@ -1,0 +1,12 @@
+services:
+  kyc-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.kyc
+    image: moana-kyc-worker:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.kyc
+    shm_size: 1gb
+    stop_grace_period: 2m

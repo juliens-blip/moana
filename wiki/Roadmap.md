@@ -13,6 +13,8 @@
 - [x] Exécuter le script dans Supabase; succès confirmé le 2026-07-15.
 - [x] Implémenter le worker Python, le claim conditionnel et les tests locaux.
 - [x] Implémenter le mode Vercel déterministe sans LLM et ses tests.
+- [x] Préparer le conteneur VPS, l’enqueue asynchrone et le suivi CRM.
+- [ ] Déployer le worker sur l’instance AWS et valider un cycle `pending → running → completed`.
 - [ ] Optionnel : approuver un fournisseur LLM avant tout enrichissement avancé.
 - [ ] Valider un premier dossier synthétique complet, puis un lead réel autorisé.
 - [x] Déclencher une collecte bornée à chaque nouvelle demande exploitable sans annuler le lead en cas d’échec.

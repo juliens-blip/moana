@@ -3,7 +3,7 @@ import { getSession } from '@/lib/supabase/auth';
 import { createManualLead, getLeadsByBroker, getLeadStats, purgeTestLeads } from '@/lib/supabase/leads';
 import { manualLeadSchema } from '@/lib/validations';
 import type { ApiResponse, LeadWithBroker } from '@/lib/types';
-import { processLeadKycSafely } from '@/lib/supabase/kyc';
+import { getLatestKycReport } from '@/lib/supabase/kyc';
 
 // Force dynamic rendering - required for cookies()
 export const dynamic = 'force-dynamic';
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     const lead = await createManualLead(session.brokerId, validation.data);
-    const kyc = await processLeadKycSafely(lead.id);
+    const kyc = (await getLatestKycReport(lead.id))?.summary ?? null;
 
     return NextResponse.json<ApiResponse>(
       {

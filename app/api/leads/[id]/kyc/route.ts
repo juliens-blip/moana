@@ -4,13 +4,11 @@ import { getLeadById } from '@/lib/supabase/leads';
 import {
   enqueueKycRecheck,
   getLatestKycReport,
-  processLeadKyc,
 } from '@/lib/supabase/kyc';
 import type { ApiResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 300;
 
 async function authorizedLead(leadId: string) {
   const session = await getSession();
@@ -57,14 +55,13 @@ export async function POST(
       country: lead.contact_country ?? '',
       city: '',
     });
-    await processLeadKyc(lead.id);
     const kyc = await getLatestKycReport(lead.id);
 
     return NextResponse.json<ApiResponse>({
       success: true,
       data: kyc,
-      message: 'Contrôle KYC terminé',
-    });
+      message: 'Contrôle KYC ajouté à la file',
+    }, { status: 202 });
   } catch (error) {
     console.error('[KYC API] Recheck failed:', error);
     return NextResponse.json<ApiResponse>(

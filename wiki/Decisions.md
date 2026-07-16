@@ -12,6 +12,7 @@
 | 2026-07-15 | Le KYC/OSINT reste une aide sourcée à la décision humaine | Éviter toute conclusion automatique, juridique ou de conformité | Rapport prudent, données insuffisantes explicites, aucune décision automatique |
 | 2026-07-15 | Stocker le KYC dans `lead_kyc_reports`, séparé de `leads` | Conserver l’historique sans alourdir ni écraser le lead | Rapport JSON versionné, dernier résultat via une vue serveur |
 | 2026-07-15 | Déclencher par défaut un KYC déterministe dans le backend Vercel | Fonctionner sans fournisseur LLM ni serveur permanent | Collecte courte, risque toujours prudent, échec isolé de la création CRM; worker Python conservé pour un futur enrichissement profond |
+| 2026-07-16 | Déporter le crawl KYC vers un worker Docker sur VPS AWS | Chromium et les recherches longues dépassent le rôle d’une requête Vercel | Supabase sert de file; Vercel enqueue et actualise; aucun port worker public |
 
 ## Règles durables
 
