@@ -18,6 +18,8 @@ Le parallélisme actuel double les requêtes SearXNG et peut saturer ses moteurs
 
 Le dépôt `pratik-dani/LinkedIn-Scraper` est classé `reject_as_worker` : installation des dépendances réussie dans un clone propre, build non reproductible sans corriger ses peer-dependencies et son prérendu React, absence de protocole MCP/HTTP documenté, session LinkedIn locale obligatoire. Aucun acteur distant ni proxy payant n’a été déclenché pendant l’audit.
 
+Le package Python `linkedin-scraper` 3.1.2 est installé et testé dans un venv temporaire avec Chromium. Il expose bien les scrapers Playwright asynchrones, mais refuse toute extraction sans session (`Not logged in`). Classement : `fallback_authorized_session`; prochaine validation uniquement avec une session créée manuellement et stockée comme secret hors dépôt.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
