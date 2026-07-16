@@ -20,6 +20,8 @@ Le dépôt `pratik-dani/LinkedIn-Scraper` est classé `reject_as_worker` : insta
 
 Le package Python `linkedin-scraper` 3.1.2 est installé et testé dans un venv temporaire avec Chromium. Il expose bien les scrapers Playwright asynchrones, mais refuse toute extraction sans session (`Not logged in`). Classement : `fallback_authorized_session`; prochaine validation uniquement avec une session créée manuellement et stockée comme secret hors dépôt.
 
+La session manuelle a été validée sur `/feed`; le profil de test a déclenché une limitation LinkedIn. Ne pas retenter en boucle : ajouter backoff, quota journalier très bas et distinction explicite entre `rate_limited`, `auth_required` et `not_found`.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
