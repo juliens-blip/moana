@@ -26,6 +26,8 @@ Le retest montre en plus un faux positif du détecteur (« try again later » da
 
 Implémentation contrôlée : ajouter la dépendance PyPI, un adaptateur optionnel dans le worker, une session montée en lecture seule hors dépôt et des tests unitaires du parsing/du rate-limit. Le comportement par défaut reste inchangé lorsque `KYC_LINKEDIN_ENABLED` est absent ou désactivé.
 
+Validation finale : Bill Gates est extrait avec nom/poste/localisation/expériences; Gaetano Nicolosi renvoie HTTP 999 malgré une session valide. Le worker doit conserver le fallback public et journaliser `linkedin_blocked` sans produire de faux `unresolved`.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
