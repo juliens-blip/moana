@@ -1,4 +1,29 @@
 services:
+  searxng:
+    image: docker.io/searxng/searxng@sha256:9aae08475a1c254c096f936ed05119568d291ad7ee5e2f805452a48acba6caea
+    restart: unless-stopped
+    env_file:
+      - .env.kyc
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_LIMITER: "false"
+      SEARXNG_PUBLIC_INSTANCE: "false"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-cache:/var/cache/searxng
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   kyc-worker:
     build:
       context: .
@@ -8,5 +33,13 @@ services:
     init: true
     env_file:
       - .env.kyc
+    environment:
+      SEARXNG_URL: http://searxng:8080
+    depends_on:
+      searxng:
+        condition: service_healthy
     shm_size: 1gb
     stop_grace_period: 2m
+
+volumes:
+  searxng-cache:

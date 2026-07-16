@@ -1,0 +1,23 @@
+use_default_settings: true
+
+general:
+  instance_name: Moana KYC Search
+  debug: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: all
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: GET
+
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 15.0
