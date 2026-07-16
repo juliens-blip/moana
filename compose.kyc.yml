@@ -35,6 +35,9 @@ services:
       - .env.kyc
     environment:
       SEARXNG_URL: http://searxng:8080
+      KYC_LINKEDIN_SESSION_PATH: /run/secrets/linkedin-session.json
+    volumes:
+      - ./secrets/linkedin-session.json:/run/secrets/linkedin-session.json:ro
     depends_on:
       searxng:
         condition: service_healthy
