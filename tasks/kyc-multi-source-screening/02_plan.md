@@ -28,6 +28,8 @@ Implémentation contrôlée : ajouter la dépendance PyPI, un adaptateur optionn
 
 Validation finale : Bill Gates est extrait avec nom/poste/localisation/expériences; Gaetano Nicolosi renvoie HTTP 999 malgré une session valide. Le worker doit conserver le fallback public et journaliser `linkedin_blocked` sans produire de faux `unresolved`.
 
+Foulques de Raigniac renvoie également HTTP 999. Après deux profils professionnels bloqués, aucune nouvelle tentative automatique ne doit être faite dans le même cycle; le fallback public est la voie normale.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
