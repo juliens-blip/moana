@@ -22,6 +22,8 @@ Le package Python `linkedin-scraper` 3.1.2 est installé et testé dans un venv 
 
 La session manuelle a été validée sur `/feed`; le profil de test a déclenché une limitation LinkedIn. Ne pas retenter en boucle : ajouter backoff, quota journalier très bas et distinction explicite entre `rate_limited`, `auth_required` et `not_found`.
 
+Le retest montre en plus un faux positif du détecteur (« try again later » dans les publicités) et des sélecteurs de profil périmés. La session est exploitable, mais le package doit être encapsulé par un adaptateur DOM versionné avant tout branchement au KYC.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
