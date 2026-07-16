@@ -302,7 +302,7 @@ Fichiers principaux : `Dockerfile.kyc`, `compose.kyc.yml`, `.env.kyc.example`, `
 - Vercel ne crawle plus : création et bouton « Revérifier » laissent une ligne `pending` dans Supabase.
 - Le worker réclame une tâche, la passe à `running`, puis stocke le rapport et son statut final.
 - La fiche CRM actualise les états actifs toutes les cinq secondes.
-- DuckDuckGo est tenté puis Bing RSS sert de repli. Recherche, redirections et crawls sont bornés.
+- SearXNG agrège la recherche dans le réseau Docker privé; DuckDuckGo, Bing RSS et Brave/Chromium restent des replis bornés.
 - La synthèse déterministe conserve uniquement les sources attribuables; un LLM LiteLLM reste optionnel.
 - Une tâche `running` abandonnée est remise en file au redémarrage, dans la limite des tentatives.
 - Sans registre officiel exhaustif, sanctions/PEP restent `not_enough_data` ou `possible_homonym`, jamais `clear`.
@@ -317,7 +317,7 @@ docker compose -f compose.kyc.yml up -d --build
 docker compose -f compose.kyc.yml logs -f kyc-worker
 ```
 
-Le service redémarre automatiquement. `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` restent uniquement sur le VPS. `KYC_LLM_MODEL`, sa clé et `KYC_LLM_BASE_URL` sont optionnels.
+Le service redémarre automatiquement. `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` restent uniquement sur le VPS. SearXNG découvre gratuitement les sources depuis le réseau Docker privé; Crawl4AI analyse ensuite les pages. `KYC_LLM_MODEL`, sa clé et `KYC_LLM_BASE_URL` sont optionnels.
 
 Commandes locales :
 

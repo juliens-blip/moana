@@ -45,6 +45,10 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 LOGGER = logging.getLogger("moana.kyc")
 USER_AGENT = "MoanaKYCResearch/1.0"
+SEARCH_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 FREE_EMAIL_DOMAINS = {
     "gmail.com",
@@ -195,6 +199,7 @@ class Settings:
     llm_model: str
     llm_api_key: str | None
     llm_base_url: str | None
+    searxng_url: str
     llm_json_mode: bool
     llm_max_tokens: int
     max_search_results: int
@@ -227,6 +232,7 @@ class Settings:
             llm_model=llm_model,
             llm_api_key=os.getenv("KYC_LLM_API_KEY") or None,
             llm_base_url=os.getenv("KYC_LLM_BASE_URL") or None,
+            searxng_url=os.getenv("SEARXNG_URL", "http://searxng:8080").strip().rstrip("/"),
             llm_json_mode=env_bool("KYC_LLM_JSON_MODE", True),
             llm_max_tokens=env_int("KYC_LLM_MAX_TOKENS", 6000, 1000, 20000),
             max_search_results=env_int("KYC_MAX_SEARCH_RESULTS", 4, 1, 10),
@@ -415,6 +421,21 @@ def build_search_queries(query: dict[str, str]) -> list[str]:
     return unique_strings(query for query in candidates if query.replace('"', "").strip())
 
 
+def build_primary_search_queries(query: dict[str, str]) -> list[str]:
+    """Use one identity query; rank business/yachting candidates after retrieval."""
+    name = query["full_name"]
+    email = query["email"]
+    company = query["company_name"]
+    country = query["country"]
+    domain = email_domain(email)
+    professional_context = " ".join(
+        value for value in (company, domain if domain not in FREE_EMAIL_DOMAINS else "", country) if value
+    )
+    if professional_context:
+        return [f'"{name}" {professional_context}']
+    return [f'"{name}"']
+
+
 def unique_strings(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -424,6 +445,23 @@ def unique_strings(values: Iterable[str]) -> list[str]:
         if normalized and key not in seen:
             seen.add(key)
             result.append(normalized)
+    return result
+
+
+def diverse_urls(values: Iterable[str], limit: int, per_host: int = 1) -> list[str]:
+    """Bound discovery without allowing one social network to fill every slot."""
+    counts: dict[str, int] = {}
+    result: list[str] = []
+    for value in unique_strings(values):
+        host = (urlparse(value).hostname or "").lower()
+        parts = host.split(".")
+        host_bucket = ".".join(parts[-2:]) if len(parts) >= 2 else host
+        if not host_bucket or counts.get(host_bucket, 0) >= per_host:
+            continue
+        counts[host_bucket] = counts.get(host_bucket, 0) + 1
+        result.append(value)
+        if len(result) >= limit:
+            break
     return result
 
 
@@ -491,6 +529,183 @@ async def search_bing_rss(
     return unique_strings(urls)[:limit]
 
 
+def rank_search_result_urls(links: Any, limit: int, required_name: str = "") -> list[str]:
+    """Filter, rank and bound structured public search results."""
+    if not isinstance(links, dict):
+        return []
+    values = links.get("external")
+    if not isinstance(values, list):
+        return []
+
+    ranked: list[tuple[int, int, str]] = []
+    required = comparable_text(required_name)
+    for index, item in enumerate(values):
+        href = item.get("href") if isinstance(item, dict) else ""
+        label = (
+            f"{item.get('text', '')} {item.get('title', '')} {href}"
+            if isinstance(item, dict)
+            else str(href or "")
+        )
+        url = canonical_url(str(href or ""))
+        host = (urlparse(url).hostname or "").lower()
+        path = urlparse(url).path.lower()
+        if (
+            not url
+            or host == "search.brave.com"
+            or host.endswith(".search.brave.com")
+            or host.endswith(".brave.com")
+            or host.startswith("imgs.")
+            or any(
+                marker in host
+                for marker in ("youtube.", "youtu.be", "spotify.", "facebook.", "instagram.", "tiktok.")
+            )
+            or path.endswith((".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".pdf"))
+            or (required and required not in comparable_text(label))
+        ):
+            continue
+        normalized_label = comparable_text(label)
+        score = 0
+        if any(
+            term in normalized_label
+            for term in ("yacht", "yachting", "maritime", "charter", "vessel")
+        ):
+            score += 12
+        if any(
+            term in normalized_label
+            for term in (
+                "logistics",
+                "logistica",
+                "trasporti",
+                "transport",
+                "fleet",
+                "chairman",
+                "board member",
+                "managing director",
+                " srl",
+                " ltd",
+            )
+        ):
+            score += 8
+        if any(
+            term in normalized_label
+            for term in (
+                "ceo",
+                "founder",
+                "director",
+                "owner",
+                "president",
+                "board member",
+                "company",
+                "entrepreneur",
+            )
+        ):
+            score += 5
+        if any(
+            term in normalized_label
+            for term in ("drummer", "musician", "discography", "album", "music", "percussion")
+        ):
+            score -= 8
+        ranked.append((score, -index, url))
+    ranked.sort(reverse=True)
+    return unique_strings(item[2] for item in ranked)[:limit]
+
+
+def searxng_result_urls(payload: Any, limit: int, required_name: str) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return []
+    links = {
+        "external": [
+            {
+                "href": item.get("url", ""),
+                "text": f"{item.get('title', '')} {item.get('content', '')}",
+                "title": item.get("title", ""),
+            }
+            for item in results
+            if isinstance(item, dict)
+        ]
+    }
+    return rank_search_result_urls(links, limit, required_name)
+
+
+async def search_searxng(
+    client: httpx.AsyncClient,
+    base_url: str,
+    query: str,
+    limit: int,
+    required_name: str,
+) -> list[str]:
+    try:
+        response = await client.get(
+            f"{base_url}/search",
+            params={
+                "q": query,
+                "format": "json",
+                "categories": "general",
+                "language": "all",
+                "safesearch": "0",
+            },
+        )
+        response.raise_for_status()
+        return searxng_result_urls(response.json(), limit, required_name)
+    except (httpx.HTTPError, ValueError):
+        LOGGER.warning("Private SearXNG search unavailable; using browser fallback")
+        return []
+
+
+async def search_brave_with_crawl4ai(
+    queries: list[str],
+    limit: int,
+    required_name: str,
+) -> list[str]:
+    """Use Chromium only when lightweight public search providers return nothing."""
+    browser = BrowserConfig(
+        headless=True,
+        text_mode=True,
+        java_script_enabled=True,
+        accept_downloads=False,
+        memory_saving_mode=True,
+        verbose=False,
+        user_agent=SEARCH_USER_AGENT,
+    )
+    run_config = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        check_robots_txt=False,
+        word_count_threshold=1,
+        excluded_tags=["script", "style", "nav", "footer", "form"],
+        remove_forms=True,
+        exclude_all_images=True,
+        page_timeout=30_000,
+        verbose=False,
+    )
+    urls: list[str] = []
+    try:
+        async with AsyncWebCrawler(config=browser) as crawler:
+            for query in queries[:1]:
+                search_url = f"https://search.brave.com/search?q={quote_plus(query)}&source=web"
+                try:
+                    result = await asyncio.wait_for(
+                        crawler.arun(url=search_url, config=run_config),
+                        timeout=40,
+                    )
+                except TimeoutError:
+                    LOGGER.warning("Crawl4AI Brave search timed out")
+                    continue
+                if not result.success:
+                    LOGGER.warning("Crawl4AI Brave search returned no usable page")
+                    continue
+                query_urls = rank_search_result_urls(result.links, limit, required_name=required_name)
+                LOGGER.info("Crawl4AI Brave search found %d candidate URL(s)", len(query_urls))
+                urls.extend(query_urls)
+                urls = unique_strings(urls)
+    except Exception as exc:
+        LOGGER.warning("Crawl4AI Brave discovery failed: %s", sanitize_error(exc))
+        return []
+    return urls[:limit]
+
+
 def infer_source_type(url: str, company_domain: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     path = urlparse(url).path.lower()
@@ -524,38 +739,58 @@ def infer_source_type(url: str, company_domain: str) -> str:
 
 async def discover_urls(query: dict[str, str], settings: Settings) -> list[str]:
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "en,fr;q=0.8"}
-    timeout = httpx.Timeout(10.0)
+    timeout = httpx.Timeout(20.0)
     discovered: list[str] = []
+    search_discovered: list[str] = []
     domain = email_domain(query["email"])
+    primary_queries = build_primary_search_queries(query)
 
     async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False) as client:
         if domain and domain not in FREE_EMAIL_DOMAINS:
             discovered.append(f"https://{domain}")
 
-        search_semaphore = asyncio.Semaphore(2)
-
-        async def search_one(search_query: str) -> list[str]:
-            async with search_semaphore:
-                try:
-                    urls = await asyncio.wait_for(
-                        search_duckduckgo(client, search_query, settings.max_search_results),
+        for primary_query in primary_queries:
+            search_discovered.extend(
+                await search_searxng(
+                    client,
+                    settings.searxng_url,
+                    primary_query,
+                    settings.max_sources * 2,
+                    query["full_name"],
+                )
+            )
+            search_discovered = unique_strings(search_discovered)
+            if len(diverse_urls(search_discovered, settings.max_sources * 2)) >= settings.max_sources * 2:
+                break
+            await asyncio.sleep(0.5)
+        if not search_discovered:
+            try:
+                search_discovered.extend(
+                    await asyncio.wait_for(
+                        search_duckduckgo(client, primary_queries[0], settings.max_search_results),
                         timeout=12,
                     )
-                    if not urls:
-                        urls = await asyncio.wait_for(
-                            search_bing_rss(client, search_query, settings.max_search_results),
+                )
+                if not search_discovered:
+                    search_discovered.extend(
+                        await asyncio.wait_for(
+                            search_bing_rss(client, primary_queries[0], settings.max_search_results),
                             timeout=12,
                         )
-                    return urls
-                except TimeoutError:
-                    LOGGER.warning("One public search query timed out")
-                    return []
+                    )
+            except TimeoutError:
+                LOGGER.warning("Public search query timed out")
 
-        search_results = await asyncio.gather(
-            *(search_one(search_query) for search_query in build_search_queries(query))
-        )
-        for urls in search_results:
-            discovered.extend(urls)
+        if not search_discovered:
+            LOGGER.info("SearXNG/public search returned no URL; using Crawl4AI Brave fallback")
+            search_discovered.extend(
+                await search_brave_with_crawl4ai(
+                    build_primary_search_queries(query),
+                    settings.max_sources * 2,
+                    query["full_name"],
+                )
+            )
+        discovered.extend(search_discovered)
 
         redirect_semaphore = asyncio.Semaphore(4)
 
@@ -566,9 +801,9 @@ async def discover_urls(query: dict[str, str], settings: Settings) -> list[str]:
                 except TimeoutError:
                     return ""
 
-        candidates = unique_strings(discovered)[: settings.max_sources * 2]
+        candidates = diverse_urls(discovered, settings.max_sources * 2)
         safe_urls = [value for value in await asyncio.gather(*(resolve_one(url) for url in candidates)) if value]
-    return unique_strings(safe_urls)[: settings.max_sources]
+    return diverse_urls(safe_urls, settings.max_sources)
 
 
 def markdown_text(markdown: Any) -> str:
@@ -804,11 +1039,18 @@ def deterministic_report(
         for item in relevant
         if item[0].source_type in {"company_website", "official_registry"}
     ]
+    query_domain = email_domain(query["email"])
+    has_identity_context = bool(
+        query["company_name"]
+        or query["country"]
+        or query["city"]
+        or (query_domain and query_domain not in FREE_EMAIL_DOMAINS)
+    )
 
     if exact_email_docs:
         identity_status, confidence = "confirmed", 95
         rationale = "Email exact et nom reliés à au moins une source publique collectée."
-    elif len(named_docs) >= 2 or (linkedin_docs and company_docs):
+    elif has_identity_context and (len(named_docs) >= 2 or (linkedin_docs and company_docs)):
         identity_status, confidence = "probable", 75
         rationale = "Nom relié à plusieurs sources professionnelles convergentes."
     elif named_docs:
@@ -839,15 +1081,27 @@ def deterministic_report(
                 + "; ces indices ne confirment pas seuls l’identité."
             )
             report["identity_resolution"]["selected_profile_rationale"] = rationale
-        report["identity_resolution"]["matched_persons"] = [
-            {
-                "name": query["full_name"],
-                "headline": document_headline(primary[0]),
-                "location": query["city"] if "ville" in primary[2] else "",
-                "company": query["company_name"] if "entreprise" in primary[2] else "",
-                "evidence": [item[0].url for item in named_docs[:5]],
-            }
-        ]
+        if identity_status == "ambiguous" and not has_identity_context:
+            report["identity_resolution"]["matched_persons"] = [
+                {
+                    "name": query["full_name"],
+                    "headline": document_headline(item[0]),
+                    "location": "",
+                    "company": "",
+                    "evidence": [item[0].url],
+                }
+                for item in sorted(named_docs, key=lambda value: value[1], reverse=True)[:5]
+            ]
+        else:
+            report["identity_resolution"]["matched_persons"] = [
+                {
+                    "name": query["full_name"],
+                    "headline": document_headline(primary[0]),
+                    "location": query["city"] if "ville" in primary[2] else "",
+                    "company": query["company_name"] if "entreprise" in primary[2] else "",
+                    "evidence": [item[0].url for item in named_docs[:5]],
+                }
+            ]
 
     person = report["person_profile"]
     if identity_status in {"confirmed", "probable"}:
@@ -1495,6 +1749,7 @@ def check_configuration() -> int:
         "llm_model": settings.llm_model or "missing",
         "llm_api_key_override": bool(settings.llm_api_key),
         "llm_base_url": settings.llm_base_url or "provider default",
+        "searxng_url": settings.searxng_url,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1

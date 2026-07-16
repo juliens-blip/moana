@@ -4,8 +4,12 @@ from scripts.kyc_worker import (
     EvidenceDocument,
     REPORT_TEMPLATE,
     blank_report,
+    rank_search_result_urls,
+    searxng_result_urls,
+    build_primary_search_queries,
     canonical_url,
     deterministic_report,
+    diverse_urls,
     email_domain,
     normalize_report,
     sanitize_error,
@@ -63,6 +67,76 @@ class KycWorkerTests(unittest.TestCase):
         self.assertNotIn("abc123", message)
         self.assertIn("[redacted]", message)
 
+    def test_primary_query_uses_professional_context(self):
+        queries = build_primary_search_queries(QUERY)
+        self.assertEqual(len(queries), 1)
+        self.assertIn('"Example Person"', queries[0])
+        self.assertIn("example.com", queries[0])
+
+    def test_search_result_links_exclude_navigation_and_images(self):
+        links = {
+            "external": [
+                {
+                    "href": "https://example.com/team/example-person",
+                    "text": "Example Person - Director",
+                },
+                {"href": "https://imgs.search.brave.com/asset.webp"},
+                {
+                    "href": "https://docs.example.org/example-person.pdf",
+                    "text": "Example Person dossier",
+                },
+                {"href": "https://search.brave.com/help"},
+                {
+                    "href": "https://news.example.org/example-person#bio",
+                    "text": "Interview with Example Person",
+                },
+                {"href": "https://irrelevant.example.net/profile", "text": "Another Person"},
+            ]
+        }
+        self.assertEqual(
+            rank_search_result_urls(links, 5, "Example Person"),
+            [
+                "https://example.com/team/example-person",
+                "https://news.example.org/example-person",
+            ],
+        )
+
+    def test_searxng_results_are_filtered_and_ranked(self):
+        payload = {
+            "results": [
+                {
+                    "url": "https://social.example/other",
+                    "title": "Example Person - Musician",
+                    "content": "Professional drummer and album artist",
+                },
+                {
+                    "url": "https://business.example/example-person",
+                    "title": "Example Person - CEO",
+                    "content": "Company founder and director",
+                },
+            ]
+        }
+        self.assertEqual(
+            searxng_result_urls(payload, 5, "Example Person"),
+            [
+                "https://business.example/example-person",
+                "https://social.example/other",
+            ],
+        )
+
+    def test_discovery_keeps_multiple_domains(self):
+        urls = [
+            "https://www.linkedin.com/in/one",
+            "https://www.linkedin.com/in/two",
+            "https://www.linkedin.com/in/three",
+            "https://example.com/profile",
+            "https://news.example.org/story",
+        ]
+        self.assertEqual(
+            diverse_urls(urls, 4),
+            [urls[0], urls[3], urls[4]],
+        )
+
     def test_deterministic_report_uses_multiple_crawl4ai_sources(self):
         documents = [
             EvidenceDocument(
@@ -96,6 +170,33 @@ class KycWorkerTests(unittest.TestCase):
         report = deterministic_report(QUERY, documents)
         self.assertEqual(report["identity_resolution"]["status"], "confirmed")
         self.assertEqual(report["person_profile"]["emails"], ["person@example.com"])
+
+    def test_name_only_homonyms_stay_ambiguous(self):
+        weak_query = {
+            "full_name": "Example Person",
+            "email": "person@gmail.com",
+            "company_name": "",
+            "country": "",
+            "city": "",
+        }
+        documents = [
+            EvidenceDocument(
+                url="https://music.example/profile",
+                text="Example Person is a professional musician.",
+                source_type="other",
+            ),
+            EvidenceDocument(
+                url="https://business.example/profile",
+                text="Example Person is a company president.",
+                source_type="other",
+            ),
+        ]
+        report = deterministic_report(weak_query, documents)
+        self.assertEqual(report["identity_resolution"]["status"], "ambiguous")
+        self.assertEqual(len(report["identity_resolution"]["matched_persons"]), 2)
+        self.assertTrue(
+            all(len(item["evidence"]) == 1 for item in report["identity_resolution"]["matched_persons"])
+        )
 
     def test_yachting_candidate_is_ranked_without_confirming_identity(self):
         documents = [
