@@ -281,7 +281,7 @@ Avant le code, décider :
 - relance manuelle et comportement en cas de source indisponible;
 - validation humaine obligatoire avant toute décision commerciale ou conformité.
 
-Le backend Vercel traite une collecte courte dans l’invocation de création. Le rapport complet reste côté serveur; la fiche CRM reçoit uniquement un résumé prudent.
+Vercel crée ou relance uniquement la tâche. Le worker Crawl4AI la traite hors requête HTTP; le rapport complet reste côté serveur et la fiche CRM suit son état.
 
 ### Modèle SQL préparé
 
@@ -292,25 +292,34 @@ Script : `scripts/kyc-enrichment-schema.sql`.
 - Sans nom ou email, la tentative passe directement à `insufficient_data` sans spéculation.
 - `lead_kyc_latest` expose au backend le dernier contrôle et ses statuts utiles au CRM.
 - `anon` et `authenticated` n’ont aucun accès direct; seul le backend `service_role` lit et écrit.
-- Le trigger SQL ne crawle rien; le backend Vercel ou le worker Python doit réclamer les lignes `pending`.
+- Le trigger SQL ne crawle rien; seul le worker Python réclame les lignes `pending`.
 
-### Backend Vercel actif — Crawl4AI sans LLM obligatoire
+### Worker Crawl4AI sur VPS AWS
 
-Fichiers principaux : `api/kyc-crawl.py`, `scripts/kyc_worker.py`, `lib/supabase/kyc.ts`, `/api/leads/[id]/kyc` et `vercel.json`.
+Fichiers principaux : `Dockerfile.kyc`, `compose.kyc.yml`, `.env.kyc.example`, `scripts/kyc_worker.py`, `lib/supabase/kyc.ts` et `/api/leads/[id]/kyc`.
 
-- La fonction Python Vercel utilise Crawl4AI `AsyncHTTPCrawlerStrategy`; aucun Render ni Chromium n’est requis.
+- Le conteneur Python 3.11 embarque Chromium; aucun port public n’est exposé.
+- Vercel ne crawle plus : création et bouton « Revérifier » laissent une ligne `pending` dans Supabase.
+- Le worker réclame une tâche, la passe à `running`, puis stocke le rapport et son statut final.
+- La fiche CRM actualise les états actifs toutes les cinq secondes.
 - DuckDuckGo est tenté puis Bing RSS sert de repli. Recherche, redirections et crawls sont bornés.
 - La synthèse déterministe conserve uniquement les sources attribuables; un LLM LiteLLM reste optionnel.
-- L’endpoint Python exige le `SUPABASE_SERVICE_ROLE_KEY` déjà présent côté serveur.
-- Création manuelle, webhook Boats Group et bouton « Revérifier » enregistrent le rapport dans Supabase.
+- Une tâche `running` abandonnée est remise en file au redémarrage, dans la limite des tentatives.
 - Sans registre officiel exhaustif, sanctions/PEP restent `not_enough_data` ou `possible_homonym`, jamais `clear`.
 - L’échec du KYC ne supprime pas le lead.
 
-### Worker CLI
+### Exécution
 
-Fichiers : `scripts/kyc_worker.py`, `requirements.txt`, `tests/test_kyc_worker.py`.
+Configuration : copier `.env.kyc.example` vers `.env.kyc`, renseigner l’URL Supabase et la clé `service_role`, puis limiter le fichier à l’utilisateur du VPS (`chmod 600 .env.kyc`).
 
-Configuration Supabase requise seulement pour `once` et `watch` : `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. `KYC_LLM_MODEL`, sa clé et `KYC_LLM_BASE_URL` sont optionnels.
+```bash
+docker compose -f compose.kyc.yml up -d --build
+docker compose -f compose.kyc.yml logs -f kyc-worker
+```
+
+Le service redémarre automatiquement. `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` restent uniquement sur le VPS. `KYC_LLM_MODEL`, sa clé et `KYC_LLM_BASE_URL` sont optionnels.
+
+Commandes locales :
 
 Commandes :
 

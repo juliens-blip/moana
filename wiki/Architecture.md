@@ -27,7 +27,7 @@ Navigateur → pages/composants → app/api/* → lib/supabase/* → Supabase
 | Listings | `/api/listings`, `/api/listings/[id]`, `/image` | CRUD, filtres, images |
 | Brokers | `/api/brokers` | Liste et résolution des brokers |
 | CRM | `/api/leads`, `/api/leads/[id]` | Liste, création manuelle, statut, commentaires |
-| KYC | `/api/leads/[id]/kyc` | Lecture et relance authentifiées; collecte déterministe Vercel |
+| KYC | `/api/leads/[id]/kyc` | Lecture/relance Vercel; collecte asynchrone par worker Crawl4AI VPS |
 | Ingestion | `/api/leads/yatco` | Webhook Boats Group; nom technique historique |
 | Suivi | `/api/bateaux-a-suivre*`, `/api/bateaux-chantier*` | CRUD et images des deux listes |
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { yatcoLeadPayloadSchema } from '@/lib/validations';
 import { YatcoLeadPayload } from '@/lib/types';
-import { processLeadKycSafely } from '@/lib/supabase/kyc';
+import { getLatestKycReport } from '@/lib/supabase/kyc';
 
 // BOats group IP whitelist
 const YATCO_IPS = ['35.171.79.77', '52.2.114.120'];
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[BOats group Webhook] Lead created successfully:', newLead.id);
-    const kyc = await processLeadKycSafely(newLead.id);
+    const kyc = (await getLatestKycReport(newLead.id))?.summary ?? null;
 
     // Success response
     return NextResponse.json(

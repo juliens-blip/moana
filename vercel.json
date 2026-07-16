@@ -1,10 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "fluid": true,
-  "functions": {
-    "api/kyc-crawl.py": {
-      "maxDuration": 240,
-      "excludeFiles": "{.git/**,.next/**,node_modules/**,app/**,components/**,lib/**,mcp/**,public/**,tests/**,wiki/**,archive/**,raw/**,backup/**,agents_library/**,orchestratoragent/**,moana/**}"
-    }
-  }
+  "fluid": true
 }

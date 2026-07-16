@@ -1,0 +1,24 @@
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+WORKDIR /app
+
+COPY scripts/requirements-kyc.txt /tmp/requirements-kyc.txt
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r /tmp/requirements-kyc.txt \
+    && python -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/* /tmp/requirements-kyc.txt
+
+RUN useradd --create-home --uid 10001 worker
+
+COPY --chown=worker:worker scripts/kyc_worker.py /app/scripts/kyc_worker.py
+
+USER worker
+
+CMD ["python", "scripts/kyc_worker.py", "watch"]

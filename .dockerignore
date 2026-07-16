@@ -1,0 +1,5 @@
+*
+!scripts/
+scripts/*
+!scripts/kyc_worker.py
+!scripts/requirements-kyc.txt

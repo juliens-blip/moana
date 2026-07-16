@@ -2,10 +2,10 @@
 
 The worker is intentionally separate from the Next.js request path. It claims
 one pending Supabase row, discovers public sources, crawls them with Crawl4AI,
-asks a configured LiteLLM model for the documented JSON contract, validates the
-result conservatively, and stores it back in Supabase.
+builds the documented JSON contract deterministically (or with an optional
+LiteLLM model), validates it conservatively, and stores it back in Supabase.
 
-No worker starts automatically. See ``--help`` and wiki/KYC-OSINT.md.
+See ``--help`` and wiki/KYC-OSINT.md.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import sys
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
@@ -203,6 +203,7 @@ class Settings:
     max_total_chars: int
     max_retries: int
     poll_seconds: float
+    stale_job_minutes: int
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -234,6 +235,7 @@ class Settings:
             max_total_chars=env_int("KYC_MAX_TOTAL_CHARS", 60000, 5000, 150000),
             max_retries=env_int("KYC_MAX_RETRIES", 3, 1, 10),
             poll_seconds=env_float("KYC_POLL_SECONDS", 30.0, 2.0, 3600.0),
+            stale_job_minutes=env_int("KYC_STALE_JOB_MINUTES", 30, 5, 1440),
         )
 
 
@@ -610,6 +612,7 @@ async def crawl_sources(
                 text_mode=True,
                 java_script_enabled=False,
                 accept_downloads=False,
+                memory_saving_mode=True,
                 verbose=False,
                 user_agent=USER_AGENT,
             )
@@ -1283,6 +1286,38 @@ class SupabaseKycStore:
     def endpoint(self, table: str) -> str:
         return f"{self.base_url}/rest/v1/{table}"
 
+    async def recover_stale(self, max_retries: int, stale_job_minutes: int) -> int:
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=stale_job_minutes)).isoformat()
+        response = await self.client.get(
+            self.endpoint("lead_kyc_reports"),
+            params={
+                "status": "eq.running",
+                "started_at": f"lt.{cutoff}",
+                "select": "id,retry_count",
+            },
+        )
+        response.raise_for_status()
+        recovered = 0
+        for job in response.json():
+            retry = int(job.get("retry_count") or 0) < max_retries
+            payload = {
+                "status": "pending" if retry else "failed",
+                "started_at": None,
+                "completed_at": None if retry else now_iso(),
+                "error_code": "STALE_WORKER_RECOVERY",
+                "error_message": "Worker stopped before completing the KYC job.",
+            }
+            update = await self.client.patch(
+                self.endpoint("lead_kyc_reports"),
+                params={"id": f"eq.{job['id']}", "status": "eq.running"},
+                headers={**self.headers, "Prefer": "return=representation"},
+                json=payload,
+            )
+            update.raise_for_status()
+            if update.json():
+                recovered += 1
+        return recovered
+
     async def claim(self) -> dict[str, Any] | None:
         response = await self.client.get(
             self.endpoint("lead_kyc_reports"),
@@ -1321,6 +1356,7 @@ class SupabaseKycStore:
             params={"id": f"eq.{job_id}", "status": "eq.running"},
             json={
                 "status": status,
+                "engine": "crawl4ai_worker_osint",
                 "report": report,
                 "checked_at": timestamp,
                 "completed_at": timestamp,
@@ -1386,6 +1422,9 @@ async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
 async def run_once(settings: Settings) -> bool:
     store = SupabaseKycStore(settings)
     try:
+        recovered = await store.recover_stale(settings.max_retries, settings.stale_job_minutes)
+        if recovered:
+            LOGGER.warning("Recovered %d stale KYC job(s)", recovered)
         return await process_one(store, settings)
     finally:
         await store.close()
@@ -1394,6 +1433,9 @@ async def run_once(settings: Settings) -> bool:
 async def run_watch(settings: Settings) -> None:
     store = SupabaseKycStore(settings)
     try:
+        recovered = await store.recover_stale(settings.max_retries, settings.stale_job_minutes)
+        if recovered:
+            LOGGER.warning("Recovered %d stale KYC job(s)", recovered)
         while True:
             processed = await process_one(store, settings)
             if not processed:

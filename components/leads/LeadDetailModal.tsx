@@ -48,7 +48,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
     if (!leadId || !isOpen) return;
 
     const controller = new AbortController();
-    void fetch(`/api/leads/${leadId}/kyc`, { signal: controller.signal })
+    void fetch(`/api/leads/${leadId}/kyc`, { signal: controller.signal, cache: 'no-store' })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) return;
@@ -63,6 +63,42 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
 
     return () => controller.abort();
   }, [lead?.id, isOpen]);
+
+  useEffect(() => {
+    const leadId = lead?.id;
+    const active = kyc?.status === 'pending' || kyc?.status === 'running';
+    if (!leadId || !isOpen || !active) return;
+
+    const controller = new AbortController();
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/leads/${leadId}/kyc`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        const data = await response.json();
+        if (!data.success) return;
+
+        const summary = data.data?.summary as KycSummary | undefined;
+        const report = data.data?.report as KycReport | undefined;
+        setKyc(summary);
+        setKycReport(report);
+        if (summary && summary.status !== 'pending' && summary.status !== 'running') {
+          setKycLoading(false);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error polling KYC report:', error);
+        }
+      }
+    };
+
+    const interval = window.setInterval(() => void refresh(), 5_000);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
+  }, [lead?.id, isOpen, kyc?.status]);
 
   if (!lead) return null;
 
@@ -186,7 +222,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
       setKyc(summary);
       setKycReport(report);
       if (summary) onLeadUpdated?.({ ...lead, kyc: summary });
-      toast.success('Contrôle KYC terminé');
+      toast.success('Analyse KYC lancée');
     } catch (error) {
       console.error('Error refreshing KYC:', error);
       toast.error('Erreur de connexion KYC');
@@ -203,6 +239,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
     failed: 'Échec technique',
     cancelled: 'Annulé',
   };
+  const kycActive = kyc?.status === 'pending' || kyc?.status === 'running';
 
   const riskLabel = kyc?.overall_risk === 'low'
     ? 'Faible'
@@ -402,11 +439,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                     variant="secondary"
                     size="sm"
                     onClick={handleKycRecheck}
-                    disabled={kycLoading}
+                    disabled={kycLoading || kycActive}
                     className="flex items-center gap-2"
                   >
-                    <RefreshCw className={`h-4 w-4 ${kycLoading ? 'animate-spin' : ''}`} />
-                    {kyc ? 'Revérifier' : 'Lancer'}
+                    <RefreshCw className={`h-4 w-4 ${kycLoading || kycActive ? 'animate-spin' : ''}`} />
+                    {kycActive ? 'Analyse...' : kyc ? 'Revérifier' : 'Lancer'}
                   </Button>
                 </div>
 
