@@ -111,6 +111,7 @@ export interface KycReport {
   kyc_assessment: {
     overall_risk: RiskLevel;
     recommended_review: ReviewLevel;
+    executive_summary?: string[];
     key_reasons: string[];
     missing_critical_items: string[];
   };

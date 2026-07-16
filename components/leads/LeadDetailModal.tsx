@@ -249,19 +249,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
         ? 'Élevé'
         : 'Indéterminé';
 
-  const selectedPerson = kycReport?.identity_resolution.matched_persons[0];
-  const profileLinks = kycReport ? [
-    { label: 'LinkedIn', url: kycReport.person_profile.profiles.linkedin },
-    { label: 'Profil entreprise', url: kycReport.person_profile.profiles.company_profile },
-    ...kycReport.person_profile.profiles.other.map((url, index) => ({ label: `Profil ${index + 1}`, url })),
-    ...kycReport.person_profile.websites.map((url, index) => ({ label: `Site ${index + 1}`, url })),
-  ].filter((link, index, links) => link.url && links.findIndex((item) => item.url === link.url) === index) : [];
-  const screeningLabel: Record<string, string> = {
-    clear: 'Aucun résultat exact',
-    possible_homonym: 'Homonyme possible',
-    hit: 'Correspondance',
-    not_enough_data: 'Non conclusif',
-  };
+  const executiveSummary = kycReport?.kyc_assessment.executive_summary?.slice(0, 4)
+    ?? kyc?.key_reasons.slice(0, 4)
+    ?? [];
   const sourceTypeLabel: Record<KycReport['sources'][number]['type'], string> = {
     official_registry: 'Registre officiel',
     company_website: 'Site entreprise',
@@ -453,137 +443,39 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                     <div className="flex-1 space-y-3">
                       {kyc ? (
                         <>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                            <div>
-                              <p className="text-xs text-gray-500">Statut</p>
-                              <p className="font-medium text-gray-900">{kycStatusLabel[kyc.status]}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Identité</p>
-                              <p className="font-medium text-gray-900">{kyc.identity_status || 'Non résolue'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Risque</p>
-                              <p className="font-medium text-gray-900">{riskLabel}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Sources</p>
-                              <p className="font-medium text-gray-900">{kyc.source_count}</p>
-                            </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1">
+                              {kycStatusLabel[kyc.status]}
+                            </span>
+                            <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1">
+                              Risque {riskLabel.toLowerCase()}
+                            </span>
                           </div>
-                          {kyc.key_reasons.length > 0 && (
-                            <ul className="space-y-1 text-sm text-gray-700 list-disc pl-4">
-                              {kyc.key_reasons.map((reason) => <li key={reason}>{reason}</li>)}
-                            </ul>
+                          {executiveSummary.length > 0 && (
+                            <div className="space-y-2 text-sm leading-6 text-gray-800">
+                              {executiveSummary.map((line) => <p key={line}>{line}</p>)}
+                            </div>
                           )}
-                          {kycReport && (
-                            <div className="space-y-3 border-t border-slate-200 pt-3">
-                              {(selectedPerson || kycReport.person_profile.current_title || kycReport.person_profile.current_company) && (
-                                <div className="rounded-md bg-white p-3 border border-slate-200">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
-                                    Profil retenu
-                                  </p>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    {selectedPerson?.name || kycReport.person_profile.full_name || lead.contact_display_name}
-                                  </p>
-                                  {(selectedPerson?.headline || kycReport.person_profile.current_title) && (
-                                    <p className="text-sm text-gray-700">
-                                      {selectedPerson?.headline || kycReport.person_profile.current_title}
-                                    </p>
-                                  )}
-                                  {(selectedPerson?.company || kycReport.person_profile.current_company) && (
-                                    <p className="text-sm text-gray-600">
-                                      {selectedPerson?.company || kycReport.person_profile.current_company}
-                                    </p>
-                                  )}
-                                  {kycReport.identity_resolution.selected_profile_rationale && (
-                                    <p className="text-xs text-gray-500 mt-2">
-                                      {kycReport.identity_resolution.selected_profile_rationale}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-
-                              {profileLinks.length > 0 && (
-                                <div>
-                                  <p className="text-xs font-semibold text-gray-600 mb-1">Profils et sites</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {profileLinks.map((link) => (
-                                      <a
-                                        key={link.url}
-                                        href={link.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-sm text-primary-700 hover:underline"
-                                      >
-                                        {link.label}<ExternalLink className="h-3.5 w-3.5" />
-                                      </a>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {(kycReport.company_profile.company_name || kycReport.company_profile.website) && (
-                                <div className="rounded-md bg-white p-3 border border-slate-200">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
-                                    Entreprise
-                                  </p>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {kycReport.company_profile.company_name || 'Entreprise associée'}
-                                  </p>
-                                  {kycReport.company_profile.industry && (
-                                    <p className="text-sm text-gray-600">{kycReport.company_profile.industry}</p>
-                                  )}
-                                  {kycReport.company_profile.website && (
+                          {kycReport && kycReport.sources.length > 0 && (
+                            <div className="rounded-md bg-white border border-slate-200 p-3">
+                              <p className="text-sm font-semibold text-gray-800 mb-2">
+                                Sources ({Math.min(kycReport.sources.length, 5)})
+                              </p>
+                              <div className="space-y-2">
+                                {kycReport.sources.slice(0, 5).map((source) => (
+                                  <div key={source.url} className="text-sm border-t border-slate-100 pt-2 first:border-0 first:pt-0">
                                     <a
-                                      href={kycReport.company_profile.website}
+                                      href={source.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-primary-700 hover:underline mt-1"
+                                      className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline break-all"
                                     >
-                                      Site officiel <ExternalLink className="h-3.5 w-3.5" />
+                                      {sourceTypeLabel[source.type]} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                                     </a>
-                                  )}
-                                </div>
-                              )}
-
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="rounded-md bg-white p-2 border border-slate-200">
-                                  <span className="text-gray-500">Sanctions : </span>
-                                  <span className="font-medium text-gray-800">
-                                    {screeningLabel[kycReport.risk_screening.sanctions.status]}
-                                  </span>
-                                </div>
-                                <div className="rounded-md bg-white p-2 border border-slate-200">
-                                  <span className="text-gray-500">PEP : </span>
-                                  <span className="font-medium text-gray-800">
-                                    {screeningLabel[kycReport.risk_screening.pep.status]}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {kycReport.sources.length > 0 && (
-                                <details className="rounded-md bg-white border border-slate-200 p-3" open>
-                                  <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-                                    Sources consultées ({kycReport.sources.length})
-                                  </summary>
-                                  <div className="mt-2 space-y-2">
-                                    {kycReport.sources.map((source) => (
-                                      <div key={source.url} className="text-sm border-t border-slate-100 pt-2 first:border-0 first:pt-0">
-                                        <a
-                                          href={source.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline break-all"
-                                        >
-                                          {sourceTypeLabel[source.type]} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                                        </a>
-                                        {source.note && <p className="text-xs text-gray-500 mt-0.5">{source.note}</p>}
-                                      </div>
-                                    ))}
+                                    {source.note && <p className="text-xs text-gray-500 mt-0.5">{source.note}</p>}
                                   </div>
-                                </details>
-                              )}
+                                ))}
+                              </div>
                             </div>
                           )}
                           <p className="text-xs text-gray-500">

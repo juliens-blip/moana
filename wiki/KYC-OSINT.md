@@ -101,7 +101,9 @@ Ces éléments sont seulement des indicateurs de cohérence économique; ils ne 
 - Personne : nom, poste, entreprise, localisation, LinkedIn/autres URL fiables, confiance d’identité.
 - Entreprise : raison sociale, juridiction, immatriculation, statut, activité, siège, dirigeants, UBO/LEI et finances si trouvés.
 - Risque : sanctions/PEP/watchlists, adverse media sourcée, maritime et cohérence économique.
-- Sources : URL directe, type et note courte.
+- Synthèse CRM : exactement 3–4 phrases courtes — identité/profession, intérêt économique/yachting, risque, action suivante.
+- Sources : 5 URL directes maximum, classées par valeur d’attribution et utilité professionnelle.
+- Un extrait public LinkedIn peut documenter un profil quand LinkedIn bloque le crawl direct; il reste un indice moyen et non une preuve finale isolée.
 
 ## Contrat de sortie
 
@@ -225,6 +227,7 @@ Retourner exactement cette structure. Les champs sans donnée robuste restent vi
   "kyc_assessment": {
     "overall_risk": "low | medium | high | undetermined",
     "recommended_review": "standard | enhanced_due_diligence | manual_review | insufficient_data",
+    "executive_summary": ["3 à 4 phrases factuelles pour la fiche CRM"],
     "key_reasons": [""],
     "missing_critical_items": [""]
   },

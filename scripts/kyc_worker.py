@@ -185,6 +185,7 @@ REPORT_TEMPLATE: dict[str, Any] = {
     "kyc_assessment": {
         "overall_risk": "undetermined",
         "recommended_review": "insufficient_data",
+        "executive_summary": [],
         "key_reasons": [],
         "missing_critical_items": [],
     },
@@ -250,6 +251,13 @@ class EvidenceDocument:
     url: str
     text: str
     source_type: str
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    url: str
+    title: str
+    content: str
 
 
 class ConfigurationError(RuntimeError):
@@ -434,6 +442,25 @@ def build_primary_search_queries(query: dict[str, str]) -> list[str]:
     if professional_context:
         return [f'"{name}" {professional_context}']
     return [f'"{name}"']
+
+
+def build_profile_search_queries(query: dict[str, str]) -> list[str]:
+    """Target professional identity before general reputation research."""
+    name = query["full_name"]
+    company = query["company_name"]
+    country = query["country"]
+    domain = email_domain(query["email"])
+    context = " ".join(value for value in (company, country) if value)
+    queries = [
+        f'"{name}" site:linkedin.com/in',
+        f'"{name}" CEO founder director entrepreneur company',
+        f'"{name}" yacht yachting charter maritime',
+    ]
+    if context:
+        queries.insert(0, f'"{name}" {context}')
+    if domain and domain not in FREE_EMAIL_DOMAINS:
+        queries.insert(0, f'"{name}" site:{domain}')
+    return unique_strings(queries)
 
 
 def unique_strings(values: Iterable[str]) -> list[str]:
@@ -630,6 +657,31 @@ def searxng_result_urls(payload: Any, limit: int, required_name: str) -> list[st
     return rank_search_result_urls(links, limit, required_name)
 
 
+def searxng_search_hits(payload: Any, limit: int, required_name: str) -> list[SearchHit]:
+    """Keep SearXNG titles/snippets as bounded, attributable public evidence."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+        return []
+    ranked_urls = searxng_result_urls(payload, limit, required_name)
+    by_url: dict[str, SearchHit] = {}
+    for item in payload["results"]:
+        if not isinstance(item, dict):
+            continue
+        url = canonical_url(str(item.get("url") or ""))
+        if not url:
+            continue
+        by_url[url] = SearchHit(
+            url=url,
+            title=clean_search_text(str(item.get("title") or ""), 300),
+            content=clean_search_text(str(item.get("content") or ""), 800),
+        )
+    return [by_url[url] for url in ranked_urls if url in by_url][:limit]
+
+
+def clean_search_text(value: str, limit: int) -> str:
+    text = BeautifulSoup(value, "html.parser").get_text(" ", strip=True)
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
 async def search_searxng(
     client: httpx.AsyncClient,
     base_url: str,
@@ -653,6 +705,74 @@ async def search_searxng(
     except (httpx.HTTPError, ValueError):
         LOGGER.warning("Private SearXNG search unavailable; using browser fallback")
         return []
+
+
+async def search_searxng_hits(
+    client: httpx.AsyncClient,
+    base_url: str,
+    query: str,
+    limit: int,
+    required_name: str,
+) -> list[SearchHit]:
+    try:
+        response = await client.get(
+            f"{base_url}/search",
+            params={
+                "q": query,
+                "format": "json",
+                "categories": "general",
+                "language": "all",
+                "safesearch": "0",
+            },
+        )
+        response.raise_for_status()
+        return searxng_search_hits(response.json(), limit, required_name)
+    except (httpx.HTTPError, ValueError):
+        LOGGER.warning("Private SearXNG profile search unavailable")
+        return []
+
+
+async def discover_search_evidence(
+    query: dict[str, str],
+    settings: Settings,
+) -> list[EvidenceDocument]:
+    """Capture public result snippets when a professional page blocks direct crawl."""
+    headers = {"User-Agent": USER_AGENT, "Accept-Language": "en,fr;q=0.8"}
+    hits: list[SearchHit] = []
+    async with httpx.AsyncClient(
+        headers=headers,
+        timeout=httpx.Timeout(20.0),
+        follow_redirects=False,
+    ) as client:
+        for search_query in build_profile_search_queries(query):
+            hits.extend(
+                await search_searxng_hits(
+                    client,
+                    settings.searxng_url,
+                    search_query,
+                    settings.max_search_results,
+                    query["full_name"],
+                )
+            )
+
+    documents: list[EvidenceDocument] = []
+    seen: set[str] = set()
+    company_domain = email_domain(query["email"])
+    for hit in hits:
+        url = canonical_url(hit.url)
+        if not url or url in seen or not (hit.title or hit.content):
+            continue
+        seen.add(url)
+        documents.append(
+            EvidenceDocument(
+                url=hit.url,
+                text=f"# {hit.title}\n{hit.content}".strip(),
+                source_type=infer_source_type(hit.url, company_domain),
+            )
+        )
+        if len(documents) >= 5:
+            break
+    return documents
 
 
 async def search_brave_with_crawl4ai(
@@ -735,6 +855,16 @@ def infer_source_type(url: str, company_domain: str) -> str:
     if any(marker in host for marker in ("reuters", "bloomberg", "ft.com", "forbes", "apnews", "bbc.")):
         return "news"
     return "other"
+
+
+def is_linkedin_person(document: EvidenceDocument) -> bool:
+    parsed = urlparse(document.url)
+    return (parsed.hostname or "").lower().endswith("linkedin.com") and parsed.path.lower().startswith("/in/")
+
+
+def is_linkedin_company(document: EvidenceDocument) -> bool:
+    parsed = urlparse(document.url)
+    return (parsed.hostname or "").lower().endswith("linkedin.com") and parsed.path.lower().startswith("/company/")
 
 
 async def discover_urls(query: dict[str, str], settings: Settings) -> list[str]:
@@ -919,6 +1049,11 @@ If identity attribution is weak, mark it ambiguous/unresolved and stay silent.
 If no official screening source was actually consulted, use not_enough_data.
 Do not call anyone clean and do not issue legal or definitive compliance advice.
 Every sensitive adverse-media or maritime item must use an exact supplied URL.
+Write 3 or 4 short French sentences in kyc_assessment.executive_summary:
+identity/profession, economic or yachting relevance, risk screening, next action.
+Never mention age, residence, revenue, passport checks, wealth or source of funds
+unless a supplied source explicitly supports that exact fact.
+Return at most five sources, ordered by identity and professional usefulness.
 Return JSON only, with exactly the supplied contract and no additional keys.
 Empty arrays/strings are preferred to unsupported content.
 """
@@ -1005,6 +1140,20 @@ def evidence_signals(
     ):
         score += 4
         signals.append("profil économique documenté")
+    if any(
+        term in text
+        for term in (
+            "drummer",
+            "musician",
+            "percussion",
+            "cymbal",
+            "discography",
+            "album",
+            "chess",
+            "gameknot",
+        )
+    ):
+        score -= 20
     if document.source_type in {"official_registry", "company_website", "linkedin"}:
         score += 5
     return score, unique_strings(signals)
@@ -1018,13 +1167,122 @@ def document_headline(document: EvidenceDocument) -> str:
     return ""
 
 
+def professional_statement(document: EvidenceDocument) -> str:
+    """Return one compact public description without inventing structured facts."""
+    lines: list[str] = []
+    for raw_line in document.text.splitlines()[:20]:
+        line = re.sub(r"^[#>*_`\s-]+", "", raw_line).strip()
+        line = re.sub(r"\s+", " ", line)
+        if 8 <= len(line) <= 350 and not line.casefold().startswith(
+            ("cookie", "javascript", "your cart", "we noticed that you are using")
+        ):
+            lines.append(line)
+    role_terms = (
+        "ceo",
+        "chief executive",
+        "founder",
+        "owner",
+        "chairman",
+        "president",
+        "director",
+        "entrepreneur",
+        "investor",
+        "amministratore",
+        "fondatore",
+        "presidente",
+        "dirigeant",
+        "fondateur",
+        "gérant",
+        "gerant",
+        "yacht",
+        "broker",
+    )
+    selected = next((line for line in lines if any(term in line.casefold() for term in role_terms)), "")
+    if not selected and document.source_type in {"linkedin", "company_website", "official_registry"}:
+        selected = lines[0] if lines else ""
+    return selected.rstrip(" .")[:280]
+
+
+def build_executive_summary(
+    query: dict[str, str],
+    identity_status: str,
+    relevant: list[tuple[EvidenceDocument, int, list[str]]],
+    report: dict[str, Any],
+) -> list[str]:
+    name = query["full_name"]
+    professional = next(
+        (item for item in relevant if is_linkedin_person(item[0]) and professional_statement(item[0])),
+        None,
+    )
+    if professional is None:
+        professional = next(
+            (
+                item
+                for item in relevant
+                if item[0].source_type in {"company_website", "official_registry"}
+                and professional_statement(item[0])
+            ),
+            None,
+        )
+    if professional is None:
+        professional = next((item for item in relevant if professional_statement(item[0])), None)
+    statement = professional_statement(professional[0]) if professional else ""
+
+    if identity_status == "confirmed":
+        identity_line = f"Client potentiel : {name}. Identité reliée à une source publique par l’email fourni."
+    elif identity_status == "probable":
+        identity_line = f"Client potentiel : {name}. Profil professionnel probable, confirmé par plusieurs indices publics convergents."
+    elif identity_status == "ambiguous":
+        identity_line = f"Client potentiel : {name}. L’attribution du profil public à la bonne personne reste ambiguë et non confirmée."
+    else:
+        identity_line = f"Client potentiel : {name}. Identité publique non résolue avec les données disponibles."
+
+    if statement:
+        qualifier = "Le profil retenu indique" if identity_status in {"confirmed", "probable"} else "Un profil portant ce nom indique"
+        activity_line = f"{qualifier} : {statement}."
+    else:
+        activity_line = "Profession et entreprise non établies par une source publique suffisamment attribuable."
+
+    has_yachting = any("proximité yachting" in signals for _doc, _score, signals in relevant)
+    has_economic = any("profil économique documenté" in signals for _doc, _score, signals in relevant)
+    if has_yachting:
+        relevance_line = "Lien yachting ou maritime repéré dans les sources, mais attribution à confirmer avant qualification commerciale."
+    elif has_economic:
+        relevance_line = "Activité dirigeante ou entrepreneuriale repérée ; capacité d’achat et source des fonds non démontrées. Aucun lien yachting confirmé."
+    else:
+        relevance_line = "Aucun lien yachting ni indicateur public robuste de capacité économique établi à ce stade."
+
+    sanctions = report["risk_screening"]["sanctions"]["status"]
+    pep = report["risk_screening"]["pep"]["status"]
+    if "hit" in {sanctions, pep}:
+        screening = "Correspondance sanctions ou PEP détectée ; contrôle renforcé obligatoire."
+    elif "possible_homonym" in {sanctions, pep}:
+        screening = "Homonyme sanctions ou PEP possible, non confirmé."
+    else:
+        screening = "Sanctions et PEP non conclusifs sur les sources intégrées."
+    risk = report["kyc_assessment"]["overall_risk"]
+    risk_label = {"low": "faible", "medium": "moyen", "high": "élevé"}.get(risk, "indéterminé")
+    review = report["kyc_assessment"]["recommended_review"]
+    action = (
+        "EDD et preuve de fonds à demander avant engagement"
+        if review == "enhanced_due_diligence"
+        else "revue manuelle et preuve de fonds à demander avant signature du MYBA"
+    )
+    risk_line = f"{screening} Niveau de risque : {risk_label} ; {action}."
+    return [identity_line, activity_line, relevance_line, risk_line]
+
+
 def deterministic_report(
     query: dict[str, str],
     documents: list[EvidenceDocument],
 ) -> dict[str, Any]:
     report = blank_report(query)
     scored = [(document, *evidence_signals(document, query)) for document in documents]
-    relevant = [(document, score, signals) for document, score, signals in scored if score >= 20]
+    relevant = sorted(
+        [(document, score, signals) for document, score, signals in scored if score >= 20],
+        key=lambda item: item[1],
+        reverse=True,
+    )
 
     if not relevant:
         return blank_report(query, "Aucune source publique attribuable avec suffisamment de confiance.")
@@ -1033,11 +1291,21 @@ def deterministic_report(
     named_docs = [
         item for item in relevant if "nom exact" in item[2] or "nom complet" in item[2]
     ]
-    linkedin_docs = [item for item in named_docs if item[0].source_type == "linkedin"]
+    person_candidate_docs = [
+        item
+        for item in named_docs
+        if not is_linkedin_company(item[0])
+        and (
+            item[0].source_type != "company_website"
+            or comparable_text(query["full_name"]) in comparable_text(document_headline(item[0]))
+        )
+    ]
+    linkedin_docs = [item for item in named_docs if is_linkedin_person(item[0])]
     company_docs = [
         item
         for item in relevant
         if item[0].source_type in {"company_website", "official_registry"}
+        or is_linkedin_company(item[0])
     ]
     query_domain = email_domain(query["email"])
     has_identity_context = bool(
@@ -1090,7 +1358,7 @@ def deterministic_report(
                     "company": "",
                     "evidence": [item[0].url],
                 }
-                for item in sorted(named_docs, key=lambda value: value[1], reverse=True)[:5]
+                for item in sorted(person_candidate_docs, key=lambda value: value[1], reverse=True)[:5]
             ]
         else:
             report["identity_resolution"]["matched_persons"] = [
@@ -1113,6 +1381,13 @@ def deterministic_report(
         person["emails"] = [query["email"]]
     if linkedin_docs:
         person["profiles"]["linkedin"] = linkedin_docs[0][0].url
+    if identity_status in {"confirmed", "probable"}:
+        professional = next(
+            (item for item in relevant if professional_statement(item[0])),
+            None,
+        )
+        if professional:
+            person["current_title"] = professional_statement(professional[0])
 
     domain = email_domain(query["email"])
     domain_documents = [
@@ -1127,8 +1402,17 @@ def deterministic_report(
     if query["company_name"] and company_docs:
         report["company_profile"]["company_name"] = query["company_name"]
 
-    for document, _score, signals in relevant:
-        note = "Indices concordants: " + ", ".join(signals) + "."
+    ordered_sources = sorted(
+        relevant,
+        key=lambda item: (
+            2 if is_linkedin_person(item[0]) else 1 if is_linkedin_company(item[0]) else 0,
+            item[1],
+        ),
+        reverse=True,
+    )
+    for document, _score, signals in ordered_sources[:5]:
+        headline = document_headline(document)
+        note = headline or ("Indices d’attribution : " + ", ".join(signals) + ".")
         report["sources"].append(
             {"type": document.source_type, "url": document.url, "note": note[:500]}
         )
@@ -1163,16 +1447,21 @@ def deterministic_report(
         }
 
     reasons = [
-        f"{len(relevant)} source(s) publique(s) pertinente(s) collectée(s) par Crawl4AI.",
+        f"{len(relevant)} source(s) publique(s) attribuables collectée(s) par la recherche publique et Crawl4AI.",
         rationale,
     ]
     if sanctions_matches or pep_matches:
         reasons.append("Correspondance sanctions/PEP textuelle uniquement; homonyme possible à vérifier.")
     else:
         reasons.append("Contrôles sanctions/PEP non conclusifs sans registre officiel exhaustif intégré.")
+    overall_risk = (
+        "medium"
+        if identity_status in {"confirmed", "probable"} and (company_docs or linkedin_docs)
+        else "undetermined"
+    )
     report["kyc_assessment"].update(
         {
-            "overall_risk": "undetermined",
+            "overall_risk": overall_risk,
             "recommended_review": (
                 "manual_review" if identity_status != "unresolved" else "insufficient_data"
             ),
@@ -1181,6 +1470,12 @@ def deterministic_report(
                 field for field in ("full_name", "email") if not query[field]
             ],
         }
+    )
+    report["kyc_assessment"]["executive_summary"] = build_executive_summary(
+        query,
+        identity_status,
+        relevant,
+        report,
     )
     return normalize_report(report, query, [item[0] for item in relevant])
 
@@ -1343,7 +1638,14 @@ def normalize_report(
                 "note": str(item.get("note") or "").strip()[:500],
             }
         )
-    report["sources"] = dedupe_dicts(normalized_sources, "url")
+    report["sources"] = dedupe_dicts(normalized_sources, "url")[:5]
+
+    raw_summary = report["kyc_assessment"].get("executive_summary", [])
+    report["kyc_assessment"]["executive_summary"] = [
+        str(line).strip()[:600]
+        for line in raw_summary[:4]
+        if isinstance(line, str) and line.strip()
+    ] if isinstance(raw_summary, list) else []
 
     matched_people = []
     raw_identity = candidate.get("identity_resolution")
@@ -1638,11 +1940,23 @@ class SupabaseKycStore:
 
 
 async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDocument]:
-    urls = await discover_urls(query, settings)
+    urls, search_documents = await asyncio.gather(
+        discover_urls(query, settings),
+        discover_search_evidence(query, settings),
+    )
     LOGGER.info("Discovered %d bounded public URLs", len(urls))
-    documents = await crawl_sources(urls, query, settings)
-    LOGGER.info("Crawled %d usable sources", len(documents))
-    return documents
+    crawled_documents = await crawl_sources(urls, query, settings)
+    LOGGER.info("Crawled %d usable sources", len(crawled_documents))
+    documents_by_url = {canonical_url(document.url): document for document in search_documents}
+    for document in crawled_documents:
+        documents_by_url[canonical_url(document.url)] = document
+    documents = [document for key, document in documents_by_url.items() if key]
+    LOGGER.info(
+        "Prepared %d evidence sources, including %d public search snippets",
+        len(documents),
+        len(search_documents),
+    )
+    return documents[: settings.max_sources]
 
 
 async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:

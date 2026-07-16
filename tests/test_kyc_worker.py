@@ -6,6 +6,7 @@ from scripts.kyc_worker import (
     blank_report,
     rank_search_result_urls,
     searxng_result_urls,
+    searxng_search_hits,
     build_primary_search_queries,
     canonical_url,
     deterministic_report,
@@ -123,6 +124,9 @@ class KycWorkerTests(unittest.TestCase):
                 "https://social.example/other",
             ],
         )
+        hits = searxng_search_hits(payload, 1, "Example Person")
+        self.assertEqual(hits[0].title, "Example Person - CEO")
+        self.assertIn("founder", hits[0].content)
 
     def test_discovery_keeps_multiple_domains(self):
         urls = [
@@ -154,6 +158,8 @@ class KycWorkerTests(unittest.TestCase):
         self.assertEqual(report["identity_resolution"]["status"], "probable")
         self.assertEqual(len(report["sources"]), 2)
         self.assertIn("Crawl4AI", report["kyc_assessment"]["key_reasons"][0])
+        self.assertEqual(len(report["kyc_assessment"]["executive_summary"]), 4)
+        self.assertIn("Client potentiel", report["kyc_assessment"]["executive_summary"][0])
         self.assertEqual(
             report["risk_screening"]["pep"]["status"],
             "not_enough_data",
@@ -181,8 +187,8 @@ class KycWorkerTests(unittest.TestCase):
         }
         documents = [
             EvidenceDocument(
-                url="https://music.example/profile",
-                text="Example Person is a professional musician.",
+                url="https://legal.example/profile",
+                text="Example Person is a commercial lawyer.",
                 source_type="other",
             ),
             EvidenceDocument(
@@ -217,6 +223,26 @@ class KycWorkerTests(unittest.TestCase):
         self.assertIn("yacht charter broker", selected["headline"].lower())
         self.assertIn("proximité yachting", rationale)
         self.assertIn(report["identity_resolution"]["status"], {"probable", "ambiguous"})
+
+    def test_summary_never_claims_unsupported_wealth_or_screening_clearance(self):
+        weak_query = {
+            "full_name": "Example Person",
+            "email": "person@gmail.com",
+            "company_name": "",
+            "country": "",
+            "city": "",
+        }
+        document = EvidenceDocument(
+            url="https://www.linkedin.com/in/example-person",
+            text="# Example Person - Founder at Example Ventures\nEntrepreneur and company director",
+            source_type="linkedin",
+        )
+        report = deterministic_report(weak_query, [document])
+        summary = " ".join(report["kyc_assessment"]["executive_summary"])
+        self.assertIn("non confirmée", summary)
+        self.assertIn("preuve de fonds", summary)
+        self.assertNotIn("30 M€", summary)
+        self.assertNotIn("Aucun signal", summary)
 
 if __name__ == "__main__":
     unittest.main()
