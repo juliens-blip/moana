@@ -105,6 +105,10 @@ Ces éléments sont seulement des indicateurs de cohérence économique; ils ne 
 - Sources : 5 URL directes maximum, classées par valeur d’attribution et utilité professionnelle.
 - Un extrait public LinkedIn peut documenter un profil quand LinkedIn bloque le crawl direct; il reste un indice moyen et non une preuve finale isolée.
 
+## LinkedIn authentifie optionnel
+
+Le worker peut utiliser `linkedin-scraper==3.1.2` uniquement si `KYC_LINKEDIN_ENABLED=1` et si `KYC_LINKEDIN_SESSION_PATH` pointe vers un fichier `session.json` monte en lecture seule hors du depot. L'adaptateur limite a un profil par job, ignore les faux positifs publicitaires du rate-limit et conserve Crawl4AI/SearXNG si la session expire, si un CAPTCHA apparait ou si LinkedIn limite l'IP. Ne jamais placer la session dans Git, Supabase ou le rapport KYC.
+
 ## Contrat de sortie
 
 Retourner exactement cette structure. Les champs sans donnée robuste restent vides ou en statut insuffisant; ne jamais les compléter par hypothèse.

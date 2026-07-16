@@ -41,6 +41,11 @@ from crawl4ai import (
 from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from dotenv import load_dotenv
 
+try:
+    from scripts.linkedin_compat import scrape_profiles
+except ModuleNotFoundError:  # Running ``python scripts/kyc_worker.py`` directly.
+    from linkedin_compat import scrape_profiles
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LOGGER = logging.getLogger("moana.kyc")
@@ -210,6 +215,9 @@ class Settings:
     max_retries: int
     poll_seconds: float
     stale_job_minutes: int
+    linkedin_enabled: bool
+    linkedin_session_path: str
+    linkedin_max_profiles: int
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -243,6 +251,9 @@ class Settings:
             max_retries=env_int("KYC_MAX_RETRIES", 3, 1, 10),
             poll_seconds=env_float("KYC_POLL_SECONDS", 30.0, 2.0, 3600.0),
             stale_job_minutes=env_int("KYC_STALE_JOB_MINUTES", 30, 5, 1440),
+            linkedin_enabled=env_bool("KYC_LINKEDIN_ENABLED", False),
+            linkedin_session_path=os.getenv("KYC_LINKEDIN_SESSION_PATH", "").strip(),
+            linkedin_max_profiles=env_int("KYC_LINKEDIN_MAX_PROFILES", 1, 0, 3),
         )
 
 
@@ -1945,8 +1956,45 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
         discover_search_evidence(query, settings),
     )
     LOGGER.info("Discovered %d bounded public URLs", len(urls))
-    crawled_documents = await crawl_sources(urls, query, settings)
+    linkedin_urls = [
+        url
+        for url in urls
+        if is_linkedin_person(EvidenceDocument(url=url, text="", source_type="linkedin"))
+    ]
+    crawl_urls = urls
+    if settings.linkedin_enabled and settings.linkedin_session_path:
+        linkedin_url_set = set(linkedin_urls)
+        crawl_urls = [url for url in urls if url not in linkedin_url_set]
+        LOGGER.info("Authenticated LinkedIn adapter reserved %d profile URL(s)", len(linkedin_urls))
+    crawled_documents = await crawl_sources(crawl_urls, query, settings)
     LOGGER.info("Crawled %d usable sources", len(crawled_documents))
+    linkedin_candidates = unique_strings(
+        [
+            *[
+                document.url
+                for document in search_documents + crawled_documents
+                if is_linkedin_person(document)
+            ],
+            *linkedin_urls,
+        ]
+    )
+    if settings.linkedin_enabled and settings.linkedin_session_path and linkedin_candidates:
+        profiles = await scrape_profiles(
+            linkedin_candidates,
+            settings.linkedin_session_path,
+            max_profiles=settings.linkedin_max_profiles,
+        )
+        for profile in profiles:
+            crawled_documents.append(
+                EvidenceDocument(
+                    url=profile["url"],
+                    text=profile["text"],
+                    source_type="linkedin",
+                )
+            )
+        LOGGER.info("Authenticated LinkedIn adapter returned %d profile(s)", len(profiles))
+    elif settings.linkedin_enabled:
+        LOGGER.info("LinkedIn adapter enabled but no session or profile candidate is available")
     documents_by_url = {canonical_url(document.url): document for document in search_documents}
     for document in crawled_documents:
         documents_by_url[canonical_url(document.url)] = document
@@ -2064,6 +2112,9 @@ def check_configuration() -> int:
         "llm_api_key_override": bool(settings.llm_api_key),
         "llm_base_url": settings.llm_base_url or "provider default",
         "searxng_url": settings.searxng_url,
+        "linkedin_enabled": settings.linkedin_enabled,
+        "linkedin_session_configured": bool(settings.linkedin_session_path),
+        "linkedin_max_profiles": settings.linkedin_max_profiles,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1

@@ -24,6 +24,8 @@ La session manuelle a été validée sur `/feed`; le profil de test a déclench�
 
 Le retest montre en plus un faux positif du détecteur (« try again later » dans les publicités) et des sélecteurs de profil périmés. La session est exploitable, mais le package doit être encapsulé par un adaptateur DOM versionné avant tout branchement au KYC.
 
+Implémentation contrôlée : ajouter la dépendance PyPI, un adaptateur optionnel dans le worker, une session montée en lecture seule hors dépôt et des tests unitaires du parsing/du rate-limit. Le comportement par défaut reste inchangé lorsque `KYC_LINKEDIN_ENABLED` est absent ou désactivé.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.
