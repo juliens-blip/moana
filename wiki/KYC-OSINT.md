@@ -105,11 +105,21 @@ Ces éléments sont seulement des indicateurs de cohérence économique; ils ne 
 - Sources : 5 URL directes maximum, classées par valeur d’attribution et utilité professionnelle.
 - Un extrait public LinkedIn peut documenter un profil quand LinkedIn bloque le crawl direct; il reste un indice moyen et non une preuve finale isolée.
 
-## LinkedIn authentifie optionnel
+## LinkedIn via Apify
 
-Le worker peut utiliser `linkedin-scraper==3.1.2` uniquement si `KYC_LINKEDIN_ENABLED=1` et si `KYC_LINKEDIN_SESSION_PATH` pointe vers un fichier `session.json` monte en lecture seule hors du depot. L'adaptateur limite a un profil par job, ignore les faux positifs publicitaires du rate-limit et conserve Crawl4AI/SearXNG si la session expire, si un CAPTCHA apparait ou si LinkedIn limite l'IP. Ne jamais placer la session dans Git, Supabase ou le rapport KYC.
+L'adaptateur Playwright/session authentifie (`linkedin-scraper`) restait bloque
+par LinkedIn (`HTTP 999`) meme derriere un proxy residentiel — voir
+`tasks/kyc-multi-source-screening/proxy.md`. Remplace par l'actor Apify
+`harvestapi/linkedin-profile-search-by-name`, qui recherche par nom (prenom +
+nom, pas d'URL requise) via l'infrastructure d'Apify.
 
-Avec Compose, placer la session sur l'hote dans `secrets/linkedin-session.json`, puis definir `KYC_LINKEDIN_ENABLED=1` dans `.env.kyc`; le montage en lecture seule est deja configure vers `/run/secrets/linkedin-session.json`.
+Actif uniquement si `KYC_LINKEDIN_ENABLED=1` et `APIFY_API_TOKEN` defini.
+`APIFY_LINKEDIN_ACTOR_ID` (defaut `harvestapi/linkedin-profile-search-by-name`)
+et `APIFY_LINKEDIN_MODE` (`Short` par defaut, ou `Full` / `Full + email search`,
+plus cher) sont configurables. `KYC_LINKEDIN_MAX_PROFILES` borne le nombre de
+profils par job (defaut 1). Facturation a l'evenement Apify (~$0.004 pour une
+recherche en mode Short jusqu'a 10 profils). Aucun identifiant ou session
+LinkedIn a gerer ni a proteger sur le serveur.
 
 ## Contrat de sortie
 

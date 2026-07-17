@@ -40,6 +40,34 @@
 
 [2026-07-16] Affichage du dossier KYC détaillé et classement prudent des homonymes | Fiche client, worker, tests et mémoire KYC | Profil, entreprise, contrôles et sources cliquables; proximité yachting priorisée sans confirmer l’identité
 
+[2026-07-16] Ajout d’une capacité de clic/interaction au MCP scrape-mcp | `D:\dev\scrape-mcp\src\engines\browser.ts`, `src\tools\interact.ts`, `src\index.ts`, mémoire du projet | Nouvel outil `interact` (Playwright click/fill/select/press/wait) pour débloquer les modules AJAX de BOSS (Search, Insight Analytics, Vessel Stats) restés vides sous simple scraping
+
+[2026-07-16] Découverte de l’URL de recherche MLS complète de BOSS | mémoire du projet (`yatco-boss-scraping-quirks.md`) | Le module Search fonctionne en `scrape` simple via l’URL exacte du lien de nav (`?code=` en base64) sans clic; 6372 annonces réelles accessibles, filtre prix/localisation encore non résolu
+
+[2026-07-16] Correction d’un bug de scrape-mcp qui masquait de vrais menus sur BOSS | `D:\dev\scrape-mcp\src\processing\content-cleaner.ts`, mémoire et bugs du projet | `button` retiré de la liste de suppression; les menus « vides » (Search Category, Insight Analytics, actions d’annonce) contenaient en réalité de vrais boutons cliquables (Listing History, Photos, etc.), confirmé par capture d’écran
+
+[2026-07-16] Localisation du rapport BOSS des impressions/vues publiques par bateau | `content-cleaner.ts` (retrait de `form`), mémoire du projet | Insight Analytics → Fleet/Inventory → "YATCO.com Vessel Statistics Report" expose Impressions/Detail Views/Phone Clicks/Gallery Views/Leads par bateau; filtre Office/Broker requis, pas encore rempli
+
+[2026-07-16] Extraction réussie des stats d'impressions par bateau (7 derniers jours) | mémoire du projet (`scrape-mcp-interact-tool.md`) | Filtre Kendo "Office" rempli via clic + flèche-bas/entrée (le clic direct sur l'option échouait); 20 bateaux avec impressions/vues/leads récupérés pour Moana Yachting
+
+[2026-07-16] Préparation du worker KYC sur VPS AWS | `Dockerfile.kyc`, `compose.kyc.yml`, backend KYC, fiche CRM, worker et mémoire | Vercel enqueue sans crawler; traitement Crawl4AI/Chromium asynchrone, suivi automatique et reprise des tâches interrompues
+
+[2026-07-16] Déploiement du worker KYC AWS | EC2 Ubuntu 26.04, Docker, PR #3, Supabase et Vercel | Crawl Chromium et connexion queue validés; worker permanent actif sans port public, déploiement Vercel réussi
+
+[2026-07-16] Correction découverte KYC AWS | worker, Compose, SearXNG, tests et mémoire | Métamoteur privé gratuit validé sur EC2; 3 sources Crawl4AI pour le test Gaetano Nicolosi, homonymes conservés séparément
+
+[2026-07-16] Tour complet des données disponibles dans YATCO BOSS | mémoire du projet (`moana-boss-business-data-tour.md`) | 173 annonces historiques cataloguées, pipeline CRM à 0 sur toutes les étapes avancées (226 leads jamais qualifiés), 34 salons nautiques disponibles mais aucun bateau Moana inscrit, benchmarks marché 5 ans récupérés
+
+[2026-07-16] Extraction des flux de marché MLS en temps quasi-réel (Search) | mémoire du projet (`moana-boss-business-data-tour.md`) | 257 annonces modifiées, 46 nouvelles (dont 2 de Moana), 5 ventes mondiales sur 5 jours, dernières 5 jours, tous courtiers confondus
+
+[2026-07-17] Adaptateur LinkedIn authentifié ajouté au worker KYC | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `compose.kyc.yml`, dépendance et tests | Session optionnelle montée en lecture seule, un profil/job, détection rate-limit stricte; aucun secret ajouté au dépôt
+[2026-07-17] Test LinkedIn réel Gaetano Nicolosi | profil `gaetano-nicolosi-22211433`, session locale | HTTP 999; fallback public conservé, aucun contournement supplémentaire
+[2026-07-17] Test LinkedIn réel Foulques de Raigniac | profil `foulques`, session locale | HTTP 999; profil public trouvé mais accès authentifié bloqué, fallback conservé
+
+[2026-07-17] Proxy Webshare pour LinkedIn testé et documenté | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `tasks/kyc-multi-source-screening/proxy.md`, PR #6/#7 | Routage proxy vérifié fonctionnel (IP de sortie confirmée) mais HTTP 999 persiste sur LinkedIn; deux bugs de déploiement préexistants corrigés au passage; piste proxy abandonnée au profit d'Apify
+
+[2026-07-17] LinkedIn migré vers Apify (`harvestapi/linkedin-profile-search-by-name`) | `scripts/apify_linkedin.py` (nouveau), suppression de `scripts/linkedin_compat.py` et `linkedin-scraper`, `kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `compose.kyc.yml`, `tests/test_kyc_worker.py`, `wiki/KYC-OSINT.md`, `tasks/kyc-multi-source-screening/proxy.md` | Recherche par nom sans session/proxy à gérer; testé en local sur Gaetano Nicolosi (profil retrouvé, $0.004/recherche mode Short); déploiement EC2 pas encore fait
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].
