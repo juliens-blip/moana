@@ -53,3 +53,19 @@ Implémenté dans `scripts/apify_linkedin.py` (voir commit associé). Testé sur
 le cas Gaetano Nicolosi : le président de Nicolosi Trasporti est retenu par
 corroboration d'entreprise ; les homonymes sans lien (ingénieur à Milan, etc.)
 sont rejetés.
+
+## Limite connue, acceptée telle quelle
+
+Testé en conditions réelles sur un vrai lead (Nicolas Pelisson, Founder & CEO
+de Marinescence Recruitment — agence de recrutement pour l'industrie du
+yachting) : le texte LinkedIn extrait par Apify est fidèle
+(`"Founder & CEO I MARINESCENCE RECRUITMENT I ..."`), mais aucun mot-clé
+`YACHTING_TERMS` littéral n'y apparaît (« Marinescence » n'est pas un terme
+générique), donc le signal « proximité yachting » ne se déclenche pas et le
+résumé exécutif dit « aucun lien yachting confirmé » — alors que l'entreprise
+en est bien une. Un correctif simple (ajouter « marine » à la liste) a été
+écarté : le texte comparé inclut le nom de la personne, et « Marine » est un
+prénom français courant, ce qui ferait remonter à tort des homonymes sans
+rapport. Décision (2026-07-17) : ne pas corriger — comportement conservateur
+volontaire, cohérent avec la consigne anti-hallucination du reste du pipeline
+KYC (mieux vaut « non confirmé » qu'un faux positif).
