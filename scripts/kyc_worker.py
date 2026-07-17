@@ -370,6 +370,13 @@ def canonical_url(value: str) -> str:
     host = parsed.hostname.lower().rstrip(".")
     port = f":{port_value}" if port_value and port_value not in {80, 443} else ""
     path = re.sub(r"/{2,}", "/", parsed.path or "/")
+    if host.endswith(".linkedin.com") and path.startswith("/in/"):
+        # LinkedIn serves the same public profile under country subdomains
+        # (it.linkedin.com, fr.linkedin.com, ...). Without this, Apify's
+        # www.linkedin.com result and a SearXNG-discovered it.linkedin.com
+        # snippet for the same person are treated as two different people
+        # instead of colliding into one (richer) evidence document.
+        host = "www.linkedin.com"
     normalized = f"{parsed.scheme.lower()}://{host}{port}{path}"
     if parsed.query:
         normalized += f"?{parsed.query}"
