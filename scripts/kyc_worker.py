@@ -218,6 +218,7 @@ class Settings:
     linkedin_enabled: bool
     linkedin_session_path: str
     linkedin_max_profiles: int
+    linkedin_proxy_url: str | None
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -254,6 +255,7 @@ class Settings:
             linkedin_enabled=env_bool("KYC_LINKEDIN_ENABLED", False),
             linkedin_session_path=os.getenv("KYC_LINKEDIN_SESSION_PATH", "").strip(),
             linkedin_max_profiles=env_int("KYC_LINKEDIN_MAX_PROFILES", 1, 0, 3),
+            linkedin_proxy_url=os.getenv("KYC_LINKEDIN_PROXY_URL", "").strip() or None,
         )
 
 
@@ -1983,6 +1985,7 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
             linkedin_candidates,
             settings.linkedin_session_path,
             max_profiles=settings.linkedin_max_profiles,
+            proxy_url=settings.linkedin_proxy_url,
         )
         for profile in profiles:
             crawled_documents.append(
@@ -2115,6 +2118,7 @@ def check_configuration() -> int:
         "linkedin_enabled": settings.linkedin_enabled,
         "linkedin_session_configured": bool(settings.linkedin_session_path),
         "linkedin_max_profiles": settings.linkedin_max_profiles,
+        "linkedin_proxy_configured": bool(settings.linkedin_proxy_url),
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1

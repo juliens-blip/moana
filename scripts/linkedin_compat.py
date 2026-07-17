@@ -13,7 +13,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 
 LOGGER = logging.getLogger("moana.kyc.linkedin")
@@ -44,6 +44,22 @@ def is_profile_url(value: str) -> bool:
         and (parsed.hostname or "").lower().endswith("linkedin.com")
         and bool(PROFILE_PATH.match(parsed.path))
     )
+
+
+def parse_proxy(value: str | None) -> dict[str, str] | None:
+    """Turn a ``scheme://user:pass@host:port`` URL into Playwright's proxy dict."""
+    if not value or not value.strip():
+        return None
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https", "socks5"} or not parsed.hostname:
+        raise LinkedInCompatError("Invalid LinkedIn proxy URL")
+    port = f":{parsed.port}" if parsed.port else ""
+    proxy = {"server": f"{parsed.scheme}://{parsed.hostname}{port}"}
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    return proxy
 
 
 def normalize_lines(text: str) -> list[str]:
@@ -191,6 +207,7 @@ async def scrape_profile(
     profile_url: str,
     session_path: str,
     timeout_ms: int = 45_000,
+    proxy: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Scrape one profile with an explicitly supplied, local browser session."""
     if not is_profile_url(profile_url):
@@ -205,7 +222,7 @@ async def scrape_profile(
     except ImportError as exc:
         raise LinkedInCompatError("linkedin-scraper package is not installed") from exc
 
-    async with BrowserManager(headless=True, slow_mo=25) as browser:
+    async with BrowserManager(headless=True, slow_mo=25, proxy=proxy) as browser:
         await browser.load_session(str(session))
         page = browser.page
         response = await page.goto(profile_url, wait_until="domcontentloaded", timeout=timeout_ms)
@@ -260,8 +277,10 @@ async def scrape_profiles(
     profile_urls: list[str],
     session_path: str,
     max_profiles: int = 1,
+    proxy_url: str | None = None,
 ) -> list[dict[str, Any]]:
     """Scrape at most ``max_profiles`` sequentially; never retry LinkedIn limits."""
+    proxy = parse_proxy(proxy_url)
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for profile_url in profile_urls:
@@ -271,7 +290,7 @@ async def scrape_profiles(
             continue
         seen.add(profile_url)
         try:
-            results.append(await scrape_profile(profile_url, session_path))
+            results.append(await scrape_profile(profile_url, session_path, proxy=proxy))
         except (LinkedInCompatError, asyncio.TimeoutError) as exc:
             LOGGER.warning("LinkedIn profile skipped: %s", str(exc))
         except Exception as exc:  # pragma: no cover - provider-specific browser failures
