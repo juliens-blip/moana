@@ -2,4 +2,5 @@
 !scripts/
 scripts/*
 !scripts/kyc_worker.py
+!scripts/linkedin_compat.py
 !scripts/requirements-kyc.txt
