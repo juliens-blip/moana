@@ -1185,6 +1185,21 @@ def evidence_signals(
     return score, unique_strings(signals)
 
 
+def linkedin_field(document: EvidenceDocument, prefix: str) -> str:
+    """Read a ``Prefix: value`` line written by apify_linkedin.py's _profile_text()."""
+    if not is_linkedin_person(document):
+        return ""
+    for raw_line in document.text.splitlines():
+        line = raw_line.strip()
+        if line.casefold().startswith(prefix.casefold()):
+            return line[len(prefix) :].strip()[:400]
+    return ""
+
+
+def linkedin_location(document: EvidenceDocument) -> str:
+    return linkedin_field(document, "Location:")
+
+
 def document_headline(document: EvidenceDocument) -> str:
     for raw_line in document.text.splitlines()[:30]:
         line = re.sub(r"^[#>*_`\s-]+", "", raw_line).strip()
@@ -1269,6 +1284,23 @@ def build_executive_summary(
     else:
         activity_line = "Profession et entreprise non établies par une source publique suffisamment attribuable."
 
+    location = next(
+        (loc for item in relevant if (loc := linkedin_location(item[0]))),
+        "",
+    )
+    if location:
+        activity_line = f"{activity_line} Localisation indiquée : {location}."
+
+    about = next(
+        (extract for item in relevant if (extract := linkedin_field(item[0], "About:"))),
+        "",
+    )
+    if about:
+        excerpt = about[:220].rstrip()
+        if len(about) > 220:
+            excerpt += "…"
+        activity_line = f"{activity_line} Extrait LinkedIn (About) : {excerpt}"
+
     has_yachting = any("proximité yachting" in signals for _doc, _score, signals in relevant)
     has_economic = any("profil économique documenté" in signals for _doc, _score, signals in relevant)
     if has_yachting:
@@ -1280,22 +1312,12 @@ def build_executive_summary(
 
     sanctions = report["risk_screening"]["sanctions"]["status"]
     pep = report["risk_screening"]["pep"]["status"]
+    summary_lines = [identity_line, activity_line, relevance_line]
     if "hit" in {sanctions, pep}:
-        screening = "Correspondance sanctions ou PEP détectée ; contrôle renforcé obligatoire."
+        summary_lines.append("Correspondance sanctions ou PEP détectée ; contrôle renforcé obligatoire.")
     elif "possible_homonym" in {sanctions, pep}:
-        screening = "Homonyme sanctions ou PEP possible, non confirmé."
-    else:
-        screening = "Sanctions et PEP non conclusifs sur les sources intégrées."
-    risk = report["kyc_assessment"]["overall_risk"]
-    risk_label = {"low": "faible", "medium": "moyen", "high": "élevé"}.get(risk, "indéterminé")
-    review = report["kyc_assessment"]["recommended_review"]
-    action = (
-        "EDD et preuve de fonds à demander avant engagement"
-        if review == "enhanced_due_diligence"
-        else "revue manuelle et preuve de fonds à demander avant signature du MYBA"
-    )
-    risk_line = f"{screening} Niveau de risque : {risk_label} ; {action}."
-    return [identity_line, activity_line, relevance_line, risk_line]
+        summary_lines.append("Homonyme sanctions ou PEP possible, non confirmé ; contrôle renforcé recommandé.")
+    return summary_lines
 
 
 def deterministic_report(
@@ -1403,6 +1425,8 @@ def deterministic_report(
         person["current_company"] = query["company_name"] if company_docs else ""
         person["country"] = query["country"] if any("pays" in item[2] for item in named_docs) else ""
         person["location"] = query["city"] if any("ville" in item[2] for item in named_docs) else ""
+        if not person["location"]:
+            person["location"] = next((loc for item in named_docs if (loc := linkedin_location(item[0]))), "")
     if exact_email_docs:
         person["emails"] = [query["email"]]
     if linkedin_docs:

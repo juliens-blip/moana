@@ -95,3 +95,24 @@ sur Daniel Weitmann : récupère le texte "about" complet (positionnement
 Golden Suisse) et « Zürich, Switzerland » au lieu d'une zone approximative.
 Coût : un appel Full supplémentaire (jusqu'à 10 profils, ~$0.04 au pire) par
 candidat réellement retenu — pas sur tout le pool de recherche.
+
+## Résumé exécutif allégé et enrichi (localisation + about)
+
+Deux retours utilisateur sur des leads réels (Daniel Weitmann, Gaetano
+Nicolosi) : (1) la ligne de routine « Sanctions et PEP non conclusifs sur les
+sources intégrées. Niveau de risque : indéterminé ; revue manuelle et preuve
+de fonds à demander avant signature du MYBA. » n'apportait rien tant que rien
+n'était détecté — supprimée. Une ligne d'alerte est conservée uniquement si le
+screening interne (`sanctions_db`/`pep_db`) trouve une correspondance
+(`hit` → alerte forte, `possible_homonym` → alerte prudente) : ce n'est pas
+une régression de conformité, juste le retrait du bruit routinier. (2) la
+localisation LinkedIn (`Location:` extrait par `_profile_text()`) et un
+extrait du "about" (jusqu'à 220 caractères, tronqué avec « … ») sont
+maintenant ajoutés à la ligne d'activité du résumé exécutif via
+`linkedin_field()`/`linkedin_location()` dans `kyc_worker.py`, plutôt que
+d'être disponibles uniquement dans le texte de preuve brut. Les deux ajouts
+restent dans la même ligne que l'activité professionnelle pour ne pas pousser
+la ligne d'alerte sanctions/PEP hors des 4 lignes affichées par le CRM
+(`executiveSummary.slice(0, 4)` dans `LeadDetailModal.tsx`). Testé en
+conditions réelles sur Daniel Weitmann (about + "Executive Chairman" bien
+extraits) et Gaetano Nicolosi (localisation "Catania, Italy" bien extraite).

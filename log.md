@@ -63,10 +63,15 @@
 [2026-07-17] Adaptateur LinkedIn authentifié ajouté au worker KYC | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `compose.kyc.yml`, dépendance et tests | Session optionnelle montée en lecture seule, un profil/job, détection rate-limit stricte; aucun secret ajouté au dépôt
 [2026-07-17] Test LinkedIn réel Gaetano Nicolosi | profil `gaetano-nicolosi-22211433`, session locale | HTTP 999; fallback public conservé, aucun contournement supplémentaire
 [2026-07-17] Test LinkedIn réel Foulques de Raigniac | profil `foulques`, session locale | HTTP 999; profil public trouvé mais accès authentifié bloqué, fallback conservé
+[2026-07-17] Test Crawl4AI recherche OpenSanctions | URL publique `/search/?q=Gaetano+Nicolosi`, venv local | `robots.txt` refuse le crawl; aucun contournement, SearXNG/API conservés
 
 [2026-07-17] Proxy Webshare pour LinkedIn testé et documenté | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `tasks/kyc-multi-source-screening/proxy.md`, PR #6/#7 | Routage proxy vérifié fonctionnel (IP de sortie confirmée) mais HTTP 999 persiste sur LinkedIn; deux bugs de déploiement préexistants corrigés au passage; piste proxy abandonnée au profit d'Apify
 
 [2026-07-17] LinkedIn migré vers Apify (`harvestapi/linkedin-profile-search-by-name`) | `scripts/apify_linkedin.py` (nouveau), suppression de `scripts/linkedin_compat.py` et `linkedin-scraper`, `kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `compose.kyc.yml`, `tests/test_kyc_worker.py`, `wiki/KYC-OSINT.md`, `tasks/kyc-multi-source-screening/proxy.md` | Recherche par nom sans session/proxy à gérer; testé en local sur Gaetano Nicolosi (profil retrouvé, $0.004/recherche mode Short); déploiement EC2 pas encore fait
+
+[2026-07-18] Filtrage sanctions OpenSanctions par lead, carte distincte du KYC | `scripts/opensanctions-schema.sql`, `lib/sanctions/types.ts`, `lib/supabase/sanctions.ts`, `app/api/leads/[id]/sanctions/route.ts`, `lib/supabase/leads.ts`, `app/api/leads/yatco/route.ts`, `lib/types.ts`, `components/leads/LeadDetailModal.tsx`, `.env.local` | Appel synchrone à l'API Screening payante d'OpenSanctions (0,10 €/requête) après chaque nouveau lead, licence CC BY-NC du bulk export écartée car usage commercial (screening clients); vocabulaire prudent hérité du KYC, clé `OPENSANCTIONS_API_KEY` restant à fournir par l'utilisateur
+
+[2026-07-18] Résumé exécutif KYC LinkedIn allégé et enrichi | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `tests/test_kyc_worker.py`, `tasks/kyc-multi-source-screening/cahier-des-charges-linkedin.md` | Ligne « Sanctions et PEP non conclusifs… » routinière retirée (conservée uniquement si sanctions_db/pep_db trouve une correspondance) ; localisation LinkedIn et extrait du "about" ajoutés à la ligne d'activité ; testé en réel sur Daniel Weitmann (about) et Gaetano Nicolosi (localisation), 25 tests unitaires OK
 
 ## Historique condensé
 

@@ -159,7 +159,7 @@ class KycWorkerTests(unittest.TestCase):
         self.assertEqual(report["identity_resolution"]["status"], "probable")
         self.assertEqual(len(report["sources"]), 2)
         self.assertIn("Crawl4AI", report["kyc_assessment"]["key_reasons"][0])
-        self.assertEqual(len(report["kyc_assessment"]["executive_summary"]), 4)
+        self.assertEqual(len(report["kyc_assessment"]["executive_summary"]), 3)
         self.assertIn("Client potentiel", report["kyc_assessment"]["executive_summary"][0])
         self.assertEqual(
             report["risk_screening"]["pep"]["status"],
@@ -241,9 +241,88 @@ class KycWorkerTests(unittest.TestCase):
         report = deterministic_report(weak_query, [document])
         summary = " ".join(report["kyc_assessment"]["executive_summary"])
         self.assertIn("non confirmée", summary)
-        self.assertIn("preuve de fonds", summary)
+        self.assertNotIn("capacité d’achat", summary)
         self.assertNotIn("30 M€", summary)
         self.assertNotIn("Aucun signal", summary)
+
+    def test_summary_keeps_warning_line_on_pep_possible_homonym(self):
+        documents = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/example-person",
+                text="# Example Person\nDirector at Example Co in Cannes",
+                source_type="linkedin",
+            ),
+            EvidenceDocument(
+                url="https://example.com/team/example-person",
+                text="Example Person is a director at Example Co in France.",
+                source_type="company_website",
+            ),
+            EvidenceDocument(
+                url="https://pep.example/example-person",
+                text="Example Person listed as a politically exposed person.",
+                source_type="pep_db",
+            ),
+        ]
+        report = deterministic_report(QUERY, documents)
+        summary = report["kyc_assessment"]["executive_summary"]
+        self.assertEqual(len(summary), 4)
+        self.assertIn("Homonyme sanctions ou PEP possible", summary[-1])
+
+    def test_summary_surfaces_linkedin_location(self):
+        documents = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/example-person",
+                text="Example Person\nDirector at Example Co\nLocation: Cannes, France",
+                source_type="linkedin",
+            ),
+            EvidenceDocument(
+                url="https://example.com/team/example-person",
+                text="Example Person is a director at Example Co in France.",
+                source_type="company_website",
+            ),
+        ]
+        report = deterministic_report(QUERY, documents)
+        summary = " ".join(report["kyc_assessment"]["executive_summary"])
+        self.assertIn("Cannes, France", summary)
+        self.assertEqual(report["person_profile"]["location"], "Cannes")
+
+    def test_summary_surfaces_linkedin_about_excerpt(self):
+        documents = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/example-person",
+                text=(
+                    "Example Person\nDirector at Example Co\n"
+                    "About: Twenty years building cross-border ventures across Europe."
+                ),
+                source_type="linkedin",
+            ),
+            EvidenceDocument(
+                url="https://example.com/team/example-person",
+                text="Example Person is a director at Example Co in France.",
+                source_type="company_website",
+            ),
+        ]
+        report = deterministic_report(QUERY, documents)
+        summary = " ".join(report["kyc_assessment"]["executive_summary"])
+        self.assertIn("Extrait LinkedIn (About)", summary)
+        self.assertIn("cross-border ventures", summary)
+
+    def test_person_profile_location_falls_back_to_linkedin_when_query_city_unconfirmed(self):
+        query = {**QUERY, "city": "Nice"}
+        documents = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/example-person",
+                text="Example Person\nDirector at Example Co\nLocation: Zürich, Switzerland",
+                source_type="linkedin",
+            ),
+            EvidenceDocument(
+                url="https://example.com/team/example-person",
+                text="Example Person is a director at Example Co in France.",
+                source_type="company_website",
+            ),
+        ]
+        report = deterministic_report(query, documents)
+        self.assertEqual(report["person_profile"]["location"], "Zürich, Switzerland")
 
     def test_split_name_requires_first_and_last(self):
         self.assertEqual(split_name("Gaetano Nicolosi"), ("Gaetano", "Nicolosi"))

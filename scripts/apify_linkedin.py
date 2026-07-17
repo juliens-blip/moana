@@ -157,6 +157,17 @@ def _current_position_lines(item: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _about_excerpt(item: dict[str, Any]) -> str:
+    about = item.get("about")
+    if not isinstance(about, str) or not about.strip():
+        return ""
+    # Collapse to one line: downstream code (professional_statement) scans the
+    # evidence text line by line looking for a role title, and a raw multi-
+    # paragraph bio fragments into dozens of candidate lines that can win that
+    # scan out of context (e.g. one unrelated sentence from a long essay).
+    return " ".join(about.split())[:400].rstrip()
+
+
 def _profile_name(item: dict[str, Any]) -> str:
     name = str(item.get("name") or "").strip()
     if name:
@@ -166,10 +177,13 @@ def _profile_name(item: dict[str, Any]) -> str:
 
 def _profile_text(item: dict[str, Any]) -> str:
     headline = str(item.get("headline") or item.get("position") or "").strip()
-    lines = [_profile_name(item), headline, _location_text(item)]
-    about = item.get("about")
-    if isinstance(about, str) and about.strip():
-        lines.extend(["About", about.strip()])
+    lines = [_profile_name(item), headline]
+    location = _location_text(item)
+    if location:
+        lines.append(f"Location: {location}")
+    about = _about_excerpt(item)
+    if about:
+        lines.append(f"About: {about}")
     lines.extend(_current_position_lines(item))
     return "\n".join(line for line in lines if line).strip()
 
