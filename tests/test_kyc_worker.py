@@ -15,14 +15,7 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.linkedin_compat import (
-    choose_headline,
-    choose_location,
-    choose_name,
-    is_profile_url,
-    parse_experience_lines,
-    strict_rate_limit_message,
-)
+from scripts.apify_linkedin import split_name, _to_profile
 
 
 QUERY = {
@@ -252,54 +245,27 @@ class KycWorkerTests(unittest.TestCase):
         self.assertNotIn("30 M€", summary)
         self.assertNotIn("Aucun signal", summary)
 
-    def test_linkedin_compat_uses_current_semantic_headings(self):
-        headings = ["0 notifications", "Bill Gates", "About", "Activity"]
-        lines = [
-            "Bill Gates",
-            "Chair, Gates Foundation and Founder, Breakthrough Energy",
-            "Seattle, Washington, United States · Contact info",
-        ]
-        self.assertEqual(choose_name(headings, lines), "Bill Gates")
-        self.assertIn("Founder", choose_headline("Bill Gates", lines))
-        self.assertEqual(choose_location(lines), "Seattle, Washington, United States")
-        self.assertEqual(
-            choose_location(["Seattle, Washington, United States", "·", "Contact info"]),
-            "Seattle, Washington, United States",
-        )
+    def test_split_name_requires_first_and_last(self):
+        self.assertEqual(split_name("Gaetano Nicolosi"), ("Gaetano", "Nicolosi"))
+        self.assertEqual(split_name("Foulques de Raigniac"), ("Foulques", "de Raigniac"))
+        self.assertIsNone(split_name("Madonna"))
 
-    def test_linkedin_compat_parses_current_experience_sections(self):
-        lines = [
-            "Experience",
-            "Co-chair",
-            "Gates Foundation",
-            "2000 - Present · 26 yrs 7 mos",
-            "Founder",
-            "Breakthrough Energy",
-            "2015 - Present · 11 yrs 7 mos",
-            "About",
-        ]
-        items = parse_experience_lines(lines)
-        self.assertEqual(len(items), 2)
-        self.assertEqual(items[0]["company"], "Gates Foundation")
-        self.assertEqual(items[1]["title"], "Founder")
+    def test_to_profile_builds_evidence_text(self):
+        item = {
+            "name": "Gaetano NICOLOSI",
+            "position": "Presidente presso Nicolosi Trasporti Società Benefit s.r.l.",
+            "location": {"linkedinText": "Catania"},
+            "linkedinUrl": "https://www.linkedin.com/in/gaetano-nicolosi-22211433",
+        }
+        profile = _to_profile(item)
+        self.assertEqual(profile["url"], item["linkedinUrl"])
+        self.assertIn("Presidente", profile["text"])
+        self.assertIn("Catania", profile["text"])
 
-    def test_linkedin_compat_does_not_treat_ad_copy_as_rate_limit(self):
-        self.assertEqual(
-            strict_rate_limit_message(
-                "https://www.linkedin.com/in/example/",
-                "This ad says try again later.",
-            ),
-            "",
-        )
-        self.assertIn(
-            "rate limit",
-            strict_rate_limit_message(
-                "https://www.linkedin.com/in/example/",
-                "Too many requests. Please slow down.",
-            ).lower(),
-        )
-        self.assertTrue(is_profile_url("https://www.linkedin.com/in/example/"))
-        self.assertFalse(is_profile_url("https://www.linkedin.com/company/example/"))
+    def test_to_profile_rejects_incomplete_items(self):
+        self.assertIsNone(_to_profile({"name": "No URL"}))
+        self.assertIsNone(_to_profile({"linkedinUrl": "https://www.linkedin.com/in/x/"}))
+        self.assertIsNone(_to_profile("not-a-dict"))
 
 if __name__ == "__main__":
     unittest.main()

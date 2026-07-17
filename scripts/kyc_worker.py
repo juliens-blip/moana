@@ -42,9 +42,9 @@ from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from dotenv import load_dotenv
 
 try:
-    from scripts.linkedin_compat import scrape_profiles
+    from scripts.apify_linkedin import search_profiles as search_linkedin_profiles
 except ModuleNotFoundError:  # Running ``python scripts/kyc_worker.py`` directly.
-    from linkedin_compat import scrape_profiles
+    from apify_linkedin import search_profiles as search_linkedin_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,9 +216,10 @@ class Settings:
     poll_seconds: float
     stale_job_minutes: int
     linkedin_enabled: bool
-    linkedin_session_path: str
     linkedin_max_profiles: int
-    linkedin_proxy_url: str | None
+    apify_api_token: str | None
+    apify_linkedin_actor_id: str
+    apify_linkedin_mode: str
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -253,9 +254,14 @@ class Settings:
             poll_seconds=env_float("KYC_POLL_SECONDS", 30.0, 2.0, 3600.0),
             stale_job_minutes=env_int("KYC_STALE_JOB_MINUTES", 30, 5, 1440),
             linkedin_enabled=env_bool("KYC_LINKEDIN_ENABLED", False),
-            linkedin_session_path=os.getenv("KYC_LINKEDIN_SESSION_PATH", "").strip(),
             linkedin_max_profiles=env_int("KYC_LINKEDIN_MAX_PROFILES", 1, 0, 3),
-            linkedin_proxy_url=os.getenv("KYC_LINKEDIN_PROXY_URL", "").strip() or None,
+            apify_api_token=os.getenv("APIFY_API_TOKEN", "").strip() or None,
+            apify_linkedin_actor_id=os.getenv(
+                "APIFY_LINKEDIN_ACTOR_ID", "harvestapi/linkedin-profile-search-by-name"
+            ).strip(),
+            apify_linkedin_mode=env_choice(
+                "APIFY_LINKEDIN_MODE", "Short", {"Short", "Full", "Full + email search"}
+            ),
         )
 
 
@@ -301,6 +307,13 @@ def env_float(name: str, default: float, minimum: float, maximum: float) -> floa
         raise ConfigurationError(f"{name} must be a number") from exc
     if not minimum <= value <= maximum:
         raise ConfigurationError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def env_choice(name: str, default: str, choices: set[str]) -> str:
+    value = os.getenv(name, default).strip()
+    if value not in choices:
+        raise ConfigurationError(f"{name} must be one of {sorted(choices)}")
     return value
 
 
@@ -1964,28 +1977,19 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
         if is_linkedin_person(EvidenceDocument(url=url, text="", source_type="linkedin"))
     ]
     crawl_urls = urls
-    if settings.linkedin_enabled and settings.linkedin_session_path:
+    if settings.linkedin_enabled:
         linkedin_url_set = set(linkedin_urls)
         crawl_urls = [url for url in urls if url not in linkedin_url_set]
-        LOGGER.info("Authenticated LinkedIn adapter reserved %d profile URL(s)", len(linkedin_urls))
+        LOGGER.info("LinkedIn URL(s) reserved for the Apify adapter: %d", len(linkedin_urls))
     crawled_documents = await crawl_sources(crawl_urls, query, settings)
     LOGGER.info("Crawled %d usable sources", len(crawled_documents))
-    linkedin_candidates = unique_strings(
-        [
-            *[
-                document.url
-                for document in search_documents + crawled_documents
-                if is_linkedin_person(document)
-            ],
-            *linkedin_urls,
-        ]
-    )
-    if settings.linkedin_enabled and settings.linkedin_session_path and linkedin_candidates:
-        profiles = await scrape_profiles(
-            linkedin_candidates,
-            settings.linkedin_session_path,
-            max_profiles=settings.linkedin_max_profiles,
-            proxy_url=settings.linkedin_proxy_url,
+    if settings.linkedin_enabled and settings.apify_api_token:
+        profiles = await search_linkedin_profiles(
+            query["full_name"],
+            settings.apify_api_token,
+            settings.apify_linkedin_actor_id,
+            settings.apify_linkedin_mode,
+            settings.linkedin_max_profiles,
         )
         for profile in profiles:
             crawled_documents.append(
@@ -1995,9 +1999,9 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
                     source_type="linkedin",
                 )
             )
-        LOGGER.info("Authenticated LinkedIn adapter returned %d profile(s)", len(profiles))
+        LOGGER.info("Apify LinkedIn adapter returned %d profile(s)", len(profiles))
     elif settings.linkedin_enabled:
-        LOGGER.info("LinkedIn adapter enabled but no session or profile candidate is available")
+        LOGGER.info("LinkedIn adapter enabled but Apify token is not configured")
     documents_by_url = {canonical_url(document.url): document for document in search_documents}
     for document in crawled_documents:
         documents_by_url[canonical_url(document.url)] = document
@@ -2116,9 +2120,10 @@ def check_configuration() -> int:
         "llm_base_url": settings.llm_base_url or "provider default",
         "searxng_url": settings.searxng_url,
         "linkedin_enabled": settings.linkedin_enabled,
-        "linkedin_session_configured": bool(settings.linkedin_session_path),
         "linkedin_max_profiles": settings.linkedin_max_profiles,
-        "linkedin_proxy_configured": bool(settings.linkedin_proxy_url),
+        "apify_token_configured": bool(settings.apify_api_token),
+        "apify_linkedin_actor_id": settings.apify_linkedin_actor_id,
+        "apify_linkedin_mode": settings.apify_linkedin_mode,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1
