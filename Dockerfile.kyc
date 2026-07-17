@@ -18,6 +18,7 @@ RUN python -m pip install --upgrade pip \
 RUN useradd --create-home --uid 10001 worker
 
 COPY --chown=worker:worker scripts/kyc_worker.py /app/scripts/kyc_worker.py
+COPY --chown=worker:worker scripts/linkedin_compat.py /app/scripts/linkedin_compat.py
 
 USER worker
 
