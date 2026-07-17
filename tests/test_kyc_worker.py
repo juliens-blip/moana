@@ -64,6 +64,23 @@ class KycWorkerTests(unittest.TestCase):
         self.assertEqual(canonical_url("HTTPS://Example.COM/a//b#fragment"), "https://example.com/a/b")
         self.assertEqual(canonical_url("file:///etc/passwd"), "")
 
+    def test_canonical_url_collapses_linkedin_country_subdomains(self):
+        # LinkedIn serves the same public profile under country subdomains
+        # (it.linkedin.com, fr.linkedin.com, ...). Apify always returns
+        # www.linkedin.com; SearXNG/Crawl4AI discovery can surface a
+        # localized subdomain for the exact same profile. Both must collapse
+        # to the same key so Apify's richer document wins the merge instead
+        # of silently losing to a bare search-snippet duplicate.
+        self.assertEqual(
+            canonical_url("https://it.linkedin.com/in/gaetano-nicolosi-22211433"),
+            canonical_url("https://www.linkedin.com/in/gaetano-nicolosi-22211433"),
+        )
+        # Unrelated linkedin.com paths (company pages, feed, etc.) are untouched.
+        self.assertEqual(
+            canonical_url("https://it.linkedin.com/company/example"),
+            "https://it.linkedin.com/company/example",
+        )
+
     def test_secret_like_error_values_are_redacted(self):
         message = sanitize_error(RuntimeError("Authorization: Bearer abc123 failed"))
         self.assertNotIn("abc123", message)
