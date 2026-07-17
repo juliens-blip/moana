@@ -1990,6 +1990,9 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
             settings.apify_linkedin_actor_id,
             settings.apify_linkedin_mode,
             settings.linkedin_max_profiles,
+            company_name=query["company_name"],
+            country=query["country"],
+            city=query["city"],
         )
         for profile in profiles:
             crawled_documents.append(

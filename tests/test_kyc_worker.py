@@ -15,7 +15,7 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.apify_linkedin import split_name, _to_profile
+from scripts.apify_linkedin import _comparable, _is_corroborated, _to_profile, split_name
 
 
 QUERY = {
@@ -266,6 +266,27 @@ class KycWorkerTests(unittest.TestCase):
         self.assertIsNone(_to_profile({"name": "No URL"}))
         self.assertIsNone(_to_profile({"linkedinUrl": "https://www.linkedin.com/in/x/"}))
         self.assertIsNone(_to_profile("not-a-dict"))
+
+    def test_corroboration_rejects_unrelated_homonym(self):
+        president = _to_profile(
+            {
+                "name": "Gaetano Nicolosi",
+                "position": "Presidente presso Nicolosi Trasporti Società Benefit s.r.l.",
+                "location": {"linkedinText": "Catania"},
+                "linkedinUrl": "https://www.linkedin.com/in/gaetano-nicolosi-22211433",
+            }
+        )
+        homonym = _to_profile(
+            {
+                "name": "Gaetano Nicolosi",
+                "position": "Ingegnere presso Altra Azienda S.p.A.",
+                "location": {"linkedinText": "Milano"},
+                "linkedinUrl": "https://www.linkedin.com/in/ing-gaetano-nicolosi-00074bbb",
+            }
+        )
+        context_terms = [_comparable("Nicolosi Trasporti")]
+        self.assertTrue(_is_corroborated(president, context_terms))
+        self.assertFalse(_is_corroborated(homonym, context_terms))
 
 if __name__ == "__main__":
     unittest.main()
