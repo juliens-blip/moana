@@ -5,11 +5,20 @@ LinkedIn (HTTP 999) even through a residential proxy — see
 tasks/kyc-multi-source-screening/proxy.md. Apify's own infrastructure reaches
 LinkedIn directly; this module only calls a name-search actor and normalizes
 its output into the evidence-document shape the rest of the worker expects.
+
+Common names return several LinkedIn homonyms (verified: "Gaetano Nicolosi"
+alone resolves to at least three different people). ``search_profiles``
+never trusts Apify's top result blindly: when the query carries any
+corroborating context (company/country/city), only candidates whose position
+or location text actually mentions it are kept. With no context at all there
+is nothing to corroborate against, so the top-ranked candidate is returned as
+a best effort, same as before this safeguard existed.
 """
 
 from __future__ import annotations
 
 import logging
+import unicodedata
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
@@ -20,6 +29,7 @@ LOGGER = logging.getLogger("moana.kyc.linkedin")
 
 MAX_CHARGE_USD = Decimal("0.20")
 RUN_TIMEOUT = timedelta(seconds=180)
+SHORT_MODE_POOL = 10  # "Short" mode bills per search page (<=10 profiles) at a flat rate.
 
 
 def split_name(full_name: str) -> tuple[str, str] | None:
@@ -27,6 +37,11 @@ def split_name(full_name: str) -> tuple[str, str] | None:
     if len(parts) < 2:
         return None
     return parts[0], " ".join(parts[1:])
+
+
+def _comparable(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
 def _profile_text(item: dict[str, Any]) -> str:
@@ -50,12 +65,20 @@ def _to_profile(item: dict[str, Any]) -> dict[str, Any] | None:
     return {"url": url, "name": name, "text": text}
 
 
+def _is_corroborated(profile: dict[str, Any], context_terms: list[str]) -> bool:
+    haystack = _comparable(profile["text"])
+    return any(term in haystack for term in context_terms)
+
+
 async def search_profiles(
     full_name: str,
     api_token: str,
     actor_id: str,
     mode: str,
     max_profiles: int,
+    company_name: str = "",
+    country: str = "",
+    city: str = "",
 ) -> list[dict[str, Any]]:
     """Search LinkedIn by name via Apify; never raises on provider failures."""
     if max_profiles <= 0 or not api_token:
@@ -65,17 +88,20 @@ async def search_profiles(
         return []
     first_name, last_name = parsed
 
+    fetch_count = SHORT_MODE_POOL if mode == "Short" else max_profiles
+    fetch_count = max(fetch_count, max_profiles)
+
     client = ApifyClientAsync(api_token)
     run_input = {
         "profileScraperMode": mode,
         "firstName": first_name,
         "lastName": last_name,
-        "maxItems": max_profiles,
+        "maxItems": fetch_count,
     }
     try:
         run = await client.actor(actor_id).call(
             run_input=run_input,
-            max_items=max_profiles,
+            max_items=fetch_count,
             max_total_charge_usd=MAX_CHARGE_USD,
             timeout=RUN_TIMEOUT,
         )
@@ -86,14 +112,27 @@ async def search_profiles(
         LOGGER.warning("Apify LinkedIn search returned no run")
         return []
 
-    profiles: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     try:
         async for item in client.dataset(run.default_dataset_id).iterate_items():
             profile = _to_profile(item)
             if profile:
-                profiles.append(profile)
-            if len(profiles) >= max_profiles:
+                candidates.append(profile)
+            if len(candidates) >= fetch_count:
                 break
     except Exception as exc:  # pragma: no cover - provider-specific network/API failures
         LOGGER.warning("Apify LinkedIn dataset read failed: %s", exc.__class__.__name__)
-    return profiles
+        return []
+
+    context_terms = [_comparable(value) for value in (company_name, country, city) if value.strip()]
+    if not context_terms:
+        return candidates[:max_profiles]
+
+    corroborated = [profile for profile in candidates if _is_corroborated(profile, context_terms)]
+    if not corroborated:
+        LOGGER.info(
+            "Apify LinkedIn search found %d candidate(s) for %r but none matched the known context; skipping",
+            len(candidates),
+            full_name,
+        )
+    return corroborated[:max_profiles]
