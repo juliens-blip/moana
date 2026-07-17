@@ -1274,7 +1274,7 @@ def build_executive_summary(
     if has_yachting:
         relevance_line = "Lien yachting ou maritime repéré dans les sources, mais attribution à confirmer avant qualification commerciale."
     elif has_economic:
-        relevance_line = "Activité dirigeante ou entrepreneuriale repérée ; capacité d’achat et source des fonds non démontrées. Aucun lien yachting confirmé."
+        relevance_line = "Activité dirigeante ou entrepreneuriale repérée. Aucun lien yachting confirmé."
     else:
         relevance_line = "Aucun lien yachting ni indicateur public robuste de capacité économique établi à ce stade."
 
