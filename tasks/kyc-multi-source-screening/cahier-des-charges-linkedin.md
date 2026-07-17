@@ -69,3 +69,29 @@ prénom français courant, ce qui ferait remonter à tort des homonymes sans
 rapport. Décision (2026-07-17) : ne pas corriger — comportement conservateur
 volontaire, cohérent avec la consigne anti-hallucination du reste du pipeline
 KYC (mieux vaut « non confirmé » qu'un faux positif).
+
+## Prénom/nom inversés à la source (corrigé)
+
+Sur un vrai lead Boats Group/YATCO (David Paturel), le `raw_payload` du
+webhook contenait déjà `contact.name = {first: "Paturel", last: "David"}` —
+inversé depuis la source, avant tout code Moana. Conséquence : la recherche
+Apify avec `firstName="Paturel", lastName="David"` ne trouvait rien, et pas
+seulement sur LinkedIn — la découverte SearXNG/Crawl4AI échouait aussi
+(`"Paturel David"` en requête entre guillemets ne matche aucune page
+mentionnant "David Paturel"). `search_profiles` réessaie maintenant une fois
+avec les deux jetons du nom inversés si la première tentative ne renvoie
+aucun candidat retenu. Ça ne résout pas l'ambiguïté d'homonyme en absence de
+contexte (pays/entreprise) — juste le cas « zéro résultat » dû à l'ordre.
+
+## Enrichissement mode Full (about + localisation précise)
+
+Le mode `Short` (recherche large, peu coûteuse) ne renvoie ni bio ni
+localisation précise. Une fois le(s) candidat(s) final(aux) sélectionné(s)
+(corroboration ou importance), un second appel Apify cible le même nom en
+mode `Full` et, si la même `linkedinUrl` réapparaît, remplace le texte par la
+version enrichie (`about`, poste(s) actuel(s) détaillé(s), localisation
+`parsed.text` — ville/pays précis plutôt qu'une zone LinkedIn vague). Testé
+sur Daniel Weitmann : récupère le texte "about" complet (positionnement
+Golden Suisse) et « Zürich, Switzerland » au lieu d'une zone approximative.
+Coût : un appel Full supplémentaire (jusqu'à 10 profils, ~$0.04 au pire) par
+candidat réellement retenu — pas sur tout le pool de recherche.

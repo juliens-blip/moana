@@ -20,6 +20,18 @@ Selection order, per tasks/kyc-multi-source-screening/cahier-des-charges-linkedi
    specifically be an owner/CEO; any senior-looking title outranks a junior
    one.
 
+Lead sources (verified: a real Boats Group/YATCO webhook payload) sometimes
+swap first/last name — a query for "Paturel David" finds nothing because the
+real person is "David Paturel". If the first attempt yields nothing,
+``search_profiles`` retries once with the two name tokens swapped.
+
+Once a candidate is selected, it was only searched in ``mode`` (typically
+"Short": name, headline, location only, no bio). A second, targeted Apify
+call re-fetches the same name in "Full" mode and, if the same
+``linkedinUrl`` reappears, swaps in the richer profile (about section, exact
+city/country, current position) — this costs one extra Apify event only for
+the actually-selected candidate(s), not the whole discovery pool.
+
 YACHTING_TERMS mirrors the exact term set used by
 scripts/kyc_worker.py::evidence_signals() ("proximité yachting" signal) to
 keep one vocabulary across the KYC pipeline. It can't be imported from there
@@ -42,6 +54,8 @@ LOGGER = logging.getLogger("moana.kyc.linkedin")
 MAX_CHARGE_USD = Decimal("0.20")
 RUN_TIMEOUT = timedelta(seconds=180)
 SHORT_MODE_POOL = 10  # "Short" mode bills per search page (<=10 profiles) at a flat rate.
+FULL_MODE_ENRICH_POOL = 10  # Wide enough that the already-selected candidate is likely re-found.
+RICH_MODES = {"Full", "Full + email search"}
 
 YACHTING_TERMS = (
     "yacht",
@@ -117,13 +131,46 @@ def _comparable(value: str) -> str:
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
-def _profile_text(item: dict[str, Any]) -> str:
+def _location_text(item: dict[str, Any]) -> str:
     location = item.get("location")
-    location_text = location.get("linkedinText", "") if isinstance(location, dict) else ""
-    lines = [str(item.get("name") or ""), str(item.get("position") or ""), location_text]
+    if not isinstance(location, dict):
+        return ""
+    parsed = location.get("parsed")
+    if isinstance(parsed, dict) and parsed.get("text"):
+        return str(parsed["text"])
+    return str(location.get("linkedinText") or "")
+
+
+def _current_position_lines(item: dict[str, Any]) -> list[str]:
+    positions = item.get("currentPosition")
+    if not isinstance(positions, list):
+        return []
+    lines: list[str] = []
+    for entry in positions[:2]:
+        if not isinstance(entry, dict):
+            continue
+        title = str(entry.get("position") or "").strip()
+        company = str(entry.get("companyName") or "").strip()
+        line = " - ".join(part for part in (title, company) if part)
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _profile_name(item: dict[str, Any]) -> str:
+    name = str(item.get("name") or "").strip()
+    if name:
+        return name
+    return " ".join(part for part in (item.get("firstName"), item.get("lastName")) if part).strip()
+
+
+def _profile_text(item: dict[str, Any]) -> str:
+    headline = str(item.get("headline") or item.get("position") or "").strip()
+    lines = [_profile_name(item), headline, _location_text(item)]
     about = item.get("about")
-    if isinstance(about, str) and about:
-        lines.extend(["About", about])
+    if isinstance(about, str) and about.strip():
+        lines.extend(["About", about.strip()])
+    lines.extend(_current_position_lines(item))
     return "\n".join(line for line in lines if line).strip()
 
 
@@ -131,7 +178,7 @@ def _to_profile(item: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(item, dict):
         return None
     url = str(item.get("linkedinUrl") or "").strip()
-    name = str(item.get("name") or "").strip()
+    name = _profile_name(item)
     text = _profile_text(item)
     if not url or not name or len(text) < 5:
         return None
@@ -154,27 +201,15 @@ def _importance_score(profile: dict[str, Any]) -> int:
     return seniority + yachting
 
 
-async def search_profiles(
-    full_name: str,
+async def _run_actor(
     api_token: str,
     actor_id: str,
     mode: str,
-    max_profiles: int,
-    company_name: str = "",
-    country: str = "",
-    city: str = "",
+    first_name: str,
+    last_name: str,
+    fetch_count: int,
 ) -> list[dict[str, Any]]:
-    """Search LinkedIn by name via Apify; never raises on provider failures."""
-    if max_profiles <= 0 or not api_token:
-        return []
-    parsed = split_name(full_name)
-    if parsed is None:
-        return []
-    first_name, last_name = parsed
-
-    fetch_count = SHORT_MODE_POOL if mode == "Short" else max_profiles
-    fetch_count = max(fetch_count, max_profiles)
-
+    """One Apify actor call; returns raw candidate profiles, never raises."""
     client = ApifyClientAsync(api_token)
     run_input = {
         "profileScraperMode": mode,
@@ -207,8 +242,15 @@ async def search_profiles(
     except Exception as exc:  # pragma: no cover - provider-specific network/API failures
         LOGGER.warning("Apify LinkedIn dataset read failed: %s", exc.__class__.__name__)
         return []
+    return candidates
 
-    context_terms = [_comparable(value) for value in (company_name, country, city) if value.strip()]
+
+def _select(
+    candidates: list[dict[str, Any]],
+    max_profiles: int,
+    context_terms: list[str],
+    full_name: str,
+) -> list[dict[str, Any]]:
     if context_terms:
         corroborated = [profile for profile in candidates if _is_corroborated(profile, context_terms)]
         if corroborated:
@@ -216,10 +258,61 @@ async def search_profiles(
 
     ranked = sorted(candidates, key=_importance_score, reverse=True)
     most_important = [profile for profile in ranked if _importance_score(profile) > 0]
-    if not most_important:
+    if not most_important and candidates:
         LOGGER.info(
             "Apify LinkedIn search found %d candidate(s) for %r but none were corroborated or notable; skipping",
             len(candidates),
             full_name,
         )
     return most_important[:max_profiles]
+
+
+async def _enrich(
+    profile: dict[str, Any],
+    first_name: str,
+    last_name: str,
+    api_token: str,
+    actor_id: str,
+) -> dict[str, Any]:
+    """Best-effort re-fetch of one already-selected candidate in Full mode."""
+    full_candidates = await _run_actor(api_token, actor_id, "Full", first_name, last_name, FULL_MODE_ENRICH_POOL)
+    for candidate in full_candidates:
+        if candidate["url"] == profile["url"]:
+            return candidate
+    return profile
+
+
+async def search_profiles(
+    full_name: str,
+    api_token: str,
+    actor_id: str,
+    mode: str,
+    max_profiles: int,
+    company_name: str = "",
+    country: str = "",
+    city: str = "",
+) -> list[dict[str, Any]]:
+    """Search LinkedIn by name via Apify; never raises on provider failures."""
+    if max_profiles <= 0 or not api_token:
+        return []
+    parsed = split_name(full_name)
+    if parsed is None:
+        return []
+    first_name, last_name = parsed
+
+    fetch_count = SHORT_MODE_POOL if mode == "Short" else max_profiles
+    fetch_count = max(fetch_count, max_profiles)
+    context_terms = [_comparable(value) for value in (company_name, country, city) if value.strip()]
+
+    name_orders = [(first_name, last_name), (last_name, first_name)]
+    selected: list[dict[str, Any]] = []
+    for attempt_first, attempt_last in name_orders:
+        candidates = await _run_actor(api_token, actor_id, mode, attempt_first, attempt_last, fetch_count)
+        selected = _select(candidates, max_profiles, context_terms, full_name)
+        if selected:
+            first_name, last_name = attempt_first, attempt_last
+            break
+
+    if selected and mode not in RICH_MODES:
+        selected = [await _enrich(profile, first_name, last_name, api_token, actor_id) for profile in selected]
+    return selected

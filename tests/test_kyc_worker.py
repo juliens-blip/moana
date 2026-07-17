@@ -15,7 +15,7 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.apify_linkedin import _comparable, _importance_score, _is_corroborated, _to_profile, split_name
+from scripts.apify_linkedin import _comparable, _importance_score, _is_corroborated, _select, _to_profile, split_name
 
 
 QUERY = {
@@ -321,6 +321,39 @@ class KycWorkerTests(unittest.TestCase):
         self.assertGreater(_importance_score(director), _importance_score(clerk))
         self.assertGreater(_importance_score(yacht_broker), _importance_score(clerk))
         self.assertEqual(_importance_score(clerk), 0)
+
+    def test_to_profile_reads_full_mode_shape(self):
+        profile = _to_profile(
+            {
+                "firstName": "Daniel",
+                "lastName": "Weitmann",
+                "headline": "Executive Chairman at Golden Suisse",
+                "about": "20+ years building investment strategies across Europe.",
+                "location": {
+                    "linkedinText": "Greater Geneva Area",
+                    "parsed": {"text": "Geneva, Switzerland"},
+                },
+                "currentPosition": [
+                    {"position": "Executive Chairman", "companyName": "Golden Suisse"},
+                ],
+                "linkedinUrl": "https://www.linkedin.com/in/daniel-weitmann-example/",
+            }
+        )
+        self.assertEqual(profile["name"], "Daniel Weitmann")
+        self.assertIn("Geneva, Switzerland", profile["text"])
+        self.assertIn("About", profile["text"])
+        self.assertIn("20+ years", profile["text"])
+        self.assertIn("Executive Chairman - Golden Suisse", profile["text"])
+
+    def test_select_falls_back_to_importance_without_context(self):
+        junior = _to_profile(
+            {"name": "Jo Example", "position": "Intern", "linkedinUrl": "https://www.linkedin.com/in/jo/"}
+        )
+        senior = _to_profile(
+            {"name": "Jo Example", "position": "Founder at Acme", "linkedinUrl": "https://www.linkedin.com/in/jo2/"}
+        )
+        selected = _select([junior, senior], max_profiles=1, context_terms=[], full_name="Jo Example")
+        self.assertEqual(selected, [senior])
 
 if __name__ == "__main__":
     unittest.main()
