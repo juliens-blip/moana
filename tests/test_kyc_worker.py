@@ -15,7 +15,7 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.apify_linkedin import _comparable, _is_corroborated, _to_profile, split_name
+from scripts.apify_linkedin import _comparable, _is_corroborated, _is_notable, _to_profile, split_name
 
 
 QUERY = {
@@ -287,6 +287,32 @@ class KycWorkerTests(unittest.TestCase):
         context_terms = [_comparable("Nicolosi Trasporti")]
         self.assertTrue(_is_corroborated(president, context_terms))
         self.assertFalse(_is_corroborated(homonym, context_terms))
+
+    def test_notable_accepts_leadership_or_yachting_role(self):
+        founder = _to_profile(
+            {
+                "name": "Jane Example",
+                "position": "Founder and CEO at Example Holdings",
+                "linkedinUrl": "https://www.linkedin.com/in/jane-example/",
+            }
+        )
+        yacht_broker = _to_profile(
+            {
+                "name": "John Example",
+                "position": "Superyacht charter broker",
+                "linkedinUrl": "https://www.linkedin.com/in/john-example/",
+            }
+        )
+        clerk = _to_profile(
+            {
+                "name": "Jo Example",
+                "position": "Administrative assistant at Example Holdings",
+                "linkedinUrl": "https://www.linkedin.com/in/jo-example/",
+            }
+        )
+        self.assertTrue(_is_notable(founder))
+        self.assertTrue(_is_notable(yacht_broker))
+        self.assertFalse(_is_notable(clerk))
 
 if __name__ == "__main__":
     unittest.main()
