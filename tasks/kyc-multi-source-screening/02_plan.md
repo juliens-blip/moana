@@ -30,6 +30,8 @@ Validation finale : Bill Gates est extrait avec nom/poste/localisation/expérien
 
 Foulques de Raigniac renvoie également HTTP 999. Après deux profils professionnels bloqués, aucune nouvelle tentative automatique ne doit être faite dans le même cycle; le fallback public est la voie normale.
 
+OpenSanctions web ne peut pas être utilisé comme source Crawl4AI dans la configuration actuelle : `robots.txt` bloque la page de recherche. Le plan conserve SearXNG pour la découverte et réserve le screening fiable à `/match` avec clé/licence ou à des listes officielles.
+
 ## Phase 3 — Architecture cible
 
 1. Résoudre le domaine email et l’entreprise potentielle.

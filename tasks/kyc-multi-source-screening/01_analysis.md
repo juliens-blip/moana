@@ -62,3 +62,5 @@ Correctif retenu : intégrer le package en mode optionnel via une couche `Linked
 Test réel Gaetano Nicolosi : URL résolue `https://it.linkedin.com/in/gaetano-nicolosi-22211433`; avec la session authentifiée, LinkedIn répond `HTTP 999`. Aucun contournement supplémentaire n’est tenté. Ce profil reste donc `non déterminable` côté LinkedIn et doit être traité par les sources Nicolosi Trasporti/SearXNG/Crawl4AI.
 
 Test réel Foulques de Raigniac (orthographe du profil LinkedIn, URL `https://fr.linkedin.com/in/foulques`) : même résultat `HTTP 999` avec la session authentifiée. Le blocage est donc lié à l’accès LinkedIn/session ou à l’IP, pas à l’absence du profil; le worker doit préserver les résultats publics Moana Yachting et marquer la source LinkedIn bloquée.
+
+Test Crawl4AI OpenSanctions : la page publique `/search/?q=Gaetano+Nicolosi` est refusée par `robots.txt` (`Access denied by robots.txt`), donc aucun résultat n’est ajouté. Ne pas désactiver ce garde-fou pour contourner le site; utiliser les snippets SearXNG ou l’API `/match` autorisée.

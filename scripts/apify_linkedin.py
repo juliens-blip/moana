@@ -7,12 +7,21 @@ LinkedIn directly; this module only calls a name-search actor and normalizes
 its output into the evidence-document shape the rest of the worker expects.
 
 Common names return several LinkedIn homonyms (verified: "Gaetano Nicolosi"
-alone resolves to at least three different people). ``search_profiles``
-never trusts Apify's top result blindly: when the query carries any
-corroborating context (company/country/city), only candidates whose position
-or location text actually mentions it are kept. With no context at all there
-is nothing to corroborate against, so the top-ranked candidate is returned as
-a best effort, same as before this safeguard existed.
+alone resolves to at least 10 different people). ``search_profiles`` never
+trusts Apify's top result blindly and never returns an anonymous homonym.
+Selection order, per tasks/kyc-multi-source-screening/cahier-des-charges-linkedin.md:
+
+1. Corroborated by the query's own context (company/country/city mentioned
+   in the candidate's position or location text).
+2. Failing that, "notable" candidates only: a leadership/decision-maker role,
+   or a yachting/maritime industry position. Everything else is dropped.
+
+LEADERSHIP_TERMS and YACHTING_TERMS mirror the exact term sets used by
+scripts/kyc_worker.py::evidence_signals() ("profil économique documenté" and
+"proximité yachting" signals) to keep one vocabulary across the KYC
+pipeline. They can't be imported from there (kyc_worker.py already imports
+this module, so the reverse import would be circular) — keep both copies in
+sync if the terms change.
 """
 
 from __future__ import annotations
@@ -30,6 +39,31 @@ LOGGER = logging.getLogger("moana.kyc.linkedin")
 MAX_CHARGE_USD = Decimal("0.20")
 RUN_TIMEOUT = timedelta(seconds=180)
 SHORT_MODE_POOL = 10  # "Short" mode bills per search page (<=10 profiles) at a flat rate.
+
+LEADERSHIP_TERMS = (
+    "chief executive",
+    "ceo",
+    "founder",
+    "owner",
+    "chairman",
+    "managing director",
+    "entrepreneur",
+    "investor",
+    "family office",
+    "dirigeant",
+    "fondateur",
+    "investisseur",
+)
+YACHTING_TERMS = (
+    "yacht",
+    "yachting",
+    "superyacht",
+    "charter",
+    "marina",
+    "maritime",
+    "naval",
+    "vessel",
+)
 
 
 def split_name(full_name: str) -> tuple[str, str] | None:
@@ -68,6 +102,13 @@ def _to_profile(item: dict[str, Any]) -> dict[str, Any] | None:
 def _is_corroborated(profile: dict[str, Any], context_terms: list[str]) -> bool:
     haystack = _comparable(profile["text"])
     return any(term in haystack for term in context_terms)
+
+
+def _is_notable(profile: dict[str, Any]) -> bool:
+    haystack = _comparable(profile["text"])
+    return any(term in haystack for term in LEADERSHIP_TERMS) or any(
+        term in haystack for term in YACHTING_TERMS
+    )
 
 
 async def search_profiles(
@@ -125,14 +166,16 @@ async def search_profiles(
         return []
 
     context_terms = [_comparable(value) for value in (company_name, country, city) if value.strip()]
-    if not context_terms:
-        return candidates[:max_profiles]
+    if context_terms:
+        corroborated = [profile for profile in candidates if _is_corroborated(profile, context_terms)]
+        if corroborated:
+            return corroborated[:max_profiles]
 
-    corroborated = [profile for profile in candidates if _is_corroborated(profile, context_terms)]
-    if not corroborated:
+    notable = [profile for profile in candidates if _is_notable(profile)]
+    if not notable:
         LOGGER.info(
-            "Apify LinkedIn search found %d candidate(s) for %r but none matched the known context; skipping",
+            "Apify LinkedIn search found %d candidate(s) for %r but none were corroborated or notable; skipping",
             len(candidates),
             full_name,
         )
-    return corroborated[:max_profiles]
+    return notable[:max_profiles]
