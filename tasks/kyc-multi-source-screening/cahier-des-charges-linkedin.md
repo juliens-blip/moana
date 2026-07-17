@@ -13,22 +13,26 @@ Un profil candidat est retenu si, dans cet ordre :
 1. **Corroboration par le contexte de la requête** (déjà en place) : le texte
    du profil (poste + localisation) mentionne l'entreprise, le pays ou la
    ville fournis par la requête KYC.
-2. **Sinon, notabilité** — si aucune corroboration directe n'est disponible
-   (contexte absent ou aucun candidat ne correspond), le profil est retenu
-   uniquement si son poste indique :
-   - un **rôle de direction** — CEO, fondateur, propriétaire, président,
-     dirigeant, administrateur, investisseur, etc. (« personne importante »),
-   - **ou** une activité dans le **milieu du yachting/maritime** — yacht,
-     yachting, superyacht, charter, marina, maritime, naval, vessel.
-3. **Sinon, rejet.** Aucun profil homonyme « anonyme » (ni corroboré, ni
-   notable) n'est renvoyé, même si c'est le mieux classé par Apify.
+2. **Sinon, classement par importance apparente** — si aucune corroboration
+   directe n'est disponible (contexte absent ou aucun candidat ne
+   correspond), les candidats restants sont classés par un score de
+   séniorité du poste (3 niveaux : dirigeant/fondateur/président en haut,
+   directeur/administrateur/associé au milieu, responsable/manager en bas)
+   plus un bonus si le poste mentionne le milieu yachting/maritime. **Ce
+   n'est pas une liste blanche stricte de « patrons » : n'importe quel poste
+   qui a l'air senior peut l'emporter sur un poste junior** — un directeur,
+   un associé ou un responsable compte, pas seulement le PDG/fondateur.
+   Seuls les candidats avec un score > 0 sont conservés.
+3. **Sinon, rejet.** Un profil homonyme sans aucun signal de séniorité ni de
+   lien yachting n'est jamais renvoyé, même si c'est le mieux classé par
+   Apify.
 
-Les deux listes de termes réutilisent exactement celles déjà utilisées dans
-`scripts/kyc_worker.py::evidence_signals()` (signaux « profil économique
-documenté » et « proximité yachting ») pour garder un seul vocabulaire dans
-tout le pipeline KYC. Elles sont dupliquées dans `apify_linkedin.py` (pas
-d'import croisé possible, `kyc_worker.py` important déjà ce module) — toute
-modification doit être répercutée des deux côtés.
+Le vocabulaire yachting réutilise exactement celui déjà utilisé dans
+`scripts/kyc_worker.py::evidence_signals()` (signal « proximité yachting »)
+pour garder un seul vocabulaire dans tout le pipeline KYC ; il est dupliqué
+dans `apify_linkedin.py` (pas d'import croisé possible, `kyc_worker.py`
+important déjà ce module) — toute modification doit être répercutée des deux
+côtés. La grille de séniorité (3 niveaux) est propre à ce module.
 
 ## Hors périmètre (délibérément non traité)
 

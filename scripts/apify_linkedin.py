@@ -13,15 +13,18 @@ Selection order, per tasks/kyc-multi-source-screening/cahier-des-charges-linkedi
 
 1. Corroborated by the query's own context (company/country/city mentioned
    in the candidate's position or location text).
-2. Failing that, "notable" candidates only: a leadership/decision-maker role,
-   or a yachting/maritime industry position. Everything else is dropped.
+2. Failing that, rank the remaining candidates by an "apparent importance"
+   score (seniority of the title, plus a yachting/maritime bonus) and keep
+   the highest-scoring ones. A candidate with no seniority or yachting
+   signal at all scores zero and is dropped — but there is no requirement to
+   specifically be an owner/CEO; any senior-looking title outranks a junior
+   one.
 
-LEADERSHIP_TERMS and YACHTING_TERMS mirror the exact term sets used by
-scripts/kyc_worker.py::evidence_signals() ("profil économique documenté" and
-"proximité yachting" signals) to keep one vocabulary across the KYC
-pipeline. They can't be imported from there (kyc_worker.py already imports
-this module, so the reverse import would be circular) — keep both copies in
-sync if the terms change.
+YACHTING_TERMS mirrors the exact term set used by
+scripts/kyc_worker.py::evidence_signals() ("proximité yachting" signal) to
+keep one vocabulary across the KYC pipeline. It can't be imported from there
+(kyc_worker.py already imports this module, so the reverse import would be
+circular) — keep both copies in sync if the terms change.
 """
 
 from __future__ import annotations
@@ -40,20 +43,6 @@ MAX_CHARGE_USD = Decimal("0.20")
 RUN_TIMEOUT = timedelta(seconds=180)
 SHORT_MODE_POOL = 10  # "Short" mode bills per search page (<=10 profiles) at a flat rate.
 
-LEADERSHIP_TERMS = (
-    "chief executive",
-    "ceo",
-    "founder",
-    "owner",
-    "chairman",
-    "managing director",
-    "entrepreneur",
-    "investor",
-    "family office",
-    "dirigeant",
-    "fondateur",
-    "investisseur",
-)
 YACHTING_TERMS = (
     "yacht",
     "yachting",
@@ -63,6 +52,56 @@ YACHTING_TERMS = (
     "maritime",
     "naval",
     "vessel",
+)
+YACHTING_SCORE = 2
+
+# Broad seniority ranking, not limited to owners/founders: any senior-looking
+# title should be able to outrank a junior homonym. Highest tier wins when a
+# title matches several (e.g. "founder and CEO" only counts once, at tier 3).
+SENIORITY_TIERS: tuple[tuple[int, tuple[str, ...]], ...] = (
+    (
+        3,
+        (
+            "chief executive",
+            "ceo",
+            "founder",
+            "owner",
+            "chairman",
+            "president",
+            "presidente",
+            "amministratore unico",
+            "fondateur",
+            "fondatore",
+        ),
+    ),
+    (
+        2,
+        (
+            "managing director",
+            "general manager",
+            "director",
+            "administrateur",
+            "amministratore",
+            "dirigeant",
+            "gérant",
+            "gerant",
+            "vice president",
+            "vice-president",
+            "partner",
+            "entrepreneur",
+            "investor",
+            "investisseur",
+        ),
+    ),
+    (
+        1,
+        (
+            "head of",
+            "senior",
+            "responsable",
+            "manager",
+        ),
+    ),
 )
 
 
@@ -104,11 +143,15 @@ def _is_corroborated(profile: dict[str, Any], context_terms: list[str]) -> bool:
     return any(term in haystack for term in context_terms)
 
 
-def _is_notable(profile: dict[str, Any]) -> bool:
+def _importance_score(profile: dict[str, Any]) -> int:
     haystack = _comparable(profile["text"])
-    return any(term in haystack for term in LEADERSHIP_TERMS) or any(
-        term in haystack for term in YACHTING_TERMS
-    )
+    seniority = 0
+    for tier_score, terms in SENIORITY_TIERS:
+        if any(term in haystack for term in terms):
+            seniority = tier_score
+            break
+    yachting = YACHTING_SCORE if any(term in haystack for term in YACHTING_TERMS) else 0
+    return seniority + yachting
 
 
 async def search_profiles(
@@ -171,11 +214,12 @@ async def search_profiles(
         if corroborated:
             return corroborated[:max_profiles]
 
-    notable = [profile for profile in candidates if _is_notable(profile)]
-    if not notable:
+    ranked = sorted(candidates, key=_importance_score, reverse=True)
+    most_important = [profile for profile in ranked if _importance_score(profile) > 0]
+    if not most_important:
         LOGGER.info(
             "Apify LinkedIn search found %d candidate(s) for %r but none were corroborated or notable; skipping",
             len(candidates),
             full_name,
         )
-    return notable[:max_profiles]
+    return most_important[:max_profiles]

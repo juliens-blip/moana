@@ -15,7 +15,7 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.apify_linkedin import _comparable, _is_corroborated, _is_notable, _to_profile, split_name
+from scripts.apify_linkedin import _comparable, _importance_score, _is_corroborated, _to_profile, split_name
 
 
 QUERY = {
@@ -288,12 +288,19 @@ class KycWorkerTests(unittest.TestCase):
         self.assertTrue(_is_corroborated(president, context_terms))
         self.assertFalse(_is_corroborated(homonym, context_terms))
 
-    def test_notable_accepts_leadership_or_yachting_role(self):
+    def test_importance_score_ranks_seniority_and_yachting(self):
         founder = _to_profile(
             {
                 "name": "Jane Example",
                 "position": "Founder and CEO at Example Holdings",
                 "linkedinUrl": "https://www.linkedin.com/in/jane-example/",
+            }
+        )
+        director = _to_profile(
+            {
+                "name": "Jim Example",
+                "position": "Managing Director at Example Holdings",
+                "linkedinUrl": "https://www.linkedin.com/in/jim-example/",
             }
         )
         yacht_broker = _to_profile(
@@ -310,9 +317,10 @@ class KycWorkerTests(unittest.TestCase):
                 "linkedinUrl": "https://www.linkedin.com/in/jo-example/",
             }
         )
-        self.assertTrue(_is_notable(founder))
-        self.assertTrue(_is_notable(yacht_broker))
-        self.assertFalse(_is_notable(clerk))
+        self.assertGreater(_importance_score(founder), _importance_score(director))
+        self.assertGreater(_importance_score(director), _importance_score(clerk))
+        self.assertGreater(_importance_score(yacht_broker), _importance_score(clerk))
+        self.assertEqual(_importance_score(clerk), 0)
 
 if __name__ == "__main__":
     unittest.main()
