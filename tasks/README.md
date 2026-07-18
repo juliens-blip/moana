@@ -1,0 +1,16 @@
+# Tasks — Index des features (tunnel agentique)
+
+Chaque feature suit le tunnel (voir `CLAUDE.md` § Tunnel agentique) :
+`01_analysis.md` → `02_plan.md` → `03_implementation_log.md`.
+
+## Backlog d'outils (audit 2026-07-18, par ratio valeur/effort)
+
+| Priorité | Outil | Source | Backend | État |
+|----------|-------|--------|---------|------|
+| 1 | `kyc-company-enrichment` — remplir `company_profile` du KYC (LinkedIn company + LEI/registre) | Apify | AWS worker KYC | 🚧 en cours |
+| 2 | `kyc-adverse-media` — remplir `adverse_media` (négative news AML) | Apify | AWS worker KYC | à faire |
+| 3 | `fleet-content-audit` — listings Moana sans photos/vidéo/specs | YATCO BOSS | AWS + UI | à faire |
+| 4 | `market-pulse` — feeds MLS New/Modified/Sold 5j (comps, baisses de prix) | YATCO BOSS | AWS scraper planifié | à faire |
+
+## Features existantes
+- `kyc-multi-source-screening` — worker KYC/OSINT (LinkedIn Apify, SearXNG, Crawl4AI).

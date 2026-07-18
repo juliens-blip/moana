@@ -1,35 +1,66 @@
 # Règles projet — Moana Yachting
 
+Source de vérité unique. Garder sous 150 lignes.
+
 ## Démarrage de session
 
-1. Lire `CLAUDE.md`, `index.md`, puis les 10–20 dernières lignes de `log.md`.
-2. Ouvrir `wiki/` ou `archive/` uniquement si la tâche l’exige.
+1. Lire `CLAUDE.md`, `index.md`, `state.md`, puis les 10–20 dernières lignes de `log.md`.
+2. Ouvrir `wiki/` ou `archive/` uniquement si la tâche l'exige.
 3. Préfixer les commandes shell avec `rtk`.
 4. Considérer chaque ligne ajoutée comme un coût pour les sessions futures.
 
+## Tunnel agentique — OBLIGATOIRE pour tout nouvel outil
+
+Aucun outil codé « à la va-vite ». Chaque nouvel outil traverse ce tunnel
+(détail en mémoire : `agentic-tunnel`). Les backends tournent sur **AWS EC2**
+(`ubuntu@51.44.220.145`, `~/moana`), jamais en process local permanent.
+
+0. **INIT** — créer `tasks/<outil>/` (kebab-case).
+1. **EXPLORE** (`.claude/agents/epct.md`) — recherche externe (Context7, WebSearch)
+   + patterns du code → `tasks/<outil>/01_analysis.md`.
+2. **PLAN** (`agents_library/apex-workflow.md`) — décomposer en étapes granulaires
+   → `tasks/<outil>/02_plan.md` AVANT tout code (règle d'or apex).
+3. **CODE** (`epct.md`) — implémenter selon les patterns existants ; journal dans
+   `tasks/<outil>/03_implementation_log.md`. Backend → AWS.
+4. **TEST** (`.claude/agents/test-code.md`, obligatoire, plusieurs tests) — lancer
+   l'agent test-code : lint, `tsc --noEmit`, build, tests unitaires + plusieurs
+   tests fonctionnels du nouvel outil. Cet agent ne modifie jamais le code.
+5. **LOOP** — en cas d'échec : consigner dans `journalbug.md`, revenir en 1/2
+   (EPCT→apex), corriger, re-tester jusqu'au tout-vert.
+6. **DEPLOY + DOC** — déployer sur AWS ; mettre à jour `state.md` et `log.md`.
+
+## Journaux de bord
+
+- `state.md` : une entrée par cycle (~6h). Garder 18h ; les cycles plus anciens
+  sont fondus dans « Résumé glissant » puis supprimés.
+- `journalbug.md` : une ligne par bug détecté au testing. Résumer et purger quand
+  ça grossit.
+
 ## Périmètre documentaire
 
-- Modifier, déplacer ou supprimer uniquement de la documentation, sauf demande explicite de code.
+- Modifier/déplacer/supprimer uniquement de la doc, sauf demande explicite de code.
 - Décrire toute action documentaire importante dans `log.md`.
-- Chercher une note proche dans `wiki/` avant d’en créer une.
-- Préférer compléter, fusionner ou supprimer plutôt que multiplier les fichiers.
-- Garder `CLAUDE.md` sous environ 150 lignes et `index.md` lisible en 30 secondes.
+- Chercher une note proche dans `wiki/` avant d'en créer une.
+- Préférer compléter/fusionner/supprimer plutôt que multiplier les fichiers.
+- Garder `index.md` lisible en 30 secondes.
 - Ne jamais stocker de secret, identifiant, dump, compte-rendu long ou note de debug ici.
 
 ## Zones protégées
 
-Ne jamais modifier, déplacer ou supprimer sans ordre explicite :
+Ne jamais modifier/déplacer/supprimer sans ordre explicite :
 
 - Dossiers : `src/`, `app/`, `pages/`, `components/`, `lib/`, `server/`, `api/`, `database/`, `migrations/`.
 - Fichiers : `package.json`, `pnpm-lock.yaml`, `package-lock.json`, `docker*`, `.env*`.
 - Configurations de build ou de déploiement.
 
-La lecture de ces zones est permise pour documenter l’état réel.
+La lecture de ces zones est permise pour documenter l'état réel.
+Respecter les changements non liés déjà présents dans le dépôt (WIP OpenSanctions,
+yatco-stats, etc.) : ne stager que les fichiers explicitement concernés.
 
 ## Mémoire du projet
 
-- `raw/` : contenu transitoire à traiter ou supprimer rapidement.
-- `wiki/` : connaissance stable, courte et validée.
+- `raw/` : contenu transitoire à traiter ou supprimer vite.
+- `wiki/` : connaissance stable, courte, validée.
 - `archive/` : contexte historique condensé, rarement lu.
 - `log.md` : détail des trois derniers jours, puis historique condensé.
 - `bugs.md` : une ligne normalisée par problème.
@@ -39,11 +70,9 @@ La lecture de ces zones est permise pour documenter l’état réel.
 - Vérifier les faits dans le code avant de reprendre une ancienne note.
 - Distinguer clairement état observé, décision et tâche future.
 - Écrire court, orienté action, sans storytelling.
-- Utiliser des liens Obsidian seulement s’ils améliorent la navigation.
-- Utiliser uniquement la taxonomie de tags définie dans `bugs.md` et la documentation.
-- Ne jamais recopier de valeur provenant d’un fichier `.env*`.
-- Respecter les changements non liés déjà présents dans le dépôt.
+- Ne jamais recopier de valeur provenant d'un fichier `.env*`.
+- Ne jamais coder un backend en secret en dur : variables d'environnement seulement.
 
 ## Liens
 
-[[index]] · [[log]] · [[bugs]] · [[Roadmap]]
+[[index]] · [[state]] · [[log]] · [[bugs]] · [[journalbug]] · [[Roadmap]]

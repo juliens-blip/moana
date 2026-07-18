@@ -1,9 +1,16 @@
 import unittest
 
+import asyncio
+import os
+from unittest import mock
+
 from scripts.kyc_worker import (
     EvidenceDocument,
     REPORT_TEMPLATE,
+    Settings,
     blank_report,
+    enrich_company_profile,
+    linkedin_company_url,
     rank_search_result_urls,
     searxng_result_urls,
     searxng_search_hits,
@@ -19,6 +26,7 @@ from scripts.apify_linkedin import (
     _comparable,
     _importance_score,
     _is_corroborated,
+    _normalize_company,
     _profile_text,
     _select,
     _to_profile,
@@ -500,6 +508,120 @@ class KycWorkerTests(unittest.TestCase):
         )
         selected = _select([junior, senior], max_profiles=1, context_terms=[], full_name="Jo Example")
         self.assertEqual(selected, [senior])
+
+
+GOLDEN_COMPANY = {
+    "name": "Golden Suisse",
+    "website": "https://www.goldensuisse.com",
+    "industries": [{"name": "Financial Services"}],
+    "locations": [
+        {"line1": "Golden Suisse", "city": "Zurich", "geographicArea": "Canton of Zurich", "country": "CH"}
+    ],
+    "foundedOn": {"year": 2016},
+    "companyType": "Privately Held",
+    "employeeCount": 12,
+}
+
+
+class CompanyEnrichmentTests(unittest.TestCase):
+    def test_normalize_company_maps_all_available_fields(self):
+        profile = _normalize_company(GOLDEN_COMPANY)
+        self.assertEqual(profile["company_name"], "Golden Suisse")
+        self.assertEqual(profile["website"], "https://www.goldensuisse.com")
+        self.assertEqual(profile["industry"], "Financial Services")
+        self.assertIn("Zurich", profile["address"])
+        self.assertEqual(profile["jurisdiction"], "CH")
+        self.assertEqual(profile["incorporation_date"], "2016")
+        self.assertEqual(profile["legal_form"], "Privately Held")
+        self.assertEqual(profile["financials"]["employees"], "12")
+
+    def test_normalize_company_robust_to_missing_fields(self):
+        self.assertEqual(_normalize_company({}), {})
+        self.assertEqual(_normalize_company("not-a-dict"), {})
+        self.assertEqual(_normalize_company({"name": "Acme"}), {"company_name": "Acme"})
+        # None values must not create keys
+        self.assertEqual(_normalize_company({"name": "Acme", "website": None}), {"company_name": "Acme"})
+
+    def test_profile_text_emits_company_url_line(self):
+        item = {
+            "name": "Xavier Yonn",
+            "linkedinUrl": "https://www.linkedin.com/in/xavier-yonn",
+            "currentPosition": [
+                {
+                    "position": "CEO",
+                    "companyName": "Acme",
+                    "companyLinkedinUrl": "https://www.linkedin.com/company/acme/",
+                }
+            ],
+        }
+        text = _profile_text(item)
+        self.assertIn("EntrepriseUrl: https://www.linkedin.com/company/acme/", text)
+
+    def test_linkedin_company_url_reads_line(self):
+        doc = EvidenceDocument(
+            url="https://www.linkedin.com/in/xavier-yonn",
+            text="Xavier Yonn\nEntrepriseUrl: https://www.linkedin.com/company/acme/",
+            source_type="linkedin",
+        )
+        self.assertEqual(linkedin_company_url(doc), "https://www.linkedin.com/company/acme/")
+
+    def test_enrich_company_profile_merges_without_overwriting_stronger_source(self):
+        report = blank_report(QUERY)
+        report["identity_resolution"]["status"] = "confirmed"
+        # Stronger source (domain match) already set the website — must survive.
+        report["company_profile"]["website"] = "https://existing.example"
+        docs = [
+            EvidenceDocument(
+                url="https://www.linkedin.com/in/xavier-yonn",
+                text="Xavier Yonn\nEntrepriseUrl: https://www.linkedin.com/company/acme/",
+                source_type="linkedin",
+            )
+        ]
+
+        async def fake_company(company_url, company_name, token, actor_id):
+            self.assertEqual(company_url, "https://www.linkedin.com/company/acme/")
+            return {"company_name": "Acme", "website": "https://apify.example", "industry": "Tech"}
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_COMPANY_ENRICH": "1"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.search_linkedin_company", fake_company):
+                out = asyncio.run(enrich_company_profile(report, docs, QUERY, settings))
+        self.assertEqual(out["company_profile"]["website"], "https://existing.example")
+        self.assertEqual(out["company_profile"]["company_name"], "Acme")
+        self.assertEqual(out["company_profile"]["industry"], "Tech")
+
+    def test_enrich_company_profile_skips_pure_homonym(self):
+        report = blank_report({**QUERY, "company_name": ""})
+        report["identity_resolution"]["status"] = "ambiguous"
+        called = False
+
+        async def fake_company(*args):
+            nonlocal called
+            called = True
+            return {"company_name": "Should not be used"}
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_COMPANY_ENRICH": "1"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.search_linkedin_company", fake_company):
+                out = asyncio.run(enrich_company_profile(report, [], {**QUERY, "company_name": ""}, settings))
+        self.assertFalse(called)
+        self.assertEqual(out["company_profile"]["company_name"], "")
+
+    def test_enrich_company_profile_disabled_by_flag(self):
+        report = blank_report(QUERY)
+        called = False
+
+        async def fake_company(*args):
+            nonlocal called
+            called = True
+            return {}
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_COMPANY_ENRICH": "0"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.search_linkedin_company", fake_company):
+                out = asyncio.run(enrich_company_profile(report, [], QUERY, settings))
+        self.assertFalse(called)
+
 
 if __name__ == "__main__":
     unittest.main()
