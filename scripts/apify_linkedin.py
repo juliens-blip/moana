@@ -157,6 +157,27 @@ def _current_position_lines(item: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _primary_position(item: dict[str, Any]) -> tuple[str, str, str]:
+    """First current position as (title, company, description).
+
+    Only "Full" mode fills currentPosition; "Short" mode leaves it empty (the
+    headline is the only signal there). ``description`` is frequently null even
+    in Full mode, so callers must treat it as best-effort, not guaranteed.
+    """
+    positions = item.get("currentPosition")
+    if not isinstance(positions, list):
+        return "", "", ""
+    for entry in positions:
+        if not isinstance(entry, dict):
+            continue
+        title = str(entry.get("position") or "").strip()
+        company = str(entry.get("companyName") or "").strip()
+        description = " ".join(str(entry.get("description") or "").split())[:400].rstrip()
+        if title or company:
+            return title, company, description
+    return "", "", ""
+
+
 def _about_excerpt(item: dict[str, Any]) -> str:
     about = item.get("about")
     if not isinstance(about, str) or not about.strip():
@@ -178,6 +199,19 @@ def _profile_name(item: dict[str, Any]) -> str:
 def _profile_text(item: dict[str, Any]) -> str:
     headline = str(item.get("headline") or item.get("position") or "").strip()
     lines = [_profile_name(item), headline]
+    # Structured template fields consumed by kyc_worker.py's executive summary
+    # (Métier / Entreprise / Rôle et missions / Localisation). Emit them as
+    # prefixed lines so the worker can rebuild the template without re-parsing
+    # free text. Métier falls back to the headline when Short mode gave no
+    # structured position (the whole headline, e.g. "Presidente presso X").
+    title, company, description = _primary_position(item)
+    metier = title or headline
+    if metier:
+        lines.append(f"Métier: {metier}")
+    if company:
+        lines.append(f"Entreprise: {company}")
+    if description:
+        lines.append(f"Missions: {description}")
     location = _location_text(item)
     if location:
         lines.append(f"Location: {location}")

@@ -116,3 +116,38 @@ la ligne d'alerte sanctions/PEP hors des 4 lignes affichées par le CRM
 (`executiveSummary.slice(0, 4)` dans `LeadDetailModal.tsx`). Testé en
 conditions réelles sur Daniel Weitmann (about + "Executive Chairman" bien
 extraits) et Gaetano Nicolosi (localisation "Catania, Italy" bien extraite).
+
+## Collision d'URL LinkedIn par sous-domaine pays
+
+Régression observée sur Gaetano Nicolosi : localisation et "about" absents du
+résumé alors qu'Apify avait bien enrichi le profil. Cause : `canonical_url()`
+ne normalisait pas les sous-domaines pays de LinkedIn. Apify renvoie
+`www.linkedin.com/in/...`, mais SearXNG/Crawl4AI découvre indépendamment le
+même profil sous `it.linkedin.com/in/...` (snippet nu « Nom - Titre |
+LinkedIn »). Sans normalisation, les deux documents de preuve ne fusionnaient
+pas et le snippet faible gagnait la sélection. Corrigé : pour les chemins
+`/in/`, tout sous-domaine `*.linkedin.com` est ramené à `www.linkedin.com`
+(les chemins `/company/` ne sont pas touchés). Le document Apify riche
+l'emporte alors sur le snippet.
+
+## Résumé exécutif en template structuré (Métier / Entreprise / Rôle / Localisation)
+
+Demande utilisateur : remplacer la prose « Un profil portant ce nom indique :
+… » par un template à champs distincts. `_profile_text()` émet désormais, à
+partir de `currentPosition[0]`, des lignes préfixées `Métier:` (titre, repli
+sur le headline en mode Short), `Entreprise:` (companyName) et `Missions:`
+(description de poste, souvent nulle chez Apify). `build_executive_summary()`
+les relit via `linkedin_metier()`/`linkedin_company()`/`linkedin_missions()`
+et construit les lignes : **Métier**, **Entreprise**, **Rôle et missions
+majeures** (description de poste si présente, sinon extrait du "about" comme
+approximation, 280 car. max), **Localisation**. Le champ « Rôle et missions »
+est le moins fiable : la description de poste LinkedIn est fréquemment absente.
+
+Garde-fou conservé : ces champs restent surmontés de la ligne d'attribution
+(`identity_line`). Quand l'identité est ambiguë (homonyme non exclu), ils
+décrivent un profil candidat, pas un fait confirmé sur le lead — supprimer ce
+préambule reviendrait à présenter un homonyme possible comme le client, ce que
+toute la logique de prudence du KYC interdit. Le cap d'affichage passe de 4 à 8
+lignes (`normalize_report` côté worker et `executiveSummary.slice(0, 8)` dans
+`LeadDetailModal.tsx`) pour loger identité + 4 champs + pertinence + alerte
+éventuelle.

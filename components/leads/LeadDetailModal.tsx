@@ -249,8 +249,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
         ? 'Élevé'
         : 'Indéterminé';
 
-  const executiveSummary = kycReport?.kyc_assessment.executive_summary?.slice(0, 4)
-    ?? kyc?.key_reasons.slice(0, 4)
+  const executiveSummary = kycReport?.kyc_assessment.executive_summary?.slice(0, 8)
+    ?? kyc?.key_reasons.slice(0, 8)
     ?? [];
   const sourceTypeLabel: Record<KycReport['sources'][number]['type'], string> = {
     official_registry: 'Registre officiel',
