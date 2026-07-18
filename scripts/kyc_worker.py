@@ -42,8 +42,10 @@ from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from dotenv import load_dotenv
 
 try:
+    from scripts.apify_linkedin import search_company as search_linkedin_company
     from scripts.apify_linkedin import search_profiles as search_linkedin_profiles
 except ModuleNotFoundError:  # Running ``python scripts/kyc_worker.py`` directly.
+    from apify_linkedin import search_company as search_linkedin_company
     from apify_linkedin import search_profiles as search_linkedin_profiles
 
 
@@ -220,6 +222,8 @@ class Settings:
     apify_api_token: str | None
     apify_linkedin_actor_id: str
     apify_linkedin_mode: str
+    apify_company_enrich: bool
+    apify_linkedin_company_actor_id: str
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -262,6 +266,10 @@ class Settings:
             apify_linkedin_mode=env_choice(
                 "APIFY_LINKEDIN_MODE", "Short", {"Short", "Full", "Full + email search"}
             ),
+            apify_company_enrich=env_bool("APIFY_COMPANY_ENRICH", False),
+            apify_linkedin_company_actor_id=os.getenv(
+                "APIFY_LINKEDIN_COMPANY_ACTOR_ID", "harvestapi/linkedin-company"
+            ).strip(),
         )
 
 
@@ -1219,6 +1227,10 @@ def linkedin_missions(document: EvidenceDocument) -> str:
     return linkedin_field(document, "Missions:")
 
 
+def linkedin_company_url(document: EvidenceDocument) -> str:
+    return linkedin_field(document, "EntrepriseUrl:")
+
+
 def document_headline(document: EvidenceDocument) -> str:
     for raw_line in document.text.splitlines()[:30]:
         line = re.sub(r"^[#>*_`\s-]+", "", raw_line).strip()
@@ -2082,6 +2094,63 @@ async def research(query: dict[str, str], settings: Settings) -> list[EvidenceDo
     return documents[: settings.max_sources]
 
 
+async def enrich_company_profile(
+    report: dict[str, Any],
+    documents: list[EvidenceDocument],
+    query: dict[str, str],
+    settings: Settings,
+) -> dict[str, Any]:
+    """Fill company_profile via the Apify linkedin-company actor (best-effort).
+
+    Prudence: only enriches when the company is attributable to the lead — the
+    identity is confirmed/probable, or the company name came from the query.
+    Never enriches a pure homonym. Merge is non-destructive: a value already set
+    by a stronger source (official registry, domain match) is kept.
+    """
+    if not settings.apify_company_enrich or not settings.apify_api_token:
+        return report
+    identity_status = report.get("identity_resolution", {}).get("status", "")
+    attributable = identity_status in {"confirmed", "probable"} or bool(query.get("company_name"))
+    if not attributable:
+        return report
+
+    company_url = ""
+    if identity_status in {"confirmed", "probable"}:
+        company_url = next((url for doc in documents if (url := linkedin_company_url(doc))), "")
+    company_name = (
+        report["company_profile"].get("company_name")
+        or report["person_profile"].get("current_company")
+        or query.get("company_name", "")
+    )
+    if not company_url and not company_name.strip():
+        return report
+
+    details = await search_linkedin_company(
+        company_url,
+        company_name,
+        settings.apify_api_token,
+        settings.apify_linkedin_company_actor_id,
+    )
+    if not details:
+        return report
+
+    profile = report["company_profile"]
+    filled = 0
+    for key, value in details.items():
+        if key == "financials" and isinstance(value, dict):
+            financials = profile.setdefault("financials", {})
+            for sub_key, sub_value in value.items():
+                if not financials.get(sub_key):
+                    financials[sub_key] = sub_value
+                    filled += 1
+            continue
+        if not profile.get(key):
+            profile[key] = value
+            filled += 1
+    LOGGER.info("Company enrichment filled %d company_profile field(s)", filled)
+    return report
+
+
 async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
     job = await store.claim()
     if not job:
@@ -2097,6 +2166,7 @@ async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
             return True
         documents = await research(query, settings)
         report = await synthesize_report(query, documents, settings)
+        report = await enrich_company_profile(report, documents, query, settings)
         status = (
             "insufficient_data"
             if report["kyc_assessment"]["recommended_review"] == "insufficient_data"
@@ -2156,6 +2226,7 @@ async def run_dry(args: argparse.Namespace, settings: Settings) -> None:
         )
         return
     report = await synthesize_report(query, documents, settings)
+    report = await enrich_company_profile(report, documents, query, settings)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -2192,6 +2263,8 @@ def check_configuration() -> int:
         "apify_token_configured": bool(settings.apify_api_token),
         "apify_linkedin_actor_id": settings.apify_linkedin_actor_id,
         "apify_linkedin_mode": settings.apify_linkedin_mode,
+        "apify_company_enrich": settings.apify_company_enrich,
+        "apify_linkedin_company_actor_id": settings.apify_linkedin_company_actor_id,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1

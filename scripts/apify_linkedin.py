@@ -52,7 +52,9 @@ from apify_client import ApifyClientAsync
 LOGGER = logging.getLogger("moana.kyc.linkedin")
 
 MAX_CHARGE_USD = Decimal("0.20")
+COMPANY_MAX_CHARGE_USD = Decimal("0.20")
 RUN_TIMEOUT = timedelta(seconds=180)
+DEFAULT_COMPANY_ACTOR_ID = "harvestapi/linkedin-company"
 SHORT_MODE_POOL = 10  # "Short" mode bills per search page (<=10 profiles) at a flat rate.
 FULL_MODE_ENRICH_POOL = 10  # Wide enough that the already-selected candidate is likely re-found.
 RICH_MODES = {"Full", "Full + email search"}
@@ -157,25 +159,28 @@ def _current_position_lines(item: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _primary_position(item: dict[str, Any]) -> tuple[str, str, str]:
-    """First current position as (title, company, description).
+def _primary_position(item: dict[str, Any]) -> tuple[str, str, str, str]:
+    """First current position as (title, company, description, company_url).
 
     Only "Full" mode fills currentPosition; "Short" mode leaves it empty (the
     headline is the only signal there). ``description`` is frequently null even
     in Full mode, so callers must treat it as best-effort, not guaranteed.
+    ``company_url`` is the company's LinkedIn page (companyLinkedinUrl), used to
+    enrich company details via the linkedin-company actor; may be empty.
     """
     positions = item.get("currentPosition")
     if not isinstance(positions, list):
-        return "", "", ""
+        return "", "", "", ""
     for entry in positions:
         if not isinstance(entry, dict):
             continue
         title = str(entry.get("position") or "").strip()
         company = str(entry.get("companyName") or "").strip()
         description = " ".join(str(entry.get("description") or "").split())[:400].rstrip()
+        company_url = str(entry.get("companyLinkedinUrl") or "").strip()
         if title or company:
-            return title, company, description
-    return "", "", ""
+            return title, company, description, company_url
+    return "", "", "", ""
 
 
 def _about_excerpt(item: dict[str, Any]) -> str:
@@ -204,12 +209,14 @@ def _profile_text(item: dict[str, Any]) -> str:
     # prefixed lines so the worker can rebuild the template without re-parsing
     # free text. Métier falls back to the headline when Short mode gave no
     # structured position (the whole headline, e.g. "Presidente presso X").
-    title, company, description = _primary_position(item)
+    title, company, description, company_url = _primary_position(item)
     metier = title or headline
     if metier:
         lines.append(f"Métier: {metier}")
     if company:
         lines.append(f"Entreprise: {company}")
+    if company_url:
+        lines.append(f"EntrepriseUrl: {company_url}")
     if description:
         lines.append(f"Missions: {description}")
     location = _location_text(item)
@@ -364,3 +371,97 @@ async def search_profiles(
     if selected and mode not in RICH_MODES:
         selected = [await _enrich(profile, first_name, last_name, api_token, actor_id) for profile in selected]
     return selected
+
+
+def _company_address(item: dict[str, Any]) -> tuple[str, str]:
+    """Return (address_line, hq_country) from the company's first location."""
+    locations = item.get("locations")
+    if not isinstance(locations, list) or not locations:
+        return "", ""
+    loc = locations[0]
+    if not isinstance(loc, dict):
+        return "", ""
+    parts = [loc.get("line1"), loc.get("line2"), loc.get("city"), loc.get("geographicArea"), loc.get("country")]
+    address = ", ".join(str(p).strip() for p in parts if p and str(p).strip())
+    country = str(loc.get("country") or "").strip()
+    return address[:300], country
+
+
+def _normalize_company(item: dict[str, Any]) -> dict[str, Any]:
+    """Map a linkedin-company actor item onto partial company_profile fields.
+
+    Pure (no network), so it is unit-testable. Only fills what LinkedIn actually
+    provides; registry-only fields (lei, vat_number, registration_number,
+    directors, ...) are left untouched for a dedicated registry tool.
+    """
+    if not isinstance(item, dict):
+        return {}
+    profile: dict[str, Any] = {}
+    name = str(item.get("name") or "").strip()
+    if name:
+        profile["company_name"] = name
+    website = str(item.get("website") or "").strip()
+    if website:
+        profile["website"] = website
+    industries = item.get("industries")
+    if isinstance(industries, list) and industries and isinstance(industries[0], dict):
+        industry = str(industries[0].get("name") or "").strip()
+        if industry:
+            profile["industry"] = industry
+    address, country = _company_address(item)
+    if address:
+        profile["address"] = address
+    if country:
+        profile["jurisdiction"] = country
+    founded = item.get("foundedOn")
+    if isinstance(founded, dict) and founded.get("year"):
+        profile["incorporation_date"] = str(founded["year"])
+    company_type = str(item.get("companyType") or "").strip()
+    if company_type:
+        profile["legal_form"] = company_type
+    employees = item.get("employeeCount")
+    if isinstance(employees, int) and employees > 0:
+        profile.setdefault("financials", {})["employees"] = str(employees)
+    return profile
+
+
+async def search_company(
+    company_url: str,
+    company_name: str,
+    api_token: str,
+    actor_id: str = DEFAULT_COMPANY_ACTOR_ID,
+) -> dict[str, Any]:
+    """Fetch company details via Apify; never raises. Returns {} on failure.
+
+    Prefers the exact LinkedIn company URL; falls back to a name search when only
+    a company name is known.
+    """
+    if not api_token:
+        return {}
+    if company_url:
+        run_input: dict[str, Any] = {"companies": [company_url]}
+    elif company_name.strip():
+        run_input = {"searches": [company_name.strip()]}
+    else:
+        return {}
+
+    client = ApifyClientAsync(api_token)
+    try:
+        run = await client.actor(actor_id).call(
+            run_input=run_input,
+            max_total_charge_usd=COMPANY_MAX_CHARGE_USD,
+            timeout=RUN_TIMEOUT,
+        )
+    except Exception as exc:  # pragma: no cover - provider-specific network/API failures
+        LOGGER.warning("Apify company search failed: %s", exc.__class__.__name__)
+        return {}
+    if run is None or not run.default_dataset_id:
+        return {}
+    try:
+        async for item in client.dataset(run.default_dataset_id).iterate_items():
+            normalized = _normalize_company(item)
+            if normalized:
+                return normalized
+    except Exception as exc:  # pragma: no cover - provider-specific network/API failures
+        LOGGER.warning("Apify company dataset read failed: %s", exc.__class__.__name__)
+    return {}

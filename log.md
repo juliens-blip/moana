@@ -77,6 +77,10 @@
 
 [2026-07-18] Résumé exécutif KYC en template structuré (Métier / Entreprise / Rôle et missions / Localisation) | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `components/leads/LeadDetailModal.tsx`, `tests/test_kyc_worker.py` | `currentPosition` (titre, entreprise, description) émis en lignes préfixées `Métier:`/`Entreprise:`/`Missions:` ; résumé reconstruit en champs distincts sous la ligne d'attribution (garde-fou homonyme conservé) ; cap résumé 4→8 (backend `normalize_report` et modal) ; 28 tests unitaires OK
 
+[2026-07-18] Mise en place du tunnel agentique + journaux | `CLAUDE.md` (unifié <150 l.), `state.md`, `journalbug.md`, `tasks/README.md`, mémoire `agentic-tunnel` | Process obligatoire pour tout nouvel outil (EPCT→apex→test-code loop, backend AWS) ; `state.md` (cycles 6h/fenêtre 18h auto-résumée) ; `journalbug.md` (bugs testing)
+
+[2026-07-18] Outil #1 — enrichissement entreprise du KYC | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `tests/test_kyc_worker.py`, `tasks/kyc-company-enrichment/*` | Acteur Apify `harvestapi/linkedin-company` (par URL de la position retenue ou fallback nom) remplit `company_profile` (nom, site, industrie, adresse, juridiction, année, forme, employés) ; fusion non destructive + garde prudence homonyme ; flag `APIFY_COMPANY_ENRICH` ; testé live (Golden Suisse, Ferretti Group) + 35 tests unitaires + agent test-code ✅ ; déployé EC2
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].
