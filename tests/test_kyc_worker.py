@@ -15,7 +15,15 @@ from scripts.kyc_worker import (
     normalize_report,
     sanitize_error,
 )
-from scripts.apify_linkedin import _comparable, _importance_score, _is_corroborated, _select, _to_profile, split_name
+from scripts.apify_linkedin import (
+    _comparable,
+    _importance_score,
+    _is_corroborated,
+    _profile_text,
+    _select,
+    _to_profile,
+    split_name,
+)
 
 
 QUERY = {
@@ -321,8 +329,50 @@ class KycWorkerTests(unittest.TestCase):
         ]
         report = deterministic_report(QUERY, documents)
         summary = " ".join(report["kyc_assessment"]["executive_summary"])
-        self.assertIn("Extrait LinkedIn (About)", summary)
+        self.assertIn("Rôle et missions", summary)
         self.assertIn("cross-border ventures", summary)
+
+    def test_summary_renders_structured_template_fields(self):
+        item = {
+            "name": "Gaetano NICOLOSI",
+            "headline": "Presidente presso Nicolosi Trasporti",
+            "linkedinUrl": "https://www.linkedin.com/in/gaetano-nicolosi-22211433",
+            "location": {"parsed": {"text": "Catania, Italie"}},
+            "currentPosition": [
+                {
+                    "position": "Presidente",
+                    "companyName": "Nicolosi Trasporti",
+                    "description": "Direction générale et développement commercial.",
+                }
+            ],
+        }
+        document = EvidenceDocument(
+            url=item["linkedinUrl"],
+            text=_profile_text(item),
+            source_type="linkedin",
+        )
+        report = deterministic_report({**QUERY, "full_name": "Gaetano Nicolosi"}, [document])
+        summary = report["kyc_assessment"]["executive_summary"]
+        joined = " ".join(summary)
+        self.assertIn("Métier : Presidente", joined)
+        self.assertIn("Entreprise : Nicolosi Trasporti", joined)
+        self.assertIn("Rôle et missions majeures : Direction générale", joined)
+        self.assertIn("Localisation : Catania, Italie", joined)
+
+    def test_profile_text_emits_structured_fields(self):
+        item = {
+            "name": "Daniel Weitmann",
+            "headline": "CEO at Golden Suisse",
+            "linkedinUrl": "https://www.linkedin.com/in/daniel-weitmann",
+            "location": {"parsed": {"text": "Zürich"}},
+            "currentPosition": [
+                {"position": "Chief Executive Officer", "companyName": "Golden Suisse"}
+            ],
+        }
+        text = _profile_text(item)
+        self.assertIn("Métier: Chief Executive Officer", text)
+        self.assertIn("Entreprise: Golden Suisse", text)
+        self.assertIn("Location: Zürich", text)
 
     def test_person_profile_location_falls_back_to_linkedin_when_query_city_unconfirmed(self):
         query = {**QUERY, "city": "Nice"}

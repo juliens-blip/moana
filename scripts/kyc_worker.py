@@ -1207,6 +1207,18 @@ def linkedin_location(document: EvidenceDocument) -> str:
     return linkedin_field(document, "Location:")
 
 
+def linkedin_metier(document: EvidenceDocument) -> str:
+    return linkedin_field(document, "Métier:")
+
+
+def linkedin_company(document: EvidenceDocument) -> str:
+    return linkedin_field(document, "Entreprise:")
+
+
+def linkedin_missions(document: EvidenceDocument) -> str:
+    return linkedin_field(document, "Missions:")
+
+
 def document_headline(document: EvidenceDocument) -> str:
     for raw_line in document.text.splitlines()[:30]:
         line = re.sub(r"^[#>*_`\s-]+", "", raw_line).strip()
@@ -1285,28 +1297,43 @@ def build_executive_summary(
     else:
         identity_line = f"Client potentiel : {name}. Identité publique non résolue avec les données disponibles."
 
-    if statement:
-        qualifier = "Le profil retenu indique" if identity_status in {"confirmed", "probable"} else "Un profil portant ce nom indique"
-        activity_line = f"{qualifier} : {statement}."
-    else:
-        activity_line = "Profession et entreprise non établies par une source publique suffisamment attribuable."
+    # Template structuré demandé pour la fiche CRM : Métier / Entreprise /
+    # Rôle et missions / Localisation, extraits du profil LinkedIn retenu.
+    # Ces champs restent surmontés de la ligne d'attribution (identity_line) :
+    # quand l'identité est ambiguë, ils décrivent un profil homonyme possible,
+    # pas un fait confirmé sur le lead.
+    metier = next((value for item in relevant if (value := linkedin_metier(item[0]))), "")
+    entreprise = next((value for item in relevant if (value := linkedin_company(item[0]))), "")
+    missions = next((value for item in relevant if (value := linkedin_missions(item[0]))), "")
+    location = next((loc for item in relevant if (loc := linkedin_location(item[0]))), "")
+    about = next((extract for item in relevant if (extract := linkedin_field(item[0], "About:"))), "")
 
-    location = next(
-        (loc for item in relevant if (loc := linkedin_location(item[0]))),
-        "",
-    )
-    if location:
-        activity_line = f"{activity_line} Localisation indiquée : {location}."
+    def _sentence(label: str, value: str) -> str:
+        value = value.rstrip()
+        end = "" if value.endswith((".", "!", "?", "…")) else "."
+        return f"{label} : {value}{end}"
 
-    about = next(
-        (extract for item in relevant if (extract := linkedin_field(item[0], "About:"))),
-        "",
-    )
-    if about:
-        excerpt = about[:220].rstrip()
-        if len(about) > 220:
+    field_lines: list[str] = []
+    if metier:
+        field_lines.append(_sentence("Métier", metier))
+    elif statement:
+        field_lines.append(_sentence("Activité indiquée", statement))
+    if entreprise:
+        field_lines.append(_sentence("Entreprise", entreprise))
+    # Rôle et missions : description de poste LinkedIn si présente (souvent
+    # absente), sinon extrait du "About" comme meilleure approximation.
+    role_source = missions or about
+    if role_source:
+        excerpt = role_source[:280].rstrip()
+        if len(role_source) > 280:
             excerpt += "…"
-        activity_line = f"{activity_line} Extrait LinkedIn (About) : {excerpt}"
+        field_lines.append(f"Rôle et missions majeures : {excerpt}")
+    if location:
+        field_lines.append(_sentence("Localisation", location))
+    if not field_lines:
+        field_lines.append(
+            "Métier, entreprise et localisation non établis par une source publique suffisamment attribuable."
+        )
 
     has_yachting = any("proximité yachting" in signals for _doc, _score, signals in relevant)
     has_economic = any("profil économique documenté" in signals for _doc, _score, signals in relevant)
@@ -1319,7 +1346,7 @@ def build_executive_summary(
 
     sanctions = report["risk_screening"]["sanctions"]["status"]
     pep = report["risk_screening"]["pep"]["status"]
-    summary_lines = [identity_line, activity_line, relevance_line]
+    summary_lines = [identity_line, *field_lines, relevance_line]
     if "hit" in {sanctions, pep}:
         summary_lines.append("Correspondance sanctions ou PEP détectée ; contrôle renforcé obligatoire.")
     elif "possible_homonym" in {sanctions, pep}:
@@ -1430,6 +1457,10 @@ def deterministic_report(
     if identity_status in {"confirmed", "probable"}:
         person["full_name"] = query["full_name"]
         person["current_company"] = query["company_name"] if company_docs else ""
+        if not person["current_company"]:
+            person["current_company"] = next(
+                (company for item in named_docs if (company := linkedin_company(item[0]))), ""
+            )
         person["country"] = query["country"] if any("pays" in item[2] for item in named_docs) else ""
         person["location"] = query["city"] if any("ville" in item[2] for item in named_docs) else ""
         if not person["location"]:
@@ -1443,7 +1474,10 @@ def deterministic_report(
             (item for item in relevant if professional_statement(item[0])),
             None,
         )
-        if professional:
+        person["current_title"] = next(
+            (metier for item in relevant if (metier := linkedin_metier(item[0]))), ""
+        )
+        if not person["current_title"] and professional:
             person["current_title"] = professional_statement(professional[0])
 
     domain = email_domain(query["email"])
@@ -1700,7 +1734,7 @@ def normalize_report(
     raw_summary = report["kyc_assessment"].get("executive_summary", [])
     report["kyc_assessment"]["executive_summary"] = [
         str(line).strip()[:600]
-        for line in raw_summary[:4]
+        for line in raw_summary[:8]
         if isinstance(line, str) and line.strip()
     ] if isinstance(raw_summary, list) else []
 

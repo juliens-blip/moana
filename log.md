@@ -73,6 +73,10 @@
 
 [2026-07-18] Résumé exécutif KYC LinkedIn allégé et enrichi | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `tests/test_kyc_worker.py`, `tasks/kyc-multi-source-screening/cahier-des-charges-linkedin.md` | Ligne « Sanctions et PEP non conclusifs… » routinière retirée (conservée uniquement si sanctions_db/pep_db trouve une correspondance) ; localisation LinkedIn et extrait du "about" ajoutés à la ligne d'activité ; testé en réel sur Daniel Weitmann (about) et Gaetano Nicolosi (localisation), 25 tests unitaires OK
 
+[2026-07-18] Correction collision URL LinkedIn par sous-domaine pays | `scripts/kyc_worker.py` (`canonical_url`), `tests/test_kyc_worker.py` | `it.linkedin.com`/`fr.linkedin.com` (chemins `/in/`) normalisés vers `www.linkedin.com` ; le profil enrichi Apify et un snippet SearXNG du même profil fusionnent au lieu de concourir, la source riche l'emporte
+
+[2026-07-18] Résumé exécutif KYC en template structuré (Métier / Entreprise / Rôle et missions / Localisation) | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `components/leads/LeadDetailModal.tsx`, `tests/test_kyc_worker.py` | `currentPosition` (titre, entreprise, description) émis en lignes préfixées `Métier:`/`Entreprise:`/`Missions:` ; résumé reconstruit en champs distincts sous la ligne d'attribution (garde-fou homonyme conservé) ; cap résumé 4→8 (backend `normalize_report` et modal) ; 28 tests unitaires OK
+
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].
