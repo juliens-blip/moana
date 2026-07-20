@@ -230,6 +230,7 @@ class Settings:
     apify_adverse_media_actor_id: str
     adverse_media_min_severity: str
     adverse_media_max_hits: int
+    adverse_media_min_linkedin_chars: int
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -284,6 +285,9 @@ class Settings:
                 "ADVERSE_MEDIA_MIN_SEVERITY", "low", {"low", "medium", "high"}
             ),
             adverse_media_max_hits=env_int("ADVERSE_MEDIA_MAX_HITS", 25, 1, 100),
+            adverse_media_min_linkedin_chars=env_int(
+                "ADVERSE_MEDIA_MIN_LINKEDIN_CHARS", 600, 0, 100000
+            ),
         )
 
 
@@ -2165,8 +2169,16 @@ async def enrich_company_profile(
     return report
 
 
+def linkedin_content_chars(documents: list[EvidenceDocument]) -> int:
+    """Total characters of LinkedIn-sourced evidence — a proxy for how much
+    substance LinkedIn returned on the subject (a rich "Full" profile with an
+    About section is long; a bare name/headline hit is short)."""
+    return sum(len(doc.text) for doc in documents if doc.source_type == "linkedin")
+
+
 async def enrich_adverse_media(
     report: dict[str, Any],
+    documents: list[EvidenceDocument],
     query: dict[str, str],
     settings: Settings,
 ) -> dict[str, Any]:
@@ -2179,11 +2191,24 @@ async def enrich_adverse_media(
     victim/plaintiff role filter, both applied in apify_adverse_media. Items are
     independently sourced (each carries its own article URL), so they bypass the
     evidence-grounding filter that gates LLM-synthesised claims.
+
+    Cost gate: only screens a subject on whom LinkedIn returned substantial
+    content (>= adverse_media_min_linkedin_chars). A thin LinkedIn footprint means
+    a low-substance lead not worth the paid screen; a rich one is a real,
+    established person worth the AML check.
     """
     if not settings.apify_adverse_media or not settings.apify_api_token:
         return report
     identity_status = report.get("identity_resolution", {}).get("status", "")
     if identity_status not in {"confirmed", "probable"}:
+        return report
+    li_chars = linkedin_content_chars(documents)
+    if li_chars < settings.adverse_media_min_linkedin_chars:
+        LOGGER.info(
+            "Adverse-media skipped: LinkedIn content %d < %d chars",
+            li_chars,
+            settings.adverse_media_min_linkedin_chars,
+        )
         return report
 
     person = report.get("person_profile", {})
@@ -2240,7 +2265,7 @@ async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
         documents = await research(query, settings)
         report = await synthesize_report(query, documents, settings)
         report = await enrich_company_profile(report, documents, query, settings)
-        report = await enrich_adverse_media(report, query, settings)
+        report = await enrich_adverse_media(report, documents, query, settings)
         status = (
             "insufficient_data"
             if report["kyc_assessment"]["recommended_review"] == "insufficient_data"
@@ -2301,7 +2326,7 @@ async def run_dry(args: argparse.Namespace, settings: Settings) -> None:
         return
     report = await synthesize_report(query, documents, settings)
     report = await enrich_company_profile(report, documents, query, settings)
-    report = await enrich_adverse_media(report, query, settings)
+    report = await enrich_adverse_media(report, documents, query, settings)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -2344,6 +2369,7 @@ def check_configuration() -> int:
         "apify_adverse_media_actor_id": settings.apify_adverse_media_actor_id,
         "adverse_media_min_severity": settings.adverse_media_min_severity,
         "adverse_media_max_hits": settings.adverse_media_max_hits,
+        "adverse_media_min_linkedin_chars": settings.adverse_media_min_linkedin_chars,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1

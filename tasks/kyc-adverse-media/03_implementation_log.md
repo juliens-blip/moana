@@ -36,5 +36,14 @@
 - EC2 : ajouter `APIFY_ADVERSE_MEDIA=0` + `APIFY_ADVERSE_MEDIA_ACTOR_ID=...` au `.env.kyc`,
   rebuild worker.
 
-## Décision ouverte (utilisateur)
-- Activation ON (≈$0.14/lead) : à décider — laissé OFF par défaut.
+## Condition LinkedIn (demande utilisateur 2026-07-20)
+- Activation conditionnée : ne screener QUE si LinkedIn a ramené « beaucoup de
+  contenu » sur le sujet. Ajout `linkedin_content_chars(documents)` (somme des
+  longueurs des docs `source_type == "linkedin"`) + setting
+  `ADVERSE_MEDIA_MIN_LINKEDIN_CHARS` (défaut **600**). `enrich_adverse_media` prend
+  désormais `documents` et skippe si contenu LinkedIn < seuil (log explicite).
+- Rationale : profil LinkedIn riche = personne réelle établie → vaut le screen AML ;
+  footprint mince = lead peu substantiel → on économise le coût.
+- Tests : 47/47 (dont skip-thin-linkedin + merge-when-rich). Câblé worker + dry-run.
+- **Activé ON** sur EC2 (flag + condition) : screen ~$0.14 uniquement sur les leads
+  confirmé/probable à fort contenu LinkedIn.

@@ -14,6 +14,19 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
 
 ## Cycles récents (<18h)
 
+### [2026-07-20 ~17:30] Cycle 4 — Outil #3 `fleet-content-audit` : EXPLORE (bloqué scrape-mcp)
+- **Fait** : EXPLORE (`tasks/fleet-content-audit/01_analysis.md`). Décision utilisateur :
+  créer une **nouvelle section app « Listings YATCO » + audit** (car seuls ~10/59 Actifs
+  ont un `yatco_vessel_id`). Portée = ingestion flotte BOSS→Supabase + UI + audit
+  photos/vidéo/specs. Ordre code explicite donné (zones protégées levées).
+- **Bloqueur** : scrape-mcp déconnecté (build+auth présents) → **redémarrer Claude Code**
+  pour re-spawn ; re-auth BOSS si cookies expirés ([[scrape-mcp-setup]]).
+- **Adverse-media** : ajout d'une **condition LinkedIn** (screen seulement si contenu
+  LinkedIn ≥ `ADVERSE_MEDIA_MIN_LINKEDIN_CHARS`=600) → **activé ON** sur EC2 (coût
+  ciblé sur les leads substantiels). 47/47 tests.
+- **Prochaine étape** : dès scrape-mcp OK, inspecter les pages Fleet Manager/listing BOSS,
+  figer schéma Supabase + plan UI (`02_plan.md`), puis CODE→TEST→DEPLOY.
+
 ### [2026-07-20 ~16:00] Cycle 3 — Outil #2 `kyc-adverse-media` (négative news AML)
 - **Fait** : tunnel complet (01/02/03). Nouveau module `scripts/apify_adverse_media.py`
   + `enrich_adverse_media` dans `kyc_worker.py` (câblé après enrich société). Acteur
