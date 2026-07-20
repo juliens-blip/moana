@@ -42,9 +42,11 @@ from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from dotenv import load_dotenv
 
 try:
+    from scripts.apify_adverse_media import screen_adverse_media
     from scripts.apify_linkedin import search_company as search_linkedin_company
     from scripts.apify_linkedin import search_profiles as search_linkedin_profiles
 except ModuleNotFoundError:  # Running ``python scripts/kyc_worker.py`` directly.
+    from apify_adverse_media import screen_adverse_media
     from apify_linkedin import search_company as search_linkedin_company
     from apify_linkedin import search_profiles as search_linkedin_profiles
 
@@ -224,6 +226,10 @@ class Settings:
     apify_linkedin_mode: str
     apify_company_enrich: bool
     apify_linkedin_company_actor_id: str
+    apify_adverse_media: bool
+    apify_adverse_media_actor_id: str
+    adverse_media_min_severity: str
+    adverse_media_max_hits: int
 
     @classmethod
     def from_env(cls, require_database: bool, require_llm: bool) -> "Settings":
@@ -270,6 +276,14 @@ class Settings:
             apify_linkedin_company_actor_id=os.getenv(
                 "APIFY_LINKEDIN_COMPANY_ACTOR_ID", "harvestapi/linkedin-company"
             ).strip(),
+            apify_adverse_media=env_bool("APIFY_ADVERSE_MEDIA", False),
+            apify_adverse_media_actor_id=os.getenv(
+                "APIFY_ADVERSE_MEDIA_ACTOR_ID", "regdata/adverse-media-screener"
+            ).strip(),
+            adverse_media_min_severity=env_choice(
+                "ADVERSE_MEDIA_MIN_SEVERITY", "low", {"low", "medium", "high"}
+            ),
+            adverse_media_max_hits=env_int("ADVERSE_MEDIA_MAX_HITS", 25, 1, 100),
         )
 
 
@@ -2151,6 +2165,65 @@ async def enrich_company_profile(
     return report
 
 
+async def enrich_adverse_media(
+    report: dict[str, Any],
+    query: dict[str, str],
+    settings: Settings,
+) -> dict[str, Any]:
+    """Fill adverse_media via the Apify adverse-media-screener actor (best-effort).
+
+    Prudence (anti-defamation): only screens when the identity is attributable —
+    resolution status confirmed/probable. Never screens an unresolved/ambiguous
+    subject or a homonym: labelling the wrong person with negative news is
+    defamatory. The actor adds a second guard (entityMatchConfidence) and a
+    victim/plaintiff role filter, both applied in apify_adverse_media. Items are
+    independently sourced (each carries its own article URL), so they bypass the
+    evidence-grounding filter that gates LLM-synthesised claims.
+    """
+    if not settings.apify_adverse_media or not settings.apify_api_token:
+        return report
+    identity_status = report.get("identity_resolution", {}).get("status", "")
+    if identity_status not in {"confirmed", "probable"}:
+        return report
+
+    person = report.get("person_profile", {})
+    full_name = str(person.get("full_name") or query.get("full_name") or "").strip()
+    if not full_name:
+        return report
+    country = str(person.get("country") or person.get("location") or "").strip()
+    aliases = [a for a in person.get("aliases", []) if isinstance(a, str) and a.strip()]
+
+    hits = await screen_adverse_media(
+        [full_name],
+        "person",
+        country,
+        aliases,
+        settings.apify_api_token,
+        settings.apify_adverse_media_actor_id,
+        settings.adverse_media_min_severity,
+        settings.adverse_media_max_hits,
+    )
+    if not hits:
+        return report
+
+    existing = report.setdefault("adverse_media", [])
+    known_urls = {item.get("source_url") for item in existing if isinstance(item, dict)}
+    sources = report.setdefault("sources", [])
+    known_sources = set(sources)
+    added = 0
+    for hit in hits:
+        if hit["source_url"] in known_urls:
+            continue
+        existing.append(hit)
+        known_urls.add(hit["source_url"])
+        if hit["source_url"] not in known_sources:
+            sources.append(hit["source_url"])
+            known_sources.add(hit["source_url"])
+        added += 1
+    LOGGER.info("Adverse-media screening added %d adverse_media item(s)", added)
+    return report
+
+
 async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
     job = await store.claim()
     if not job:
@@ -2167,6 +2240,7 @@ async def process_one(store: SupabaseKycStore, settings: Settings) -> bool:
         documents = await research(query, settings)
         report = await synthesize_report(query, documents, settings)
         report = await enrich_company_profile(report, documents, query, settings)
+        report = await enrich_adverse_media(report, query, settings)
         status = (
             "insufficient_data"
             if report["kyc_assessment"]["recommended_review"] == "insufficient_data"
@@ -2227,6 +2301,7 @@ async def run_dry(args: argparse.Namespace, settings: Settings) -> None:
         return
     report = await synthesize_report(query, documents, settings)
     report = await enrich_company_profile(report, documents, query, settings)
+    report = await enrich_adverse_media(report, query, settings)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -2265,6 +2340,10 @@ def check_configuration() -> int:
         "apify_linkedin_mode": settings.apify_linkedin_mode,
         "apify_company_enrich": settings.apify_company_enrich,
         "apify_linkedin_company_actor_id": settings.apify_linkedin_company_actor_id,
+        "apify_adverse_media": settings.apify_adverse_media,
+        "apify_adverse_media_actor_id": settings.apify_adverse_media_actor_id,
+        "adverse_media_min_severity": settings.adverse_media_min_severity,
+        "adverse_media_max_hits": settings.adverse_media_max_hits,
     }
     print(json.dumps(checks, indent=2))
     return 0 if checks["supabase_url"] and checks["supabase_service_key"] else 1
