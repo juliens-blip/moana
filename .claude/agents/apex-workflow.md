@@ -24,6 +24,29 @@ Gérer toutes les tâches complexes via un workflow rigoureux en 3 phases:
 
 ═══════════════════════════════════════════════════════════════════════════════
 
+## 🔎 Recherche de contexte — QMD (RAG Obsidian, OBLIGATOIRE)
+
+> ⚠️ Sur cette machine (CPU, pas de GPU) les embeddings ne tournent pas : utilise
+> **`qmd search`** (BM25, aucun modèle requis). `qmd query`/`vsearch` (vectoriel)
+> sont indisponibles ici — ne les lance pas, ils bloquent.
+
+Avant toute recherche dans le **contexte**, la **mémoire**, la **RAG** ou le **vault
+Obsidian** (phase /analyze notamment), passe TOUJOURS par **QMD**, moteur de recherche
+local de la RAG Moana. Cherche d'abord, récupère la source, puis décide.
+
+Collections : `memory` (mémoire persistante Claude), `moana-wiki` (connaissance stable),
+`moana-archive` (historique), `moana-tasks` (artefacts du tunnel par outil — regarde
+toujours si un outil proche a déjà été planifié).
+
+1. **Chercher** — `qmd query "<intention>"` (hybride) ou `qmd search "<termes exacts>"`
+   (BM25), ou l'outil MCP `mcp__qmd__query`. Rédige toi-même `intent:`/`lex:`/`vec:`.
+2. **Récupérer** — `qmd get "#docid"` / `qmd multi-get "..."`. Jamais le snippet seul.
+3. **Citer** — chemin `qmd://...` ou `#docid`. Scoper avec `-c memory` / `-c moana-tasks`.
+
+Ne mute jamais l'index (`qmd collection add` / `qmd embed`) sans demande explicite.
+
+═══════════════════════════════════════════════════════════════════════════════
+
 ## 📂 STRUCTURE DE STOCKAGE
 
 Toutes les tâches sont organisées dans le dossier racine `tasks/`:

@@ -9,6 +9,7 @@ from scripts.kyc_worker import (
     REPORT_TEMPLATE,
     Settings,
     blank_report,
+    enrich_adverse_media,
     enrich_company_profile,
     linkedin_company_url,
     rank_search_result_urls,
@@ -31,6 +32,13 @@ from scripts.apify_linkedin import (
     _select,
     _to_profile,
     split_name,
+)
+from scripts.apify_adverse_media import (
+    _is_subject_adverse,
+    _map_category,
+    _map_confidence,
+    _normalize_hit,
+    _normalize_items,
 )
 
 
@@ -620,6 +628,128 @@ class CompanyEnrichmentTests(unittest.TestCase):
             settings = Settings.from_env(require_database=False, require_llm=False)
             with mock.patch("scripts.kyc_worker.search_linkedin_company", fake_company):
                 out = asyncio.run(enrich_company_profile(report, [], QUERY, settings))
+        self.assertFalse(called)
+
+
+GOLDEN_HIT = {
+    "title": "Bernard Madoff, Architect of Largest Ponzi Scheme in History",
+    "url": "https://www.nytimes.com/2021/04/14/business/bernie-madoff-dead.html",
+    "source": "The New York Times",
+    "publishedDate": "Apr 15, 2021",
+    "snippet": "Architect of largest Ponzi scheme in history.",
+    "riskCategory": "financial_crime",
+    "severity": "high",
+    "entityRole": "perpetrator",
+    "entityMatchConfidence": "high",
+    "reason": "Perpetrator of a Ponzi scheme.",
+}
+
+
+class AdverseMediaTests(unittest.TestCase):
+    def test_map_category_covers_families(self):
+        self.assertEqual(_map_category("financial_crime"), "criminal")
+        self.assertEqual(_map_category("money laundering"), "criminal")  # space-normalised
+        self.assertEqual(_map_category("sanctions"), "regulatory")
+        self.assertEqual(_map_category("regulatory-enforcement"), "regulatory")  # hyphen-normalised
+        self.assertEqual(_map_category("litigation"), "civil")
+        self.assertEqual(_map_category("tax"), "fiscal")
+        self.assertEqual(_map_category("environmental"), "reputational")
+        self.assertEqual(_map_category("something_unknown"), "reputational")  # safe default
+        self.assertEqual(_map_category(None), "reputational")
+
+    def test_map_confidence_from_severity(self):
+        self.assertEqual(_map_confidence("high"), "high")
+        self.assertEqual(_map_confidence("Medium"), "medium")
+        self.assertEqual(_map_confidence("low"), "low")
+        self.assertEqual(_map_confidence("bogus"), "low")
+        self.assertEqual(_map_confidence(None), "low")
+
+    def test_normalize_hit_maps_all_fields(self):
+        item = _normalize_hit(GOLDEN_HIT, jurisdiction="US")
+        self.assertEqual(item["category"], "criminal")
+        self.assertEqual(item["confidence"], "high")
+        self.assertEqual(item["date"], "Apr 15, 2021")
+        self.assertEqual(item["jurisdiction"], "US")
+        self.assertEqual(item["status_type"], "media_report")
+        self.assertEqual(item["source_url"], GOLDEN_HIT["url"])
+        self.assertIn("Ponzi", item["summary"])
+
+    def test_normalize_hit_drops_non_adverse_role(self):
+        # Subject is the victim/plaintiff -> never framed as wrongdoer.
+        self.assertIsNone(_normalize_hit({**GOLDEN_HIT, "entityRole": "victim"}))
+        self.assertIsNone(_normalize_hit({**GOLDEN_HIT, "entityRole": "plaintiff"}))
+        self.assertFalse(_is_subject_adverse("victim"))
+        self.assertTrue(_is_subject_adverse("perpetrator"))
+
+    def test_normalize_hit_drops_low_match_confidence(self):
+        # Likely homonym -> drop (anti-defamation second guard).
+        self.assertIsNone(_normalize_hit({**GOLDEN_HIT, "entityMatchConfidence": "low"}))
+
+    def test_normalize_hit_requires_source_url(self):
+        self.assertIsNone(_normalize_hit({**GOLDEN_HIT, "url": ""}))
+        self.assertIsNone(_normalize_hit("not-a-dict"))
+
+    def test_normalize_items_flattens_and_dedupes(self):
+        items = [
+            {"country": "US", "hits": [GOLDEN_HIT, GOLDEN_HIT]},  # duplicate URL
+            {"country": "US", "hits": [{**GOLDEN_HIT, "url": "https://other.example/x"}]},
+        ]
+        out = _normalize_items(items)
+        self.assertEqual(len(out), 2)  # de-duplicated by source_url
+        self.assertEqual({h["source_url"] for h in out},
+                         {GOLDEN_HIT["url"], "https://other.example/x"})
+
+    def test_enrich_adverse_media_guards_unresolved_identity(self):
+        report = blank_report(QUERY)
+        report["identity_resolution"]["status"] = "ambiguous"  # not confirmed/probable
+        report["person_profile"]["full_name"] = "Example Person"
+        called = False
+
+        async def fake_screen(*args, **kwargs):
+            nonlocal called
+            called = True
+            return [_normalize_hit(GOLDEN_HIT)]
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "1"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
+                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
+        self.assertFalse(called)  # never screens an unattributed subject
+        self.assertEqual(out["adverse_media"], [])
+
+    def test_enrich_adverse_media_merges_and_records_source(self):
+        report = blank_report(QUERY)
+        report["identity_resolution"]["status"] = "confirmed"
+        report["person_profile"]["full_name"] = "Example Person"
+
+        async def fake_screen(names, entity_type, country, aliases, token, actor_id, min_sev, max_hits):
+            self.assertEqual(names, ["Example Person"])
+            self.assertEqual(entity_type, "person")
+            return [_normalize_hit(GOLDEN_HIT)]
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "1"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
+                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
+        self.assertEqual(len(out["adverse_media"]), 1)
+        self.assertEqual(out["adverse_media"][0]["source_url"], GOLDEN_HIT["url"])
+        self.assertIn(GOLDEN_HIT["url"], out["sources"])  # source recorded
+
+    def test_enrich_adverse_media_disabled_by_flag(self):
+        report = blank_report(QUERY)
+        report["identity_resolution"]["status"] = "confirmed"
+        report["person_profile"]["full_name"] = "Example Person"
+        called = False
+
+        async def fake_screen(*args, **kwargs):
+            nonlocal called
+            called = True
+            return []
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "0"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
+                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
         self.assertFalse(called)
 
 

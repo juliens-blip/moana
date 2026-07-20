@@ -8,6 +8,22 @@ Source de vérité unique. Garder sous 150 lignes.
 2. Ouvrir `wiki/` ou `archive/` uniquement si la tâche l'exige.
 3. Préfixer les commandes shell avec `rtk`.
 4. Considérer chaque ligne ajoutée comme un coût pour les sessions futures.
+5. Pour **retrouver** une note, une mémoire ou une décision (contexte/RAG/Obsidian),
+   passer par **QMD** (voir « Recherche RAG »), jamais en lisant les notes au hasard.
+
+## Recherche RAG — QMD (OBLIGATOIRE)
+
+Le vault Obsidian et la mémoire sont indexés par **QMD** (moteur local, `npm i -g @tobilu/qmd`,
+serveur MCP `qmd` actif). Toute recherche de contexte/mémoire passe par lui — et les agents
+du tunnel ont la même consigne dans leur mémoire.
+
+- Chercher : `qmd search "<termes exacts>"` (BM25 — mode utilisé ici, aucun modèle requis).
+- Récupérer la source : `qmd get "#docid"` / `qmd multi-get "..."` — jamais le snippet seul.
+- Collections : `memory` (mémoire persistante), `moana-wiki`, `moana-archive`, `moana-tasks`.
+- Après avoir ajouté des notes durables : `qmd update` (ré-indexe le FTS BM25).
+- ⚠️ Cette machine est **CPU sans GPU** : les embeddings bloquent → `qmd query`/`vsearch`
+  (vectoriel) indisponibles. Rester en `qmd search`. Vectoriel = à réactiver si GPU un jour.
+- Ne jamais muter l'index (`collection add`/`embed`) sans raison ; l'index vit hors dépôt.
 
 ## Tunnel agentique — OBLIGATOIRE pour tout nouvel outil
 
@@ -16,8 +32,9 @@ Aucun outil codé « à la va-vite ». Chaque nouvel outil traverse ce tunnel
 (`ubuntu@51.44.220.145`, `~/moana`), jamais en process local permanent.
 
 0. **INIT** — créer `tasks/<outil>/` (kebab-case).
-1. **EXPLORE** (`.claude/agents/epct.md`) — recherche externe (Context7, WebSearch)
-   + patterns du code → `tasks/<outil>/01_analysis.md`.
+1. **EXPLORE** (`.claude/agents/epct.md`) — **QMD d'abord** (RAG interne : `memory`,
+   `moana-tasks`…), puis recherche externe (Context7, WebSearch) + patterns du code
+   → `tasks/<outil>/01_analysis.md`.
 2. **PLAN** (`agents_library/apex-workflow.md`) — décomposer en étapes granulaires
    → `tasks/<outil>/02_plan.md` AVANT tout code (règle d'or apex).
 3. **CODE** (`epct.md`) — implémenter selon les patterns existants ; journal dans

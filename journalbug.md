@@ -14,7 +14,14 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   UTF-8 file pour diagnostics ; jamais en prod.
 - Tests worker KYC : lancer avec `py -3.11` + `PYTHONPATH="repo:repo/scripts"`
   (import sibling `apify_linkedin`), pas `python` (3.14 sans deps).
+- Apify `.call(...)` : passer `timeout=timedelta(...)`, JAMAIS `timeout_secs=` (TypeError).
+- Objet Apify `Run` = pydantic : `run.default_dataset_id` / `run.status` (jamais `run.get()`).
 
 ## Bugs bruts
 
-_(aucun pour l'instant)_
+- [2026-07-20] qmd-rag-search | `qmd embed` bloque indéfiniment (0 vecteur même sur 1
+  doc, sortie vide) | machine CPU sans GPU, llama.cpp init « 0 math cores » →
+  chargement/inférence du modèle d'embedding hang | rester en **BM25 `qmd search`**
+  (aucun modèle requis, fonctionne) ; `query`/`vsearch` désactivés côté agents |
+  leçon : sur ce poste, RAG = BM25 uniquement ; vectoriel à réactiver seulement si
+  GPU (CUDA/Vulkan) configuré, puis `qmd embed --force`.
