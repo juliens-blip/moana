@@ -23,8 +23,10 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   `ModuleNotFoundError: No module named 'apify_adverse_media'` | `Dockerfile.kyc`
   COPY les modules scripts **un par un, par nom** (pas `scripts/`) → tout NOUVEAU
   module n'est jamais copié dans l'image | ajouter une ligne `COPY scripts/<module>.py`
-  dans `Dockerfile.kyc` | **leçon : tout nouvel outil worker qui ajoute un module
-  scripts/ DOIT ajouter sa ligne COPY dans Dockerfile.kyc** (à vérifier en phase DEPLOY).
+  dans `Dockerfile.kyc` ET un `!scripts/<module>.py` dans `.dockerignore` (allowlist :
+  `*` puis `!` par fichier nommé — sinon « not found » au build) | **leçon : tout
+  nouvel outil worker qui ajoute un module `scripts/` DOIT mettre à jour DEUX fichiers,
+  `Dockerfile.kyc` (COPY) ET `.dockerignore` (allowlist), à vérifier en phase DEPLOY.**
 - [2026-07-20] qmd-rag-search | `qmd embed` bloque indéfiniment (0 vecteur même sur 1
   doc, sortie vide) | machine CPU sans GPU, llama.cpp init « 0 math cores » →
   chargement/inférence du modèle d'embedding hang | rester en **BM25 `qmd search`**
