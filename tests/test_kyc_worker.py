@@ -12,6 +12,7 @@ from scripts.kyc_worker import (
     enrich_adverse_media,
     enrich_company_profile,
     linkedin_company_url,
+    linkedin_content_chars,
     rank_search_result_urls,
     searxng_result_urls,
     searxng_search_hits,
@@ -644,6 +645,18 @@ GOLDEN_HIT = {
     "reason": "Perpetrator of a Ponzi scheme.",
 }
 
+# A rich "Full"-mode LinkedIn profile (>600 chars) — above the default screen gate.
+RICH_LINKEDIN_DOCS = [
+    EvidenceDocument(
+        url="https://www.linkedin.com/in/example-person",
+        text=(
+            "Name: Example Person\nTitre: Managing Director\nPoste: Example Capital\n"
+            "Localisation: Monaco\nAbout: " + ("Seasoned executive in maritime finance. " * 20)
+        ),
+        source_type="linkedin",
+    )
+]
+
 
 class AdverseMediaTests(unittest.TestCase):
     def test_map_category_covers_families(self):
@@ -699,6 +712,15 @@ class AdverseMediaTests(unittest.TestCase):
         self.assertEqual({h["source_url"] for h in out},
                          {GOLDEN_HIT["url"], "https://other.example/x"})
 
+    def test_linkedin_content_chars_counts_only_linkedin(self):
+        docs = [
+            EvidenceDocument(url="https://a", text="x" * 100, source_type="linkedin"),
+            EvidenceDocument(url="https://b", text="y" * 50, source_type="linkedin"),
+            EvidenceDocument(url="https://c", text="z" * 999, source_type="news"),
+        ]
+        self.assertEqual(linkedin_content_chars(docs), 150)
+        self.assertEqual(linkedin_content_chars([]), 0)
+
     def test_enrich_adverse_media_guards_unresolved_identity(self):
         report = blank_report(QUERY)
         report["identity_resolution"]["status"] = "ambiguous"  # not confirmed/probable
@@ -713,11 +735,31 @@ class AdverseMediaTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "1"}):
             settings = Settings.from_env(require_database=False, require_llm=False)
             with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
-                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
+                out = asyncio.run(enrich_adverse_media(report, RICH_LINKEDIN_DOCS, QUERY, settings))
         self.assertFalse(called)  # never screens an unattributed subject
         self.assertEqual(out["adverse_media"], [])
 
-    def test_enrich_adverse_media_merges_and_records_source(self):
+    def test_enrich_adverse_media_skips_thin_linkedin(self):
+        # Attributable identity, but LinkedIn returned little -> not worth the paid screen.
+        report = blank_report(QUERY)
+        report["identity_resolution"]["status"] = "confirmed"
+        report["person_profile"]["full_name"] = "Example Person"
+        thin_docs = [EvidenceDocument(url="https://li", text="Name: Example Person", source_type="linkedin")]
+        called = False
+
+        async def fake_screen(*args, **kwargs):
+            nonlocal called
+            called = True
+            return [_normalize_hit(GOLDEN_HIT)]
+
+        with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "1"}):
+            settings = Settings.from_env(require_database=False, require_llm=False)
+            with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
+                out = asyncio.run(enrich_adverse_media(report, thin_docs, QUERY, settings))
+        self.assertFalse(called)  # LinkedIn footprint below threshold -> no screen
+        self.assertEqual(out["adverse_media"], [])
+
+    def test_enrich_adverse_media_merges_when_rich_linkedin(self):
         report = blank_report(QUERY)
         report["identity_resolution"]["status"] = "confirmed"
         report["person_profile"]["full_name"] = "Example Person"
@@ -730,7 +772,7 @@ class AdverseMediaTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "1"}):
             settings = Settings.from_env(require_database=False, require_llm=False)
             with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
-                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
+                out = asyncio.run(enrich_adverse_media(report, RICH_LINKEDIN_DOCS, QUERY, settings))
         self.assertEqual(len(out["adverse_media"]), 1)
         self.assertEqual(out["adverse_media"][0]["source_url"], GOLDEN_HIT["url"])
         self.assertIn(GOLDEN_HIT["url"], out["sources"])  # source recorded
@@ -749,7 +791,7 @@ class AdverseMediaTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"APIFY_API_TOKEN": "x", "APIFY_ADVERSE_MEDIA": "0"}):
             settings = Settings.from_env(require_database=False, require_llm=False)
             with mock.patch("scripts.kyc_worker.screen_adverse_media", fake_screen):
-                out = asyncio.run(enrich_adverse_media(report, QUERY, settings))
+                out = asyncio.run(enrich_adverse_media(report, RICH_LINKEDIN_DOCS, QUERY, settings))
         self.assertFalse(called)
 
 
