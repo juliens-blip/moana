@@ -19,6 +19,7 @@ RUN useradd --create-home --uid 10001 worker
 
 COPY --chown=worker:worker scripts/kyc_worker.py /app/scripts/kyc_worker.py
 COPY --chown=worker:worker scripts/apify_linkedin.py /app/scripts/apify_linkedin.py
+COPY --chown=worker:worker scripts/apify_adverse_media.py /app/scripts/apify_adverse_media.py
 
 USER worker
 
