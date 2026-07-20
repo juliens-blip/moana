@@ -3,4 +3,5 @@
 scripts/*
 !scripts/kyc_worker.py
 !scripts/apify_linkedin.py
+!scripts/apify_adverse_media.py
 !scripts/requirements-kyc.txt
