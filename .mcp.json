@@ -13,6 +13,14 @@
         "shadcn@latest",
         "mcp"
       ]
+    },
+    "qmd": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "qmd",
+        "mcp"
+      ]
     }
   }
 }

@@ -26,7 +26,8 @@
   },
   "enabledMcpjsonServers": [
     "context7",
-    "shadcn"
+    "shadcn",
+    "qmd"
   ],
   "enableAllProjectMcpServers": true
 }

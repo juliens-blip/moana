@@ -14,6 +14,29 @@ Workflow specialise pour le developpement de fonctionnalites du SaaS Moana Yacht
 
 ---
 
+## 🔎 Recherche de contexte — QMD (RAG Obsidian, OBLIGATOIRE)
+
+> ⚠️ Sur cette machine (CPU, pas de GPU) les embeddings ne tournent pas : utilise
+> **`qmd search`** (BM25, aucun modèle requis). `qmd query`/`vsearch` (vectoriel)
+> sont indisponibles ici — ne les lance pas, ils bloquent.
+
+Avant toute recherche dans le **contexte**, la **mémoire**, la **RAG** ou le **vault
+Obsidian**, passe TOUJOURS par **QMD**, le moteur de recherche local de la RAG Moana.
+Ne réponds pas « de mémoire » et ne lis pas les notes au hasard : cherche d'abord dans
+QMD, puis récupère la source complète.
+
+Collections : `memory` (mémoire persistante Claude), `moana-wiki` (connaissance stable),
+`moana-archive` (historique), `moana-tasks` (artefacts du tunnel par outil).
+
+1. **Chercher** — `qmd query "<intention>"` (hybride, recommandé) ou `qmd search "<termes
+   exacts>"` (BM25), ou l'outil MCP `mcp__qmd__query`. Rédige toi-même `intent:`/`lex:`/`vec:`.
+2. **Récupérer** — `qmd get "#docid"` / `qmd multi-get "..."`. Ne juge jamais sur le snippet seul.
+3. **Citer** — chemin `qmd://...` ou `#docid`. Scoper avec `-c memory` / `-c moana-tasks` si utile.
+
+Ne mute jamais l'index (`qmd collection add` / `qmd embed`) sans demande explicite.
+
+---
+
 ## Phase 1: EXPLORE
 
 ### Contexte Projet Moana
