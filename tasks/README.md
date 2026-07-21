@@ -8,9 +8,9 @@ Chaque feature suit le tunnel (voir `CLAUDE.md` § Tunnel agentique) :
 | Priorité | Outil | Source | Backend | État |
 |----------|-------|--------|---------|------|
 | 1 | `kyc-company-enrichment` — remplir `company_profile` du KYC (LinkedIn company) | Apify | AWS worker KYC | ✅ déployé (flag ON) |
-| 2 | `kyc-adverse-media` — remplir `adverse_media` (négative news AML) | Apify | AWS worker KYC | ✅ codé+testé, flag OFF (activation à décider) |
-| 3 | `fleet-content-audit` — listings Moana sans photos/vidéo/specs | YATCO BOSS | AWS + UI | à faire |
-| 4 | `market-pulse` — feeds MLS New/Modified/Sold 5j (comps, baisses de prix) | YATCO BOSS | AWS scraper planifié | à faire |
+| 2 | `kyc-adverse-media` — remplir `adverse_media` (négative news AML) | Apify | AWS worker KYC | ✅ déployé, flag **ON** sur EC2 (condition LinkedIn ≥600 car.) |
+| 3 | `fleet-content-audit` — listings Moana sans photos/vidéo/specs | YATCO BOSS | UI (Supabase, pas d'AWS) | ✅ codé+testé, rien commité |
+| 4 | `market-pulse` — feeds MLS New/Modified/Sold 5j (comps, baisses de prix) | YATCO BOSS | UI (Supabase, pas d'AWS) | ✅ codé+testé, rien commité |
 | — | `kyc-company-registry` — champs registre non fournis par LinkedIn (LEI, VAT, dirigeants) | Apify/GLEIF | AWS worker KYC | backlog (issu de #1) |
 
 ## Infra / outillage

@@ -19,6 +19,8 @@ export function Header() {
   const isLeadsPage = pathname?.includes('/leads');
   const isBateauASuivrePage = pathname?.includes('/bateau-a-suivre');
   const isBateauChantierPage = pathname?.includes('/bateau-chantier');
+  const isListingsYatcoPage = pathname?.includes('/listings-yatco');
+  const isMarketPulsePage = pathname?.includes('/market-pulse');
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -77,7 +79,7 @@ export function Header() {
               <Link
                 href="/dashboard"
                 className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
-                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage
+                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isListingsYatcoPage && !isMarketPulsePage
                     ? 'border-secondary-500 text-white'
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
@@ -103,6 +105,26 @@ export function Header() {
               >
                 <Ship className="h-4 w-4" />
                 <span className="uppercase tracking-wide">Bateaux Chantier</span>
+              </Link>
+              <Link
+                href="/dashboard/listings-yatco"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isListingsYatcoPage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <Ship className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Listings YATCO</span>
+              </Link>
+              <Link
+                href="/dashboard/market-pulse"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isMarketPulsePage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <Ship className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Market Pulse</span>
               </Link>
               <Link
                 href="/dashboard/leads"
@@ -192,7 +214,7 @@ export function Header() {
                     href="/dashboard"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
-                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage
+                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isListingsYatcoPage && !isMarketPulsePage
                         ? 'bg-secondary-600 text-white'
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
@@ -222,6 +244,30 @@ export function Header() {
                   >
                     <Ship className="h-5 w-5" />
                     <span>Bateaux Chantier</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/listings-yatco"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isListingsYatcoPage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <Ship className="h-5 w-5" />
+                    <span>Listings YATCO</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/market-pulse"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isMarketPulsePage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <Ship className="h-5 w-5" />
+                    <span>Market Pulse</span>
                   </Link>
 
                   <Link

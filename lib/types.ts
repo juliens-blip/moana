@@ -39,6 +39,61 @@ export interface ListingWithBroker extends Listing {
 }
 
 // ============================================
+// YATCO BOSS FLEET CONTENT AUDIT TYPES
+// ============================================
+
+export interface YatcoFleetListing {
+  id: string;
+  vid: string;
+  mls_id?: string;
+  vessel_name: string;
+  status?: string;
+  agreement_type?: string;
+  builder?: string;
+  model_year?: number;
+  asking_price_text?: string;
+  loa_text?: string;
+  broker_name?: string;
+  photo_count: number;
+  has_description: boolean;
+  has_broker_message: boolean;
+  has_hull_deck_specs: boolean;
+  has_engine_specs: boolean;
+  has_dimensions: boolean;
+  has_speed_capacity_specs: boolean;
+  days_on_market?: number;
+  linked_listing_id?: string;
+  last_synced_at: string;
+  created_at: string;
+}
+
+// ============================================
+// YATCO MLS MARKET PULSE TYPES (comps + price drops)
+// ============================================
+
+export interface YatcoMarketPulseEntry {
+  id: string;
+  feed_type: 'new' | 'modified' | 'sold';
+  vid: string;
+  mls_id?: string;
+  vessel_name: string;
+  builder?: string;
+  model_year?: number;
+  category?: string;
+  loa_text?: string;
+  price_text?: string;
+  location?: string;
+  broker_name?: string;
+  history_text?: string;
+  is_price_drop: boolean;
+  price_before_text?: string;
+  price_after_text?: string;
+  sold_date?: string;
+  scraped_at: string;
+  created_at: string;
+}
+
+// ============================================
 // API RESPONSE TYPES
 // ============================================
 
