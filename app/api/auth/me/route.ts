@@ -20,8 +20,7 @@ export async function GET() {
       broker: session.broker,
       brokerId: session.brokerId,
     });
-  } catch (error) {
-    console.error('Get session API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Erreur serveur' },
       { status: 500 }

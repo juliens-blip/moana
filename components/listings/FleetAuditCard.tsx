@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, XCircle, ExternalLink, Link2, Camera } from 'lucide-react';
+import { CheckCircle2, XCircle, ExternalLink, Link2, Camera, Eye, MousePointerClick, Phone, Images } from 'lucide-react';
 import type { YatcoFleetListing } from '@/lib/types';
 
 interface FleetAuditCardProps {
@@ -95,6 +95,49 @@ export function FleetAuditCard({ listing, index = 0 }: FleetAuditCardProps) {
         {typeof listing.days_on_market === 'number' && (
           <div className="text-xs text-gray-500 pt-2">
             {listing.days_on_market} jours sur le marché
+          </div>
+        )}
+
+        {typeof listing.stats_impressions === 'number' && (
+          <div className="pt-3 border-t border-gray-200">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Visibilité YATCO.com (7 derniers jours)
+            </p>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div>
+                <div className="flex items-center justify-center gap-1 text-gray-400">
+                  <Eye className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">{listing.stats_impressions}</p>
+                <p className="text-[10px] text-gray-400">Impressions</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1 text-gray-400">
+                  <MousePointerClick className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">{listing.stats_detail_views ?? 0}</p>
+                <p className="text-[10px] text-gray-400">Vues</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1 text-gray-400">
+                  <Phone className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">{listing.stats_phone_clicks ?? 0}</p>
+                <p className="text-[10px] text-gray-400">Appels</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1 text-gray-400">
+                  <Images className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">{listing.stats_gallery_views ?? 0}</p>
+                <p className="text-[10px] text-gray-400">Galerie</p>
+              </div>
+            </div>
+            {typeof listing.stats_leads === 'number' && listing.stats_leads > 0 && (
+              <p className="text-xs font-semibold text-emerald-700 text-center mt-2">
+                {listing.stats_leads} lead{listing.stats_leads > 1 ? 's' : ''} généré{listing.stats_leads > 1 ? 's' : ''}
+              </p>
+            )}
           </div>
         )}
 

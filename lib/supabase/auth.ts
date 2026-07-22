@@ -1,9 +1,16 @@
-import { createClient } from './server';
-import { createAdminClient } from './admin';
+import { createHmac } from 'node:crypto';
 import { cookies } from 'next/headers';
+import { createAdminClient } from './admin';
+import {
+  constantTimeBufferEqual,
+  getConfiguredSecret,
+  hashPassword,
+  verifyPassword,
+} from '@/lib/security';
 
 const SESSION_COOKIE_NAME = 'moana_session';
-const SESSION_MAX_AGE = 24 * 60 * 60; // 24 hours in seconds
+const SESSION_MAX_AGE = 24 * 60 * 60;
+const SESSION_SECRET_NAMES = ['MOANA_SESSION_SECRET', 'SESSION_SECRET'];
 
 export interface Session {
   brokerId: string;
@@ -11,110 +18,153 @@ export interface Session {
   expiresAt: number;
 }
 
+interface SignedSession extends Session {
+  issuedAt: number;
+}
+
 /**
- * Login a broker
- * Uses admin client to bypass RLS during authentication
+ * Login a broker using the admin client, then migrate a valid legacy password
+ * to the current scrypt format without logging authentication material.
  */
 export async function login(brokerName: string, password: string): Promise<Session | null> {
-  // Use admin client to bypass RLS policies
-  const supabase = createAdminClient();
+  if (!getConfiguredSecret(...SESSION_SECRET_NAMES)) {
+    return null;
+  }
 
   try {
-    console.log('[login] Attempting login for:', brokerName);
-    console.log('[login] Password provided:', password);
-
-    // Récupérer le broker par broker_name
+    const supabase = createAdminClient();
     const { data: broker, error } = await supabase
       .from('brokers')
-      .select('*')
+      .select('id, broker_name, password_hash')
       .eq('broker_name', brokerName)
       .single();
 
-    console.log('[login] Query error:', error);
-    console.log('[login] Broker data:', broker ? {
-      id: broker.id,
-      broker_name: broker.broker_name,
-      password_hash: broker.password_hash,
-      email: broker.email
-    } : 'null');
-
     if (error || !broker) {
-      console.error('[login] Broker not found:', brokerName, error);
       return null;
     }
 
-    // Vérifier le mot de passe (à améliorer avec bcrypt)
-    // TODO: Hash passwords avec bcrypt
-    console.log('[login] Comparing passwords:', {
-      stored: broker.password_hash,
-      provided: password,
-      match: broker.password_hash === password
-    });
-
-    if (broker.password_hash !== password) {
-      console.error('[login] Invalid password - stored:', broker.password_hash, 'provided:', password);
+    const passwordCheck = await verifyPassword(password, broker.password_hash);
+    if (!passwordCheck.valid) {
       return null;
     }
 
-    const session: Session = {
+    if (passwordCheck.needsMigration) {
+      const migratedHash = await hashPassword(password);
+      await supabase
+        .from('brokers')
+        .update({ password_hash: migratedHash })
+        .eq('id', broker.id);
+    }
+
+    return {
       brokerId: broker.id,
       broker: broker.broker_name,
       expiresAt: Date.now() + SESSION_MAX_AGE * 1000,
     };
-
-    console.log('[login] Session created successfully:', session);
-    return session;
-  } catch (error) {
-    console.error('[login] Exception:', error);
+  } catch {
     return null;
   }
 }
 
 /**
- * Get current session
+ * Read and verify the signed session cookie. Legacy unsigned JSON cookies are
+ * rejected and naturally expire when the user logs in again.
  */
 export async function getSession(): Promise<Session | null> {
+  const secret = getConfiguredSecret(...SESSION_SECRET_NAMES);
+  if (!secret) {
+    return null;
+  }
+
   const cookieStore = cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-
   if (!sessionCookie) {
     return null;
   }
 
   try {
-    const session: Session = JSON.parse(sessionCookie.value);
-
-    // Check if session has expired
-    if (session.expiresAt < Date.now()) {
+    const [encodedPayload, encodedSignature] = sessionCookie.value.split('.');
+    if (!encodedPayload || !encodedSignature) {
       await logout();
       return null;
     }
 
-    return session;
-  } catch (error) {
-    console.error('[getSession] Session parse error:', error);
+    const expectedSignature = signSession(encodedPayload, secret);
+    if (!constantTimeBufferEqual(
+      Buffer.from(encodedSignature, 'base64url'),
+      Buffer.from(expectedSignature, 'base64url'),
+    )) {
+      await logout();
+      return null;
+    }
+
+    const payload = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+    const session = JSON.parse(payload) as SignedSession;
+    const now = Date.now();
+    if (!isValidSession(session, now)) {
+      await logout();
+      return null;
+    }
+
+    return {
+      brokerId: session.brokerId,
+      broker: session.broker,
+      expiresAt: session.expiresAt,
+    };
+  } catch {
     return null;
   }
 }
 
-/**
- * Set session cookie
- */
+/** Set an HTTP-only, signed session cookie. */
 export async function setSessionCookie(session: Session): Promise<void> {
-  const cookieStore = cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), {
+  const secret = getConfiguredSecret(...SESSION_SECRET_NAMES);
+  if (!secret) {
+    throw new Error('Session secret is not configured');
+  }
+
+  const issuedAt = Date.now();
+  const signedSession: SignedSession = { ...session, issuedAt };
+  if (!isValidSession(signedSession, issuedAt)) {
+    throw new Error('Invalid session');
+  }
+
+  const encodedPayload = Buffer.from(JSON.stringify(signedSession), 'utf8').toString('base64url');
+  const value = `${encodedPayload}.${signSession(encodedPayload, secret)}`;
+  cookies().set(SESSION_COOKIE_NAME, value, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    priority: 'high',
     maxAge: SESSION_MAX_AGE,
     path: '/',
   });
 }
 
-/**
- * Logout (clear session)
- */
+/** Clear the session cookie. */
 export async function logout(): Promise<void> {
-  const cookieStore = cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  cookies().delete(SESSION_COOKIE_NAME);
+}
+
+function isValidSession(session: Partial<SignedSession>, now: number): session is SignedSession {
+  const issuedAt = session.issuedAt;
+  const expiresAt = session.expiresAt;
+
+  return (
+    typeof session.brokerId === 'string' &&
+    session.brokerId.length > 0 &&
+    typeof session.broker === 'string' &&
+    session.broker.length > 0 &&
+    typeof issuedAt === 'number' &&
+    typeof expiresAt === 'number' &&
+    Number.isSafeInteger(issuedAt) &&
+    Number.isSafeInteger(expiresAt) &&
+    issuedAt <= now + 30_000 &&
+    expiresAt > now &&
+    expiresAt <= issuedAt + SESSION_MAX_AGE * 1000 + 30_000
+  );
+}
+
+function signSession(payload: string, secret: string): string {
+  return createHmac('sha256', secret).update(payload, 'utf8').digest('base64url');
 }

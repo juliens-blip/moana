@@ -27,7 +27,7 @@ async function listBrokers() {
   try {
     const { data: brokers, error } = await supabase
       .from('brokers')
-      .select('id, broker_name, email, password_hash, created_at')
+      .select('id, broker_name, email, created_at')
       .order('broker_name', { ascending: true });
 
     if (error) {
@@ -47,13 +47,11 @@ async function listBrokers() {
       console.log(`\n${index + 1}. Broker: ${broker.broker_name}`);
       console.log(`   Email:         ${broker.email}`);
       console.log(`   ID:            ${broker.id}`);
-      console.log(`   Password Hash: ${broker.password_hash.substring(0, 50)}${broker.password_hash.length > 50 ? '...' : ''}`);
       console.log(`   Created:       ${new Date(broker.created_at).toLocaleString()}`);
     });
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('\n💡 To test login, use one of these broker_name values with its password');
-    console.log('   (Check your Airtable or migration data for original passwords)\n');
+    console.log('\n💡 Password material is intentionally never displayed by this script.\n');
 
   } catch (err) {
     console.error('❌ Exception:', err);

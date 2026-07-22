@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
+import { hashPassword } from '../lib/security';
 
 // Configuration Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -34,7 +35,10 @@ function parseYear(value: string): number | undefined {
 async function importBrokers() {
   console.log('📥 Importing brokers from CSV...\n');
 
-  const csvPath = path.join(__dirname, '..', 'backup', 'brokers.csv');
+  const csvPath = process.env.BROKER_IMPORT_CSV;
+  if (!csvPath) {
+    throw new Error('BROKER_IMPORT_CSV must point to an external, access-controlled CSV file');
+  }
   const csvContent = fs.readFileSync(csvPath, 'utf-8');
 
   const records = parse(csvContent, {
@@ -49,14 +53,19 @@ async function importBrokers() {
   for (const record of records) {
     const { broker, password } = record;
 
-    if (!broker) continue;
+    if (!broker || !password) {
+      console.warn('Skipping broker row without a broker name or password');
+      continue;
+    }
+
+    const passwordHash = await hashPassword(password);
 
     const { data, error } = await supabase
       .from('brokers')
       .insert({
         email: `${broker}@moana-yachting.com`,
         broker_name: broker,
-        password_hash: password, // TODO: hash avec bcrypt en prod
+        password_hash: passwordHash,
       })
       .select('id, broker_name')
       .single();
@@ -80,40 +89,6 @@ async function importBrokers() {
     } else {
       brokerMap.set(broker, data.id);
       console.log(`✅ Imported broker: ${broker}`);
-    }
-  }
-
-  // Ajouter les brokers manquants trouvés dans les listings
-  const additionalBrokers = ['Charles', 'Foulques', 'JMO', 'Marc', 'Bart', 'Aldric'];
-
-  for (const broker of additionalBrokers) {
-    const { data, error } = await supabase
-      .from('brokers')
-      .insert({
-        email: `${broker.toLowerCase()}@moana-yachting.com`,
-        broker_name: broker,
-        password_hash: 'changeme', // Mot de passe par défaut
-      })
-      .select('id, broker_name')
-      .single();
-
-    if (error) {
-      if (error.code === '23505') {
-        const { data: existing } = await supabase
-          .from('brokers')
-          .select('id, broker_name')
-          .eq('broker_name', broker)
-          .single();
-
-        if (existing) {
-          brokerMap.set(broker, existing.id);
-        }
-      } else {
-        console.error(`❌ Error creating broker ${broker}:`, error.message);
-      }
-    } else {
-      brokerMap.set(broker, data.id);
-      console.log(`✅ Created additional broker: ${broker}`);
     }
   }
 

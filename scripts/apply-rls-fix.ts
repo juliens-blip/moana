@@ -23,7 +23,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 async function applyRLSFix() {
-  console.log('🔧 Applying RLS policy fix...\n');
+  console.log('🔐 Applying server-only brokers RLS policy...\n');
 
   // Read SQL file
   const sqlPath = path.resolve(process.cwd(), 'scripts', 'fix-rls-policies.sql');
@@ -47,12 +47,9 @@ async function applyRLSFix() {
       process.exit(1);
     }
 
-    console.log('✅ RLS policies fixed successfully!');
-    console.log('\n📋 Changes applied:');
-    console.log('   • Removed restrictive "Brokers can view their own profile" policy');
-    console.log('   • Added "Allow anonymous login queries" policy for anon role');
-    console.log('   • Added "Authenticated brokers can view their own profile" for authenticated users\n');
-    console.log('🎉 Anonymous users can now query brokers table for login!\n');
+    console.log('✅ Server-only brokers RLS policy applied.');
+    console.log('   • Anonymous and browser roles cannot read broker credentials.');
+    console.log('   • Authentication continues through the server-side service role.\n');
 
   } catch (err) {
     console.error('❌ Exception:', err);

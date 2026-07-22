@@ -56,13 +56,35 @@ async function main() {
   const scrapedAt = new Date().toISOString();
   console.log(`🚀 Syncing ${rows.length} market pulse rows (scraped_at=${scrapedAt})...\n`);
 
+  const dayStart = `${scrapedAt.slice(0, 10)}T00:00:00.000Z`;
+  const { data: existingRows, error: existingError } = await supabase
+    .from('yatco_market_pulse')
+    .select('vid, feed_type')
+    .gte('scraped_at', dayStart);
+
+  if (existingError) {
+    console.error('❌ Failed to check existing Market Pulse rows:', existingError.message);
+    process.exit(1);
+  }
+
+  const existingKeys = new Set(
+    (existingRows || []).map((row) => `${row.vid}:${row.feed_type}`)
+  );
+
   let synced = 0;
+  let skippedExisting = 0;
   let priceDrops = 0;
   let errorCount = 0;
 
   for (const row of rows) {
     if (!row.vid || !row.vesselName) {
       console.warn('⚠️  Skipping row with missing vid/vesselName:', row);
+      continue;
+    }
+
+    const eventKey = `${row.vid}:${row.feedType}`;
+    if (existingKeys.has(eventKey)) {
+      skippedExisting++;
       continue;
     }
 
@@ -99,10 +121,15 @@ async function main() {
 
     if (row.isPriceDrop) priceDrops++;
     synced++;
+    existingKeys.add(eventKey);
     console.log(`✅ [${row.feedType}] ${row.vesselName} (vID ${row.vid})${row.isPriceDrop ? ` — PRICE DROP ${row.priceBeforeText} → ${row.priceAfterText}` : ''}`);
   }
 
-  console.log(`\n📊 Résumé: ${synced} synced, ${priceDrops} price drops, ${errorCount} errors`);
+  console.log(`\n📊 Résumé: ${synced} synced, ${skippedExisting} already present today, ${priceDrops} price drops, ${errorCount} errors`);
+
+  if (errorCount > 0) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {

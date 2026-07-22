@@ -1,5 +1,10 @@
 # Journal
 
+## 2026-07-22 — Reprise code, sécurité et testing
+
+[2026-07-22] CODE/SECURITY/TEST | YATCO Stats, Market Trends et cyber durcis par trois agents segmentés ; scripts de migration/backup nettoyés et RLS brokers refermé | lint, type-check, build, diff-check, KYC 12/12 et crypto scrypt/HMAC verts ; avertissements Browserslist seulement | appliquer les schémas/syncs Supabase, configurer/rotater les secrets et valider les endpoints avec données de staging
+[2026-07-22] GRAPHIFY/UV | Graphify 0.9.23 déjà présent ; installation Codex enregistrée dans `AGENTS.md` + `.codex/hooks.json`, extraction AST/SQL locale validée (1 284 nœuds, 3 001 relations brutes, 2 646 après clustering) et requête auth/webhook testée | `uvx --from "graphifyy[sql]"` utilisé après verrouillage du tool env global | conserver `graphify-out/` partageable, ignorer seulement son cache, utiliser `graphify update .` après les changements
+
 ## 2026-07-15
 
 [2026-07-15] Audit de la documentation et de l’état réel du dépôt | Racine, `docs/`, `tasks/`, routes et modules Supabase lus | Plan de consolidation validé
@@ -86,6 +91,12 @@
 [2026-07-21] Outil #3 — nouvelle section « Listings YATCO » (audit de contenu profond) | `scripts/yatco-fleet-listings-schema.sql`, `scripts/sync-yatco-fleet-listings.ts`, `D:\dev\scrape-mcp\scripts\fleet-audit-scrape.mjs`, `lib/supabase/yatco-fleet.ts`, `lib/types.ts` (ajout `YatcoFleetListing`), `app/dashboard/listings-yatco/page.tsx`, `components/listings/FleetAuditCard.tsx`, `components/listings/FleetAuditGrid.tsx`, `components/layout/Header.tsx`, `tasks/fleet-content-audit/*` | Pipeline de scraping BOSS craqué (Insight Analytics « Active Listings Report » rend en headless, clic photo par vID charge le détail complet inline) ; scraper standalone réutilisable sans Claude/MCP pour les futurs refresh ; nouvelle table `yatco_fleet_listings` (25/25 vessels actifs ingérés, 6 liés à des listings Moana existants, 0 erreur) ; nouvelle section app avec carte de complétude par bateau (photos, description, specs, broker's message) ; `tsc`/`eslint` propres, QA visuelle live confirmée ; rien commité (WIP non lié dans `lib/types.ts`/`package.json` à ne pas stager en bloc)
 
 [2026-07-21] Outil #4 — nouvelle section « Market Pulse » (comps MLS + baisses de prix) | `scripts/market-pulse-schema.sql`, `scripts/sync-market-pulse.ts`, `D:\dev\scrape-mcp\scripts\market-pulse-scrape.mjs`, `lib/supabase/market-pulse.ts`, `lib/types.ts` (ajout `YatcoMarketPulseEntry`), `app/dashboard/market-pulse/page.tsx`, `components/listings/MarketPulseCard.tsx`, `components/listings/MarketPulseGrid.tsx`, `components/layout/Header.tsx`, `tasks/market-pulse/*` | Feeds MLS-wide (tous brokers) New/Modified/Sold 5j via le module Search de BOSS ; `div.HistoryText` par carte donne le texte littéral du changement ("Price was X changed to Y") → détection de baisse de prix sans diff maison ; limite trouvée : chaque feed a un vrai total (190 vu ce jour) mais seules ~12 lignes triées "Largest" se rendent (pagination non résolue, jugé non bloquant car le segment Moana est justement 27-85m) ; nouvelle table event-stream `yatco_market_pulse` (30 lignes ingérées, 0 erreur) ; nouvelle section app avec bandeau rouge sur baisse de prix détectée et tag "(Moana)" quand un des propres listings de Moana apparaît dans le feed concurrent ; `tsc`/`eslint` propres, QA visuelle live confirmée ; rien commité
+
+## 2026-07-22
+
+[2026-07-22] Reprise APEX segmentée YATCO Stats + Market Trends + cybersecurity | `tasks/vessel-visibility-stats/*`, `tasks/market-trends/*`, `tasks/cybersecurity/*`, `.claude/agents/cybersecurity.md`, `journalbug.md` | QMD 2.5.3 disponible en BM25 ; Graphiti/Graphyphy non disponible ; analyses/plans et agent cyber créés ; état initial lint vert, type-check/build non verts confirmé | lancer les workers code disjoints puis test-code et boucle de correction jusqu’au vert
+
+[2026-07-22] Automatisation AWS de YATCO Stats et Market Trends toutes les 72 h | `ops/yatco-automation/*`, `scripts/sync-{vessel-visibility-stats,yatco-stats,market-review,market-pulse}.ts`, `tasks/yatco-automation/*`, EC2 `/home/ubuntu/moana-yatco` | Image Playwright non-root, validations anti-données-vides, syncs séquentielles/idempotentes, statut sans secret, service systemd durci (exposition 2.4 OK), npm audit 0 ; migration Market Review appliquée, run live 3/3 vert, refresh 72 h et keepalive cookie 4 h actifs, worker KYC inchangé
 
 ## Historique condensé
 

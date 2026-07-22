@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import { hashPassword } from '../lib/security';
 
 // Configuration Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -48,7 +49,12 @@ interface AirtableListing {
 async function importBrokers() {
   console.log('📥 Importing brokers...');
 
-  const brokersPath = path.join(__dirname, '..', 'backup', 'brokers.json');
+  const brokersPath = process.env.BROKER_IMPORT_JSON;
+
+  if (!brokersPath) {
+    console.error('❌ BROKER_IMPORT_JSON must point to an external, access-controlled JSON file');
+    process.exit(1);
+  }
 
   if (!fs.existsSync(brokersPath)) {
     console.error(`❌ File not found: ${brokersPath}`);
@@ -66,7 +72,7 @@ async function importBrokers() {
       .insert({
         email: `${broker.fields.broker}@moana-yachting.com`,
         broker_name: broker.fields.broker,
-        password_hash: broker.fields.password, // TODO: hash if not already
+        password_hash: await hashPassword(broker.fields.password),
         created_at: broker.createdTime,
       })
       .select('id, broker_name')

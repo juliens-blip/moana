@@ -18,6 +18,49 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
 
 ## Cycles récents (<18h)
 
+### [2026-07-22] Cycle 7 — Reprise APEX segmentée : YATCO Stats, Market Trends, cybersécurité
+- **Fait** : QMD 2.5.3 vérifié et utilisé en BM25 ; Graphiti/Graphyphy non disponible.
+  Analyses/plans APEX créés pour `vessel-visibility-stats`, `market-trends` et
+  `cybersecurity`. Nouvel agent `.claude/agents/cybersecurity.md` créé.
+- **Bugs enregistrés** : contrats TypeScript YATCO incomplets, Market Trends non
+  câblé, build dépendant des Google Fonts, auth/session/debug/credentials à durcir.
+- **Tests** : état de départ confirmé : lint vert, type-check rouge, build bloqué
+  par TLS Google Fonts ; tests Python bloqués par l’environnement LiteLLM/TLS.
+- **Prochaine étape** : agents code segmentés YATCO Stats + Market Trends + cyber,
+  puis agent test-code sans modification du code et boucle APEX jusqu’au vert.
+
+### [2026-07-22] Complément — CODE + durcissement sécurité
+- **Fait** : YATCO Stats compile et gère les états UI ; Market Trends est câblé
+  sur `/dashboard/market-trends`, nav, exports et lecture bornée ; auth/session,
+  brokers, debug, webhook YATCO, scripts credentials et RLS ont été durcis.
+- **Tests** : `npm run lint`, `npm run type-check`, `npm run build`,
+  `git diff --check`, KYC déterministe 12/12 et crypto scrypt/HMAC verts ; les
+  avertissements restants concernent uniquement la fraîcheur Browserslist/
+  Baseline.
+- **Reste** : variables `MOANA_SESSION_SECRET`/`YATCO_WEBHOOK_SECRET`, rotation
+  des credentials historiques, application des schémas/syncs Supabase et
+  validation HTTP en environnement intégré.
+
+### [2026-07-22] Complément — Installation Graphify CLI
+- **Fait** : Graphify 0.9.23 confirmé via `uv`; intégration Codex installée
+  (`AGENTS.md`, `.codex/hooks.json`). Extraction AST + SQL locale validée avec
+  `uvx --from "graphifyy[sql]"` : 1 284 nœuds, 3 001 relations brutes, 2 646
+  relations après clustering, 118 communautés.
+- **Tests** : requête ciblée auth/webhook renvoie les modules de session,
+  sécurité, route YATCO et Supabase ; aucune API LLM utilisée.
+- **Reste** : le tool env global `uv` est verrouillé pour une réinstallation
+  de l'extra SQL ; `uvx --from` est le chemin reproductible retenu.
+
+### [2026-07-22] Complément — Automatisation AWS YATCO 72 h
+- **Fait** : paquet `ops/yatco-automation` créé via le tunnel APEX, image
+  Playwright 1.55.1 construite sur EC2, Supabase readiness 4/4, service/timer
+  systemd installés et durcis (score 2.4 OK), aucun impact sur le worker KYC.
+- **Tests** : automation 6/6, lint/type-check/build verts, npm audit 0,
+  `systemd-analyze verify` vert, garde d'auth absente vérifiée.
+- **Final** : session BOSS renouvelée, schéma Market Review appliqué, run live
+  3/3 vert ; timers refresh 72 h + keepalive 4 h actifs. Retry idempotent et
+  disque EC2 ramené de 82 % à 64 % après retrait de l'image vulnérable obsolète.
+
 ### [2026-07-21 ~16:45] Cycle 6 — Outil #4 `market-pulse` : CODE + TEST complet
 - **Fait** : EXPLORE confirme le pipeline Search module (`useractionid` 75/76/77,
   New/Modified/Sold, MLS-wide 5j glissants) avec `div.HistoryText` donnant le texte

@@ -42,8 +42,8 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans: ['var(--font-lato)', 'sans-serif'],
-        heading: ['var(--font-montserrat)', 'sans-serif'],
+        sans: ['Lato', 'Arial', 'sans-serif'],
+        heading: ['Montserrat', 'Arial', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

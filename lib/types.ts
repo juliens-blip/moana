@@ -31,6 +31,7 @@ export interface Listing {
   created_at: string;
   updated_at: string;
   airtable_id?: string; // Pour référence migration
+  yatco_vessel_id?: string | null;
 }
 
 export interface ListingWithBroker extends Listing {
@@ -41,6 +42,19 @@ export interface ListingWithBroker extends Listing {
 // ============================================
 // YATCO BOSS FLEET CONTENT AUDIT TYPES
 // ============================================
+
+export interface YatcoListingStats {
+  id: string;
+  listing_id: string;
+  snapshot_date: string;
+  impressions: number | null;
+  detail_views: number | null;
+  phone_clicks: number | null;
+  gallery_views: number | null;
+  leads: number | null;
+  source: 'manual_refresh' | 'backfill';
+  created_at: string;
+}
 
 export interface YatcoFleetListing {
   id: string;
@@ -63,6 +77,12 @@ export interface YatcoFleetListing {
   has_speed_capacity_specs: boolean;
   days_on_market?: number;
   linked_listing_id?: string;
+  stats_impressions?: number;
+  stats_detail_views?: number;
+  stats_phone_clicks?: number;
+  stats_gallery_views?: number;
+  stats_leads?: number;
+  stats_synced_at?: string;
   last_synced_at: string;
   created_at: string;
 }
@@ -89,6 +109,23 @@ export interface YatcoMarketPulseEntry {
   price_before_text?: string;
   price_after_text?: string;
   sold_date?: string;
+  scraped_at: string;
+  created_at: string;
+}
+
+// ============================================
+// YATCO MARKET REVIEW SNAPSHOT TYPES (global market state)
+// ============================================
+
+export type MarketSizeBandTable = Record<string, Record<string, string>>;
+
+export interface YatcoMarketReviewSnapshot {
+  id: string;
+  size_bands: {
+    soldVessels: MarketSizeBandTable;
+    totalSoldValue: MarketSizeBandTable;
+    avgDaysOnMarket: MarketSizeBandTable;
+  };
   scraped_at: string;
   created_at: string;
 }
@@ -309,6 +346,7 @@ export interface LeadWithBroker extends Lead {
   broker_name?: string;
   broker_email?: string;
   kyc?: import('@/lib/kyc/types').KycSummary;
+  sanctions?: import('@/lib/sanctions/types').SanctionsSummary;
 }
 
 // ============================================

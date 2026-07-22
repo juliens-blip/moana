@@ -11,6 +11,7 @@
     "export-airtable": "dotenv -e .env.local -- tsx scripts/export-airtable-data.ts",
     "import-supabase": "dotenv -e .env.local -- tsx scripts/import-to-supabase.ts",
     "import-csv": "dotenv -e .env.local -- tsx scripts/import-from-csv.ts",
+    "sync-yatco-stats": "dotenv -e .env.local -- tsx scripts/sync-yatco-stats.ts",
     "migrate": "npm run export-airtable && npm run import-supabase"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "react-dom": "18.2.0",
     "react-hook-form": "^7.51.0",
     "react-hot-toast": "^2.4.1",
+    "recharts": "^3.9.2",
     "tailwind-merge": "^2.2.1",
     "zod": "^3.22.4"
   },
