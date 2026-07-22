@@ -23,6 +23,20 @@ du tunnel ont la même consigne dans leur mémoire.
 - Après avoir ajouté des notes durables : `qmd update` (ré-indexe le FTS BM25).
 - ⚠️ Cette machine est **CPU sans GPU** : les embeddings bloquent → `qmd query`/`vsearch`
   (vectoriel) indisponibles. Rester en `qmd search`. Vectoriel = à réactiver si GPU un jour.
+
+### Choix entre QMD et Graphify
+
+- **QMD** est la source de vérité pour la mémoire persistante : décisions,
+  exigences, journaux, bugs, plans et historique métier. Chercher en BM25 puis
+  récupérer la note complète.
+- **Graphify** est la source de vérité pour le dépôt courant : relations entre
+  fichiers/symboles, appels, dépendances, SQL et impact architectural. Utiliser
+  `graphify query`, `path` ou `explain` avant de parcourir le code au hasard.
+- Pour un audit ou une feature, faire **QMD pour le contexte**, puis
+  **Graphify pour la structure actuelle**. Si la question concerne uniquement
+  l'un des deux domaines, utiliser seulement l'outil correspondant.
+- Après une note durable : `qmd update`. Après une modification de code :
+  `graphify update .`.
 - Ne jamais muter l'index (`collection add`/`embed`) sans raison ; l'index vit hors dépôt.
 
 ## Tunnel agentique — OBLIGATOIRE pour tout nouvel outil

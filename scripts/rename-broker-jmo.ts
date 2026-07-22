@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { hashPassword } from '../lib/security';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -35,12 +36,17 @@ async function ensureBroker(name: string, email: string) {
     return existing;
   }
 
+  const bootstrapPassword = process.env.BROKER_BOOTSTRAP_PASSWORD;
+  if (!bootstrapPassword) {
+    throw new Error('BROKER_BOOTSTRAP_PASSWORD is required to create a broker');
+  }
+
   const { data, error } = await supabase
     .from('brokers')
     .insert({
       broker_name: name,
       email,
-      password_hash: 'changeme'
+      password_hash: await hashPassword(bootstrapPassword)
     })
     .select('id, broker_name, email')
     .single();

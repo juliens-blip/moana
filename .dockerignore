@@ -5,3 +5,12 @@ scripts/*
 !scripts/apify_linkedin.py
 !scripts/apify_adverse_media.py
 !scripts/requirements-kyc.txt
+!scripts/sync-vessel-visibility-stats.ts
+!scripts/sync-yatco-stats.ts
+!scripts/sync-market-review.ts
+!scripts/sync-market-pulse.ts
+!scripts/market-review-schema.sql
+!ops/
+ops/*
+!ops/yatco-automation/
+!ops/yatco-automation/**

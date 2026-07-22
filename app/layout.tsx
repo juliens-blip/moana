@@ -1,21 +1,7 @@
 import type { Metadata, Viewport } from 'next';
-import { Montserrat, Lato } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import { Providers } from './providers';
 import './globals.css';
-
-const montserrat = Montserrat({ 
-  subsets: ['latin'],
-  variable: '--font-montserrat',
-  display: 'swap',
-});
-
-const lato = Lato({ 
-  weight: ['400', '700', '900'],
-  subsets: ['latin'],
-  variable: '--font-lato',
-  display: 'swap',
-});
 
 // Force dynamic rendering to prevent prerender errors with framer-motion
 export const dynamic = 'force-dynamic';
@@ -60,7 +46,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className={`${lato.className} ${montserrat.variable} font-sans`}>
+      <body className="font-sans">
         <Providers>
           {children}
           <Toaster
