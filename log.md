@@ -1,5 +1,9 @@
 # Journal
 
+## 2026-07-23 — Carte des mouvements de marché (tunnel complet)
+
+[2026-07-23] CODE/TEST | Bloc A de Market Trends remplacé par une carte monde (`react-simple-maps`, atlas vendored, géocodage offline ville→pays) des mouvements new/sold sur 14 jours ; crawl passé de 72h à 48h | lint, type-check, build (16/16 pages), 13/13 tests unitaires, agent test-code indépendant tous verts ; bug de bundling partagé trouvé et corrigé (`next/dynamic` + retrait barrel) | déploiement (Vercel + SSH EC2 pour le timer) et contrôle visuel authentifié restent à faire
+
 ## 2026-07-22 — Reprise code, sécurité et testing
 
 [2026-07-22] CODE/SECURITY/TEST | YATCO Stats, Market Trends et cyber durcis par trois agents segmentés ; scripts de migration/backup nettoyés et RLS brokers refermé | lint, type-check, build, diff-check, KYC 12/12 et crypto scrypt/HMAC verts ; avertissements Browserslist seulement | appliquer les schémas/syncs Supabase, configurer/rotater les secrets et valider les endpoints avec données de staging

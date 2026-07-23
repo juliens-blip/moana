@@ -1,43 +1,44 @@
-import type { ReactNode } from 'react';
-import type { YatcoMarketReviewSnapshot } from '@/lib/types';
-import { MarketPulseTrendChart, MarketReviewCharts } from '@/components/listings';
+import nextDynamic from 'next/dynamic';
+import type { MarketMovementsResult } from '@/lib/types';
+import { MarketPulseTrendChart } from '@/components/listings';
 import {
-  getLatestMarketReview,
   getMarketPulseTrendEntries,
   MARKET_PULSE_TREND_DAYS,
   MARKET_PULSE_TREND_LIMIT,
 } from '@/lib/supabase/market-review';
+import { getRecentMarketPulseMovements, MARKET_PULSE_MAP_DAYS } from '@/lib/supabase/market-pulse-map';
+
+// Loaded directly from the component file (not the components/listings barrel)
+// and with ssr:false so react-simple-maps/d3-geo/the vendored atlas (~141 KB
+// gzip) stay code-split to this route instead of landing in the shared
+// dashboard chunk every other page pulls in via the barrel import.
+const MarketMovementsMap = nextDynamic(
+  () => import('@/components/listings/MarketMovementsMap').then((mod) => mod.MarketMovementsMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[420px] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400">
+        Chargement de la carte…
+      </div>
+    ),
+  },
+);
 
 export const dynamic = 'force-dynamic';
-
-function StatusMessage({ children, error = false }: { children: ReactNode; error?: boolean }) {
-  return (
-    <div
-      role={error ? 'alert' : undefined}
-      className={`rounded-lg border px-4 py-10 text-center text-sm ${
-        error
-          ? 'border-red-200 bg-red-50 text-red-700'
-          : 'border-dashed border-gray-300 bg-white text-gray-500'
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
 
 function getFulfilledValue<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === 'fulfilled' ? result.value : null;
 }
 
 export default async function MarketTrendsPage() {
-  const [marketReviewResult, marketPulseResult] = await Promise.allSettled([
-    getLatestMarketReview(),
+  const [marketMovementsResult, marketPulseResult] = await Promise.allSettled([
+    getRecentMarketPulseMovements({ days: MARKET_PULSE_MAP_DAYS }),
     getMarketPulseTrendEntries({ days: MARKET_PULSE_TREND_DAYS, limit: MARKET_PULSE_TREND_LIMIT }),
   ]);
 
-  const marketReview = getFulfilledValue<YatcoMarketReviewSnapshot | null>(marketReviewResult);
+  const marketMovements = getFulfilledValue<MarketMovementsResult | null>(marketMovementsResult);
   const marketPulseEntries = getFulfilledValue(marketPulseResult) || [];
-  const marketReviewFailed = marketReviewResult.status === 'rejected';
+  const marketMovementsFailed = marketMovementsResult.status === 'rejected';
   const marketPulseFailed = marketPulseResult.status === 'rejected';
 
   return (
@@ -45,32 +46,24 @@ export default async function MarketTrendsPage() {
       <div>
         <h1 className="text-2xl font-heading font-bold text-gray-900">Market Trends</h1>
         <p className="mt-1 max-w-3xl text-gray-500">
-          Vue globale du marché yachting : état YATCO MLS par taille et tendance prospective des
-          événements Market Pulse.
+          Vue globale du marché yachting : carte des mouvements récents (MLS, tous brokers) et
+          tendance prospective des événements Market Pulse.
         </p>
       </div>
 
-      <section aria-labelledby="market-review-heading">
-        {marketReviewFailed ? (
-          <StatusMessage error>
-            Impossible de charger l&apos;état du marché mondial pour le moment. Vérifiez la synchronisation
-            du Market Review ou réessayez plus tard.
-          </StatusMessage>
-        ) : marketReview ? (
-          <MarketReviewCharts
-            soldVessels={marketReview.size_bands.soldVessels}
-            totalSoldValue={marketReview.size_bands.totalSoldValue}
-            avgDaysOnMarket={marketReview.size_bands.avgDaysOnMarket}
-            scrapedAt={marketReview.scraped_at}
-          />
-        ) : (
-          <div>
-            <h2 id="market-review-heading" className="mb-3 text-lg font-bold text-gray-900">
-              État du marché mondial
-            </h2>
-            <StatusMessage>Aucun snapshot Market Review n&apos;a encore été synchronisé.</StatusMessage>
-          </div>
-        )}
+      <section aria-labelledby="market-movements-heading">
+        <MarketMovementsMap
+          data={
+            marketMovements ?? {
+              locations: [],
+              totalMovements: 0,
+              locatedPlaces: 0,
+              unlocatedCount: 0,
+              windowDays: MARKET_PULSE_MAP_DAYS,
+            }
+          }
+          error={marketMovementsFailed}
+        />
       </section>
 
       <section aria-labelledby="market-pulse-trend-heading">

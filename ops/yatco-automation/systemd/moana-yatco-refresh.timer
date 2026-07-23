@@ -1,9 +1,9 @@
 [Unit]
-Description=Run the Moana YATCO refresh every 72 hours
+Description=Run the Moana YATCO refresh every 48 hours
 
 [Timer]
 OnBootSec=20min
-OnUnitInactiveSec=72h
+OnUnitInactiveSec=48h
 AccuracySec=5min
 RandomizedDelaySec=15min
 Unit=moana-yatco-refresh.service

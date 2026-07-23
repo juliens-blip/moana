@@ -114,6 +114,41 @@ export interface YatcoMarketPulseEntry {
 }
 
 // ============================================
+// MARKET MOVEMENTS MAP TYPES (geocoded new/sold vessels, last N days)
+// ============================================
+
+export interface MarketMovementVessel {
+  vid: string;
+  feed_type: 'new' | 'sold';
+  vessel_name: string;
+  builder?: string;
+  loa_text?: string;
+  price_text?: string;
+  sold_date?: string;
+}
+
+export interface MarketMovementLocation {
+  key: string;
+  lat: number;
+  lon: number;
+  resolved: 'city' | 'country';
+  label: string;
+  country: string;
+  newCount: number;
+  soldCount: number;
+  total: number;
+  vessels: MarketMovementVessel[];
+}
+
+export interface MarketMovementsResult {
+  locations: MarketMovementLocation[];
+  totalMovements: number;
+  locatedPlaces: number;
+  unlocatedCount: number;
+  windowDays: number;
+}
+
+// ============================================
 // YATCO MARKET REVIEW SNAPSHOT TYPES (global market state)
 // ============================================
 

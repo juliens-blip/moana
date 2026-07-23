@@ -2,7 +2,7 @@
 
 Conteneur `oneshot` pour rafraîchir YATCO Stats, Market Review et Market Pulse,
 puis synchroniser les données vers Supabase. Il est lancé par systemd toutes les
-72 heures et n'ouvre aucun port. Un second timer léger visite BOSS toutes les
+48 heures et n'ouvre aucun port. Un second timer léger visite BOSS toutes les
 4 heures et persiste l'expiration glissante du cookie, dont le TTL initial est
 d'environ 24 heures.
 
