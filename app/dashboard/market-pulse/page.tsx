@@ -14,6 +14,9 @@ export default async function MarketPulsePage() {
           Comparables du marché MLS (tous brokers) — nouveaux listings, modifications et ventes
           récentes dans le segment de Moana. {entries.length} entrée{entries.length > 1 ? 's' : ''}.
         </p>
+        <p className="mt-1 text-xs text-gray-400">
+          Synchronisation automatique toutes les 48 heures.
+        </p>
       </div>
 
       {entries.length === 0 ? (

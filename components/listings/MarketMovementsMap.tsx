@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
-import { Sparkles, CheckCircle2, X } from 'lucide-react';
+import { Sparkles, CheckCircle2, X, ExternalLink } from 'lucide-react';
 import type { MarketMovementLocation, MarketMovementsResult } from '@/lib/types';
 import geoTopo from '@/lib/geo/atlas/countries-110m.json';
 
@@ -28,30 +28,43 @@ function bubbleColor(location: MarketMovementLocation): string {
 
 function VesselRow({ vessel }: { vessel: MarketMovementLocation['vessels'][number] }) {
   const isNew = vessel.feed_type === 'new';
+  const bossUrl = `https://www.yatcoboss.com/search/vesseldetails/viewlisting/?vID=${vessel.vid}`;
   return (
-    <li className="flex items-start justify-between gap-3 border-t border-gray-100 py-2 text-sm first:border-t-0">
-      <div>
-        <p className="font-medium text-gray-900">{vessel.vessel_name}</p>
-        <p className="text-xs text-gray-500">
-          {vessel.builder || '—'} · {vessel.loa_text || '—'} · {vessel.price_text || '—'}
-        </p>
+    <li className="border-t border-gray-100 py-2 text-sm first:border-t-0">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-gray-900">{vessel.vessel_name}</p>
+          <p className="text-xs text-gray-500">
+            {vessel.builder || '—'} · {vessel.loa_text || '—'} · {vessel.price_text || '—'}
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+            isNew
+              ? 'border-sky-200 bg-sky-100 text-sky-700'
+              : 'border-emerald-200 bg-emerald-100 text-emerald-700'
+          }`}
+        >
+          {isNew ? <Sparkles className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+          {isNew ? 'Nouveau' : 'Vendu'}
+        </span>
       </div>
-      <span
-        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
-          isNew
-            ? 'border-sky-200 bg-sky-100 text-sky-700'
-            : 'border-emerald-200 bg-emerald-100 text-emerald-700'
-        }`}
+      <a
+        href={bossUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 hover:text-primary-900 font-medium"
       >
-        {isNew ? <Sparkles className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-        {isNew ? 'Nouveau' : 'Vendu'}
-      </span>
+        Voir l&apos;annonce YATCO
+        <ExternalLink className="h-3 w-3" />
+      </a>
     </li>
   );
 }
 
 export function MarketMovementsMap({ data, error = false }: MarketMovementsMapProps) {
   const [selected, setSelected] = useState<MarketMovementLocation | null>(null);
+  const [zoom, setZoom] = useState(1);
   const maxTotal = data.locations.reduce((max, l) => Math.max(max, l.total), 0);
 
   return (
@@ -84,7 +97,13 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 h-[420px] rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
             <ComposableMap projection="geoEqualEarth" width={800} height={420}>
-              <ZoomableGroup center={[10, 20]} zoom={1} minZoom={1} maxZoom={8}>
+              <ZoomableGroup
+                center={[10, 20]}
+                zoom={1}
+                minZoom={1}
+                maxZoom={48}
+                onMoveEnd={(position) => setZoom(position.zoom)}
+              >
                 <Geographies geography={geoTopo}>
                   {({ geographies }) =>
                     geographies.map((geography) => (
@@ -103,11 +122,11 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
                 {data.locations.map((location) => (
                   <Marker key={location.key} coordinates={[location.lon, location.lat]}>
                     <circle
-                      r={bubbleRadius(location.total, maxTotal)}
+                      r={Math.max(3, bubbleRadius(location.total, maxTotal) / zoom)}
                       fill={bubbleColor(location)}
                       fillOpacity={0.75}
                       stroke="#fff"
-                      strokeWidth={1}
+                      strokeWidth={Math.max(0.5, 1 / zoom)}
                       onClick={() => setSelected(location)}
                       style={{ cursor: 'pointer' }}
                       role="button"
