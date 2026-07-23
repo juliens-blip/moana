@@ -125,6 +125,9 @@ export interface MarketMovementVessel {
   loa_text?: string;
   price_text?: string;
   sold_date?: string;
+  // The precise resolved place (city or country) this vessel geocoded to,
+  // preserved even after nearby places get merged into one map zone.
+  location_label: string;
 }
 
 export interface MarketMovementLocation {

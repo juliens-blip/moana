@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { Sparkles, CheckCircle2, X, ExternalLink } from 'lucide-react';
 import type { MarketMovementLocation, MarketMovementsResult } from '@/lib/types';
@@ -13,16 +13,12 @@ interface MarketMovementsMapProps {
 
 const NEW_COLOR = '#2a78d6';
 const SOLD_COLOR = '#10b981';
-const MIN_RADIUS = 4;
-const MAX_RADIUS = 16;
-
-// Two distinct city bubbles closer than this on screen (e.g. Antibes/Cannes/
-// Nice on the French Riviera) are merged into a single click target: a click
-// anywhere in the cluster reveals vessels from every nearby place, not just
-// whichever bubble happens to be on top of the SVG stack.
-const CLICK_GROUP_PX = 22;
-
-type ProjectionFn = (coordinates: [number, number]) => [number, number] | null;
+// One bubble already represents a whole zone (nearby places are pre-merged
+// server-side, see lib/supabase/market-pulse-map.ts), so it's sized to read
+// as a single meaningful dot — bigger than a single-vessel marker, capped so
+// a busy zone never dominates the map.
+const MIN_RADIUS = 6;
+const MAX_RADIUS = 20;
 
 function bubbleRadius(total: number, maxTotal: number): number {
   if (maxTotal <= 0) return MIN_RADIUS;
@@ -36,10 +32,10 @@ function bubbleColor(location: MarketMovementLocation): string {
 
 interface VesselRowProps {
   vessel: MarketMovementLocation['vessels'][number];
-  placeLabel?: string;
+  showLocation: boolean;
 }
 
-function VesselRow({ vessel, placeLabel }: VesselRowProps) {
+function VesselRow({ vessel, showLocation }: VesselRowProps) {
   const isNew = vessel.feed_type === 'new';
   const bossUrl = `https://www.yatcoboss.com/search/vesseldetails/viewlisting/?vID=${vessel.vid}`;
   return (
@@ -49,7 +45,7 @@ function VesselRow({ vessel, placeLabel }: VesselRowProps) {
           <p className="font-medium text-gray-900">{vessel.vessel_name}</p>
           <p className="text-xs text-gray-500">
             {vessel.builder || '—'} · {vessel.loa_text || '—'} · {vessel.price_text || '—'}
-            {placeLabel ? ` · ${placeLabel}` : ''}
+            {showLocation ? ` · ${vessel.location_label}` : ''}
           </p>
         </div>
         <span
@@ -76,38 +72,12 @@ function VesselRow({ vessel, placeLabel }: VesselRowProps) {
   );
 }
 
-function distance(a: [number, number], b: [number, number]): number {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
 export function MarketMovementsMap({ data, error = false }: MarketMovementsMapProps) {
-  const [selectedPlaces, setSelectedPlaces] = useState<MarketMovementLocation[] | null>(null);
+  const [selected, setSelected] = useState<MarketMovementLocation | null>(null);
   const [zoom, setZoom] = useState(1);
-  const projectionRef = useRef<ProjectionFn | null>(null);
   const maxTotal = data.locations.reduce((max, l) => Math.max(max, l.total), 0);
-  const selectedNewCount = (selectedPlaces ?? []).reduce((sum, p) => sum + p.newCount, 0);
-  const selectedSoldCount = (selectedPlaces ?? []).reduce((sum, p) => sum + p.soldCount, 0);
-
-  function handleMarkerClick(clicked: MarketMovementLocation) {
-    const project = projectionRef.current;
-    const clickedXY = project?.([clicked.lon, clicked.lat]);
-
-    if (!project || !clickedXY) {
-      setSelectedPlaces([clicked]);
-      return;
-    }
-
-    // Screen-space clustering: gather every location whose projected point
-    // lands within CLICK_GROUP_PX of the clicked one, regardless of which
-    // bubble is on top of the SVG stack (e.g. Antibes/Cannes/Nice cluster).
-    const thresholdProjected = CLICK_GROUP_PX / zoom;
-    const nearby = data.locations.filter((location) => {
-      const xy = project([location.lon, location.lat]);
-      return xy ? distance(clickedXY, xy) <= thresholdProjected : location.key === clicked.key;
-    });
-
-    setSelectedPlaces(nearby.length > 0 ? nearby : [clicked]);
-  }
+  const hasMultipleSubPlaces = (selected?.vessels.length ?? 0) > 0 &&
+    new Set(selected?.vessels.map((v) => v.location_label)).size > 1;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -117,8 +87,8 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
         </h2>
         {!error && (
           <span className="text-xs text-gray-400">
-            {data.totalMovements} mouvement{data.totalMovements > 1 ? 's' : ''} · {data.locatedPlaces} lieu
-            {data.locatedPlaces > 1 ? 'x' : ''}
+            {data.totalMovements} mouvement{data.totalMovements > 1 ? 's' : ''} · {data.locatedPlaces} zone
+            {data.locatedPlaces > 1 ? 's' : ''}
             {data.unlocatedCount > 0 ? ` · ${data.unlocatedCount} non localisé${data.unlocatedCount > 1 ? 's' : ''}` : ''}
           </span>
         )}
@@ -143,13 +113,12 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
                 center={[10, 20]}
                 zoom={1}
                 minZoom={1}
-                maxZoom={48}
+                maxZoom={20}
                 onMoveEnd={(position) => setZoom(position.zoom)}
               >
                 <Geographies geography={geoTopo}>
-                  {({ geographies, projection }) => {
-                    projectionRef.current = projection as unknown as ProjectionFn;
-                    return geographies.map((geography) => (
+                  {({ geographies }) =>
+                    geographies.map((geography) => (
                       <Geography
                         key={geography.rsmKey}
                         geography={geography}
@@ -159,8 +128,8 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
                           pressed: { fill: '#e5e7eb', stroke: '#d1d5db', strokeWidth: 0.5, outline: 'none' },
                         }}
                       />
-                    ));
-                  }}
+                    ))
+                  }
                 </Geographies>
                 {data.locations.map((location) => (
                   <Marker key={location.key} coordinates={[location.lon, location.lat]}>
@@ -170,7 +139,7 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
                       fillOpacity={0.75}
                       stroke="#fff"
                       strokeWidth={Math.max(0.5, 1 / zoom)}
-                      onClick={() => handleMarkerClick(location)}
+                      onClick={() => setSelected(location)}
                       style={{ cursor: 'pointer' }}
                       role="button"
                       aria-label={`${location.label} — ${location.total} mouvement${location.total > 1 ? 's' : ''}`}
@@ -182,17 +151,13 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
           </div>
 
           <div className="lg:col-span-1">
-            {selectedPlaces ? (
+            {selected ? (
               <div className="rounded-lg border border-gray-200 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-gray-900">
-                    {selectedPlaces.length === 1
-                      ? selectedPlaces[0].label
-                      : `${selectedPlaces.length} lieux proches : ${selectedPlaces.map((p) => p.label).join(', ')}`}
-                  </h3>
+                  <h3 className="font-semibold text-gray-900">{selected.label}</h3>
                   <button
                     type="button"
-                    onClick={() => setSelectedPlaces(null)}
+                    onClick={() => setSelected(null)}
                     className="shrink-0 text-gray-400 hover:text-gray-600"
                     aria-label="Fermer"
                   >
@@ -200,24 +165,22 @@ export function MarketMovementsMap({ data, error = false }: MarketMovementsMapPr
                   </button>
                 </div>
                 <p className="mb-2 text-xs text-gray-400">
-                  {selectedNewCount} nouveau{selectedNewCount > 1 ? 'x' : ''} · {selectedSoldCount} vendu
-                  {selectedSoldCount > 1 ? 's' : ''}
+                  {selected.newCount} nouveau{selected.newCount > 1 ? 'x' : ''} · {selected.soldCount} vendu
+                  {selected.soldCount > 1 ? 's' : ''}
                 </p>
                 <ul>
-                  {selectedPlaces.flatMap((place) =>
-                    place.vessels.map((vessel, i) => (
-                      <VesselRow
-                        key={`${vessel.vid}-${vessel.feed_type}-${i}`}
-                        vessel={vessel}
-                        placeLabel={selectedPlaces.length > 1 ? place.label : undefined}
-                      />
-                    )),
-                  )}
+                  {selected.vessels.map((vessel, i) => (
+                    <VesselRow
+                      key={`${vessel.vid}-${vessel.feed_type}-${i}`}
+                      vessel={vessel}
+                      showLocation={hasMultipleSubPlaces}
+                    />
+                  ))}
                 </ul>
               </div>
             ) : (
               <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-400">
-                Cliquez sur un point de la carte pour voir les bateaux du lieu.
+                Cliquez sur un point de la carte pour voir les bateaux de la zone.
               </div>
             )}
           </div>
