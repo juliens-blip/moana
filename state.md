@@ -18,6 +18,36 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
 
 ## Cycles récents (<18h)
 
+### [2026-07-24] Cycle 9 — LOOP `market-trends-map` : clustering/spiderfy des bulles (retour UX mobile)
+- **Fait** : retour utilisateur — bulles de `MarketMovementsMap.tsx` trop collées
+  en vue monde, imperceptibles au clic surtout mobile. `tasks/market-trends-map/
+  04_clustering_ux_fix.md` (EXPLORE : confirmé `react-simple-maps`/SVG, pas
+  Leaflet, donc pas de lib de clustering marker-based existante ; `ZoomableGroup`
+  accepte `center`/`zoom` **contrôlés**, vérifié dans le bundle de la lib).
+  Ajout `lib/geo/screen-cluster.ts` (union-find générique sur distance
+  projetée) branché dans un nouveau sous-composant `MapMarkers` qui recalcule
+  le clustering en **pixels écran live** (`useMapContext`/`useZoomPanContext`)
+  à chaque pan/zoom : clic sur cluster multi-zones → zoom programmatique
+  (×4, plafonné `MAX_ZOOM=20`) ; si déjà au max et toujours fusionné →
+  **spiderfy** (éventail de bulles individuelles) ; cercle de hit-area
+  invisible ≥22px de rayon sous chaque bulle (design visuel inchangé) ;
+  boutons zoom +/-/reset (44×44px) superposés + `touchAction:'none'` pour le
+  tactile mobile.
+- **Bug trouvé et corrigé en LOOP** : agent test-code a détecté que `maxTotal`
+  (échelle de taille des bulles) était recalculé depuis le clustering courant
+  au lieu d'un maximum global fixe → "pulsation" de taille au pan/zoom.
+  Corrigé (calcul unique sur `locations` complet) ; lint/tsc rejoués verts.
+  Voir [[journalbug]].
+- **Tests** : lint ✅, `tsc --noEmit` ✅, `npm run build` ✅ (route
+  `/dashboard/market-trends` toujours code-split seule), 25/25 tests unitaires
+  ✅ (6 nouveaux `screen-cluster.test.ts` + 19 préexistants inchangés), agent
+  test-code indépendant ✅ verdict global après correctif du point mineur.
+- **Non fait** : contrôle visuel authentifié/tactile réel (même limite que le
+  cycle 8 — pas de credentials broker ni d'outil navigateur ici). Rien commité.
+- **Prochaine étape** : QA manuelle mobile réelle (pan/pinch, tap cluster,
+  spiderfy, boutons +/-/reset) dès qu'un environnement navigateur/credentials
+  est disponible, puis décision utilisateur pour commit + déploiement.
+
 ### [2026-07-23] Cycle 8 — Outil #5 `market-trends-map` : tunnel complet EXPLORE→APEX→CODE→TEST
 - **Fait** : tunnel complet (`tasks/market-trends-map/01_analysis.md`/`02_plan.md`/
   `03_implementation_log.md`). Bloc A de `/dashboard/market-trends` (3 courbes

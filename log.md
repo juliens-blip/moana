@@ -1,5 +1,9 @@
 # Journal
 
+## 2026-07-24 — Clustering/spiderfy des bulles de la carte (retour UX mobile)
+
+[2026-07-24] LOOP/CODE/TEST | Bulles trop collées en vue monde sur `MarketMovementsMap.tsx`, imperceptibles au clic surtout mobile ; ajout `lib/geo/screen-cluster.ts` (clustering par distance projetée écran, recalculé live au pan/zoom), clic sur cluster = zoom programmatique puis spiderfy en éventail si déjà au zoom max, hit-area tactile ≥44px sous chaque bulle (design inchangé), boutons zoom +/-/reset | lint, type-check, build (route toujours code-split seule), 25/25 tests unitaires, agent test-code indépendant vert après correctif d'un `maxTotal` recalculé par erreur sur le clustering courant (pulsation de taille corrigée) | QA tactile réelle et déploiement restent à faire (pas de credentials/navigateur ici)
+
 ## 2026-07-23 — Carte des mouvements de marché (tunnel complet)
 
 [2026-07-23] CODE/TEST | Bloc A de Market Trends remplacé par une carte monde (`react-simple-maps`, atlas vendored, géocodage offline ville→pays) des mouvements new/sold sur 14 jours ; crawl passé de 72h à 48h | lint, type-check, build (16/16 pages), 13/13 tests unitaires, agent test-code indépendant tous verts ; bug de bundling partagé trouvé et corrigé (`next/dynamic` + retrait barrel) | déploiement (Vercel + SSH EC2 pour le timer) et contrôle visuel authentifié restent à faire
