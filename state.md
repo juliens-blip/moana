@@ -18,6 +18,71 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
 
 ## Cycles récents (<18h)
 
+### [2026-07-25] Cycle 11 — LOOP `market-trends-map` : MAX_ZOOM + spiderfy insuffisants à l'échelle (3e retour utilisateur)
+- **Fait** : après Cycle 10 (tout vert lint/tsc/build/tests, jamais commit/push),
+  3e retour utilisateur — carte toujours mauvaise. EXPLORE : script de vérif
+  `tasks/market-trends-map/_verify-cluster.ts` trouvé corrompu (octets nuls,
+  append Bash heredoc antérieur) → réparé (réécrit via `Write` + `Copy-Item`,
+  jamais de `>>` heredoc sur ce fichier). Re-exécuté : `clusterByOverlap`
+  toujours correct (0 chevauchement, Pass 1), mais deux nouveaux contrôles
+  géométriques ajoutés révèlent 2 bugs jamais couverts par les cycles 9/10 :
+  (A) `MAX_ZOOM=20` mathématiquement trop bas — aucun hub proche-mais-distinct
+  (Antibes/Monaco 24km, besoin zoom≥75 ; Antibes/Cannes 9km, besoin zoom≥209)
+  ne pouvait jamais se séparer par zoom, tombait systématiquement en spiderfy ;
+  (B) `SPIDERFY_STEP_PX=26` insuffisant à l'échelle — sweep N=2..50 montre
+  41.7px d'espacement pire-cas dès 4 membres (cible 50px), donc le spiderfy
+  lui-même laissait des bulles superposées, violant l'invariant dur "aucun
+  bateau jamais caché". PLAN : `tasks/market-trends-map/06_zoom_spiderfy_fix.md`
+  (apex, avant tout code). CODE : `MAX_ZOOM` 20→256 (=4⁴, 4 clics de
+  `CLUSTER_ZOOM_FACTOR` depuis 1), `SPIDERFY_STEP_PX` 26→38 (marge ~22%
+  au-dessus du minimum 34 trouvé par sweep) dans `MarketMovementsMap.tsx`.
+  Aucun autre changement — clustering et rendu déjà corrects.
+- **Tests** : `_verify-cluster.ts` → `ALL PASSES CLEAN` (0 chevauchement
+  toutes passes, Antibes/Cannes et Antibes/Monaco séparent maintenant
+  proprement par zoom, seul Ft. Lauderdale/Miami à 5km tombe légitimement
+  en spiderfy). Agent test-code indépendant : lint ✅, `tsc --noEmit` ✅,
+  `npm run build` ✅ (16/16 pages, route carte 79.5 kB), 26/26 tests
+  unitaires ✅, dev server smoke test ✅. 2 bugs consignés dans `journalbug.md`
+  (`market-trends-map-clustering-v3`).
+- **Leçon retenue** : lint/tsc/build/tests unitaires ne peuvent PAS détecter
+  un chevauchement pixel réel — c'est pourquoi cycles 9/10 ont clôturé
+  "tout vert" avec le bug encore présent. `_verify-cluster.ts` (géométrie
+  rejouée mathématiquement) est le seul contrôle qui l'a détecté ; à garder
+  comme étape de vérif systématique pour tout futur changement sur cette carte.
+- **Prochaine étape** : commit + push (autorisation utilisateur déjà donnée),
+  puis QA manuelle mobile réelle dès qu'un environnement le permet.
+
+### [2026-07-24] Cycle 10 — LOOP `market-trends-map` : clustering définitif par recouvrement réel (2e retour utilisateur)
+- **Fait** : après déploiement du Cycle 9 (commit `b6ef2e6`), retour utilisateur —
+  toujours des bulles superposées/inaccessibles. Cause racine identifiée :
+  le clustering v1 fusionnait sur un **seuil de distance fixe** entre centres
+  (26px), indépendant du rayon réel des bulles (jusqu'à 20-25px, plus après
+  fusion) — deux grosses bulles pouvaient rester "proches mais pas assez pour
+  le seuil" tout en se chevauchant visuellement à l'écran.
+  `tasks/market-trends-map/05_overlap_aware_clustering.md`. Remplacement
+  complet : `lib/geo/screen-cluster.ts` → `clusterByOverlap()` (union-find
+  agglomératif **à point fixe**, fusionne deux groupes dès que leurs cercles
+  — rayon réel = même valeur que la zone tactile invisible — se touchent,
+  recalcule après chaque fusion pour capter les cascades qu'une passe unique
+  raterait). Spiderfy de secours passé d'un cercle fixe à une spirale
+  (angle doré ≈137,5°) pour rester propre au-delà de 2-3 zones coïncidentes.
+- **Tests** : lint ✅ (0 avertissement, `react-hooks/exhaustive-deps` inclus —
+  accesseur de rayon inliné dans le `useMemo`, pas de règle désactivée),
+  `tsc --noEmit` ✅, `npm run build` ✅ (16/16 pages, route carte 79.5 kB,
+  stable), 26/26 tests unitaires ✅ (7 nouveaux `clusterByOverlap`, dont un
+  qui encode directement le bug trouvé et un qui prouve la cascade multi-passe).
+  Agent test-code indépendant ✅ verdict "Prêt" — relecture manuelle confirme
+  terminaison correcte, aucune paire chevauchante non fusionnée, cohérence
+  d'unités position/rayon vérifiée par script Node à plusieurs niveaux de zoom.
+  Graphify réindexé + interrogé : plus aucune référence à l'ancienne fonction
+  supprimée (`clusterByProjectedDistance`), périmètre confirmé isolé.
+- **Non fait** : contrôle visuel/tactile réel en navigateur — même limite que
+  les cycles précédents (pas de credentials broker, pas d'outil navigateur).
+  La preuve de correction repose sur des tests unitaires qui encodent
+  directement la géométrie du bug, pas sur une capture d'écran réelle.
+- **Prochaine étape** : commit + push (demandé explicitement par l'utilisateur),
+  puis QA manuelle mobile réelle dès qu'un environnement le permet.
+
 ### [2026-07-24] Cycle 9 — LOOP `market-trends-map` : clustering/spiderfy des bulles (retour UX mobile)
 - **Fait** : retour utilisateur — bulles de `MarketMovementsMap.tsx` trop collées
   en vue monde, imperceptibles au clic surtout mobile. `tasks/market-trends-map/

@@ -12,7 +12,7 @@ import {
 } from 'react-simple-maps';
 import { Sparkles, CheckCircle2, X, ExternalLink, Plus, Minus, Maximize2 } from 'lucide-react';
 import type { MarketMovementLocation, MarketMovementsResult } from '@/lib/types';
-import { clusterByProjectedDistance } from '@/lib/geo/screen-cluster';
+import { clusterByOverlap } from '@/lib/geo/screen-cluster';
 import geoTopo from '@/lib/geo/atlas/countries-110m.json';
 
 interface MarketMovementsMapProps {
@@ -34,18 +34,29 @@ const MIN_HIT_RADIUS = 22;
 
 const DEFAULT_CENTER: [number, number] = [10, 20];
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 20;
+// High enough that real nearby-but-distinct yacht hubs (e.g. Antibes/Monaco,
+// ~24km apart, needs zoom ~75 to clear 50px on this projection) can fully
+// separate by zoom alone, not just fall straight to spiderfy. 4^4 = exactly
+// 4 cluster-zoom clicks (CLUSTER_ZOOM_FACTOR) from MIN_ZOOM, so it's always
+// reachable in a small, predictable number of clicks. Only genuinely
+// sub-5km-apart or duplicate points still rely on spiderfy past this point.
+const MAX_ZOOM = 256;
 const ZOOM_BUTTON_FACTOR = 1.6;
 const CLUSTER_ZOOM_FACTOR = 4;
-// Screen-pixel radius under which nearby bubbles are merged into one
-// clickable cluster. Recomputed on every pan/zoom (see useZoomPanContext
-// below) so clusters split apart the moment there's enough room on screen —
-// this is what actually fixes "can't tap a bubble, they're all touching."
-const CLUSTER_PIXEL_RADIUS = 26;
+// Extra breathing room (screen px) kept between two bubbles even when their
+// radii don't strictly overlap, so adjacent tap targets never sit flush.
+const CLUSTER_GAP_PX = 6;
 // Fallback for points that stay screen-coincident even at MAX_ZOOM (e.g. two
-// berths a few hundred meters apart): fan them out around the cluster so
-// each becomes its own clickable target.
-const SPIDERFY_LEG_PX = 30;
+// berths a few hundred meters apart): fan them out in a spiral around the
+// cluster centroid so each becomes its own clickable target. Spiral (not a
+// fixed ring) so it keeps working cleanly if more than a couple of zones
+// ever end up genuinely coincident.
+// Must keep worst-case pairwise spacing across the spiral >= 2*MIN_HIT_RADIUS
+// + CLUSTER_GAP_PX (50px) for any realistic cluster size, or two spiderfied
+// legs can still overlap. Verified by sweep in _verify-cluster.ts: 34 is the
+// bare minimum that clears 50px (54.5px), 38 keeps a real margin (60.9px).
+const SPIDERFY_STEP_PX = 38;
+const GOLDEN_ANGLE_RAD = Math.PI * (3 - Math.sqrt(5));
 
 function bubbleRadius(total: number, maxTotal: number): number {
   if (maxTotal <= 0) return MIN_RADIUS;
@@ -150,23 +161,39 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
   const { k: zoomScale } = useZoomPanContext();
   const strokeWidth = Math.max(0.5, 1 / zoomScale);
   const hitRadius = MIN_HIT_RADIUS / zoomScale;
-  const thresholdWorld = CLUSTER_PIXEL_RADIUS / zoomScale;
-
-  const clusters = useMemo(
-    () =>
-      clusterByProjectedDistance(
-        locations,
-        (location) => projection([location.lon, location.lat]),
-        thresholdWorld,
-      ),
-    [locations, projection, thresholdWorld],
-  );
 
   // Fixed to the full, un-clustered location list (not the current on-screen
   // clusters) so bubble sizes stay stable as you pan/zoom — recomputing this
   // from the transient clustering would make every bubble subtly resize each
   // time a nearby cluster merges or splits.
   const maxTotal = locations.reduce((max, l) => Math.max(max, l.total), 0);
+
+  const clusters = useMemo(
+    () =>
+      clusterByOverlap(locations, {
+        project: (location) => {
+          const p = projection([location.lon, location.lat]);
+          // Bring the raw (pre-zoom-transform) projected position into the
+          // same screen-pixel space the radius is expressed in — only the
+          // scale matters for relative distances, the pan offset doesn't.
+          return p ? [p[0] * zoomScale, p[1] * zoomScale] : null;
+        },
+        // Screen-pixel radius a location (or a merged group of locations)
+        // would actually be drawn/tapped at — the SAME value used for the
+        // hit-area below, so the clustering decision matches reality
+        // instead of a blanket pixel radius. This is what makes a big
+        // bubble merge with a neighbor further away than a small bubble
+        // would, and is what actually keeps every bubble tappable: two
+        // groups are only left un-merged once their real circles (visual +
+        // touch target) genuinely stop overlapping.
+        radius: (members) => {
+          const total = members.reduce((sum, m) => sum + m.total, 0);
+          return Math.max(bubbleRadius(total, maxTotal), MIN_HIT_RADIUS);
+        },
+        gap: CLUSTER_GAP_PX,
+      }),
+    [locations, projection, zoomScale, maxTotal],
+  );
 
   return (
     <>
@@ -216,15 +243,18 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
           );
         }
 
-        // Spiderfied: fan the underlying zones out in a small ring so every
-        // one gets its own clickable bubble, even though they're still
-        // geographically (and therefore visually) coincident at MAX_ZOOM.
+        // Spiderfied: fan the underlying zones out in a spiral (not a fixed
+        // ring, so it keeps every leg clickable even if more than a couple
+        // of zones end up genuinely coincident) so every one gets its own
+        // clickable bubble, even though they're still geographically (and
+        // therefore visually) identical at MAX_ZOOM.
         const [cx, cy] = projection([lon, lat]) ?? [0, 0];
-        const legPx = SPIDERFY_LEG_PX / zoomScale;
+        const stepPx = SPIDERFY_STEP_PX / zoomScale;
         return (
           <g key={key}>
             {members.map((member, i) => {
-              const angle = (2 * Math.PI * i) / members.length;
+              const legPx = stepPx * Math.sqrt(i + 1);
+              const angle = i * GOLDEN_ANGLE_RAD;
               const lx = cx + Math.cos(angle) * legPx;
               const ly = cy + Math.sin(angle) * legPx;
               return (
