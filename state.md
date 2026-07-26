@@ -18,6 +18,52 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
 
 ## Cycles récents (<18h)
 
+### [2026-07-26] Cycle 12 — `market-trends-map` : la VRAIE cause (espace d'unités SVG) — 4e retour utilisateur
+- **Fait** : demande explicite de l'utilisateur de traiter le bug moi-même
+  (pas de délégation à `test-code`). Deux causes racines, reproduites
+  numériquement AVANT tout changement de code :
+  (A) **erreur d'espace d'unités** — `ZoomableGroup` rend
+  `<g transform="… scale(k)">`, donc tout ce qui est dessiné dedans est en
+  unités locales et apparaît k× plus grand. Or tous les floors du composant
+  (`Math.max(3, r/k)`, `Math.max(0.5, 1/k)`, `Math.max(9, 11/k)`,
+  `Math.max(4, 8/k)`) étaient appliqués **après** la division : un plancher
+  de `3` vaut en fait `3·k` pixels écran. Rayon de clic mesuré : 22px à k=1,
+  48px à k=16, 192px à k=64, 768px à k=256 — alors que le clustering ne
+  garantit que 50px entre centres (22+22+6). Recouvrement de 46px dès k=16,
+  atteint au 2e clic puisqu'un clic sur cluster zoome ×4. La zone de clic
+  invisible enflant aussi, les bulles voisines devenaient inatteignables :
+  le symptôme rapporté, mot pour mot.
+  (B) **rayon non plafonné** — `Math.sqrt(total / maxTotal)` sans clamp, mais
+  un cluster **somme** ses membres alors que `maxTotal` est le max par lieu :
+  34px pour un total de 40, 83px pour 300, contre `MAX_RADIUS`=20. Ce rayon
+  étant réinjecté dans la décision de clustering, le gros cluster continuait
+  d'« avaler » ses voisins (blob au zoom monde = « les ronds sont trop gros »).
+  CODE : `lib/geo/bubble-geometry.ts` (nouveau — `bubbleRadius` clampé,
+  `tapRadius` = **source de vérité unique** partagée par le clustering ET le
+  rendu, `toLocalUnits`), `MarketMovementsMap.tsx` (toute la géométrie en px
+  écran, convertie **exactement une fois** via `toLocal()`, bloc
+  « UNIT CONVENTION »). `MAX_RADIUS`/`MIN_HIT_RADIUS` volontairement non
+  touchés : le plafonnement fait déjà passer le pire blob de 166px à 40px de
+  diamètre. Doc : `tasks/market-trends-map/07_unit_space_bug.md`.
+- **Tests** : 45/45 ✅, `next lint` 0/0 ✅, `tsc --noEmit` ✅, `next build` ✅.
+  Surtout : **chaque assertion vérifiée ROUGE sur le code d'avant correctif**.
+  1re tentative ratée — l'assertion anti-chevauchement passait au VERT sur le
+  code cassé (grille synthétique à 17 unités d'écart, alors que le bug ne se
+  manifeste que pour `50/k < Δ < 6` unités projetées), soit exactement le mode
+  d'échec des cycles 9/10 ; remplacée par un jeu réaliste (hubs Côte d'Azur
+  sub-unitaires, bande 3–6 unités, poids lourds au rayon plafonné, points
+  strictement coïncidents).
+- **Leçon retenue** : sur une carte SVG zoomable, une valeur en pixels et une
+  valeur en unités locales ne sont **pas comparables** — un plancher posé du
+  mauvais côté de la division devient une valeur qui croît avec le zoom. Et un
+  test de régression jamais observé **rouge** ne prouve rien.
+- **Reste à faire** : QA tactile réelle sur mobile (pas de navigateur ici).
+  Point secondaire noté, non traité : `<ComposableMap width={800}>` dans un
+  conteneur responsive → sur un écran 375px le viewBox est réduit d'environ
+  0,47, donc la cible tactile de 44px ne fait plus que ~20 px CSS réels. La
+  géométrie de recouvrement étant invariante d'échelle, ce n'est pas le bug
+  rapporté, mais c'est une vraie limite mobile.
+
 ### [2026-07-25] Cycle 11 — LOOP `market-trends-map` : MAX_ZOOM + spiderfy insuffisants à l'échelle (3e retour utilisateur)
 - **Fait** : après Cycle 10 (tout vert lint/tsc/build/tests, jamais commit/push),
   3e retour utilisateur — carte toujours mauvaise. EXPLORE : script de vérif

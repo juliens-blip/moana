@@ -13,6 +13,7 @@ import {
 import { Sparkles, CheckCircle2, X, ExternalLink, Plus, Minus, Maximize2 } from 'lucide-react';
 import type { MarketMovementLocation, MarketMovementsResult } from '@/lib/types';
 import { clusterByOverlap } from '@/lib/geo/screen-cluster';
+import { MIN_HIT_RADIUS, bubbleRadius, tapRadius, toLocalUnits } from '@/lib/geo/bubble-geometry';
 import geoTopo from '@/lib/geo/atlas/countries-110m.json';
 
 interface MarketMovementsMapProps {
@@ -22,15 +23,18 @@ interface MarketMovementsMapProps {
 
 const NEW_COLOR = '#2a78d6';
 const SOLD_COLOR = '#10b981';
-// One bubble already represents a whole zone (nearby places are pre-merged
-// server-side, see lib/supabase/market-pulse-map.ts), so it's sized to read
-// as a single meaningful dot — bigger than a single-vessel marker, capped so
-// a busy zone never dominates the map.
-const MIN_RADIUS = 6;
-const MAX_RADIUS = 20;
-// Invisible hit-area floor (~44px diameter, the standard mobile touch target)
-// so small/packed bubbles stay tappable without changing their visible size.
-const MIN_HIT_RADIUS = 22;
+
+// UNIT CONVENTION — every pixel constant in this file is a SCREEN pixel.
+// Markers live inside ZoomableGroup, which wraps them in
+// `<g transform="translate(x y) scale(k)">`, so anything drawn there is in
+// LOCAL units and appears k times bigger on screen. Convert exactly once,
+// at the point of use, with the toLocal() helper in MapMarkers — never write
+// a bare pixel number into a rendered attribute, and never floor a value in
+// local units (a `Math.max(3, r / k)` floor is 3*k screen pixels, i.e. it
+// grows without bound as you zoom in).
+//
+// Bubble sizing/tap-target geometry itself lives in lib/geo/bubble-geometry.ts
+// (imported above) so it can be unit-tested against the clustering.
 
 const DEFAULT_CENTER: [number, number] = [10, 20];
 const MIN_ZOOM = 1;
@@ -57,12 +61,6 @@ const CLUSTER_GAP_PX = 6;
 // bare minimum that clears 50px (54.5px), 38 keeps a real margin (60.9px).
 const SPIDERFY_STEP_PX = 38;
 const GOLDEN_ANGLE_RAD = Math.PI * (3 - Math.sqrt(5));
-
-function bubbleRadius(total: number, maxTotal: number): number {
-  if (maxTotal <= 0) return MIN_RADIUS;
-  const ratio = Math.sqrt(total / maxTotal);
-  return MIN_RADIUS + ratio * (MAX_RADIUS - MIN_RADIUS);
-}
 
 function bubbleColor(newCount: number, soldCount: number): string {
   return soldCount > newCount ? SOLD_COLOR : NEW_COLOR;
@@ -159,8 +157,11 @@ interface MapMarkersProps {
 function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick }: MapMarkersProps) {
   const { projection } = useMapContext();
   const { k: zoomScale } = useZoomPanContext();
-  const strokeWidth = Math.max(0.5, 1 / zoomScale);
-  const hitRadius = MIN_HIT_RADIUS / zoomScale;
+  // Screen pixels -> ZoomableGroup local units. Everything rendered below
+  // goes through this exactly once, so a bubble keeps a constant on-screen
+  // size at every zoom level instead of inflating with k.
+  const toLocal = (screenPx: number) => toLocalUnits(screenPx, zoomScale);
+  const strokeWidth = toLocal(1);
 
   // Fixed to the full, un-clustered location list (not the current on-screen
   // clusters) so bubble sizes stay stable as you pan/zoom — recomputing this
@@ -179,17 +180,14 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
           return p ? [p[0] * zoomScale, p[1] * zoomScale] : null;
         },
         // Screen-pixel radius a location (or a merged group of locations)
-        // would actually be drawn/tapped at — the SAME value used for the
-        // hit-area below, so the clustering decision matches reality
+        // is actually drawn/tapped at — literally the same tapRadius() the
+        // render below uses, so the clustering decision matches reality
         // instead of a blanket pixel radius. This is what makes a big
         // bubble merge with a neighbor further away than a small bubble
         // would, and is what actually keeps every bubble tappable: two
         // groups are only left un-merged once their real circles (visual +
         // touch target) genuinely stop overlapping.
-        radius: (members) => {
-          const total = members.reduce((sum, m) => sum + m.total, 0);
-          return Math.max(bubbleRadius(total, maxTotal), MIN_HIT_RADIUS);
-        },
+        radius: (members) => tapRadius(members.reduce((sum, m) => sum + m.total, 0), maxTotal),
         gap: CLUSTER_GAP_PX,
       }),
     [locations, projection, zoomScale, maxTotal],
@@ -209,8 +207,8 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
           return (
             <Marker key={location.key} coordinates={[location.lon, location.lat]}>
               <Bubble
-                radius={Math.max(3, bubbleRadius(location.total, maxTotal) / zoomScale)}
-                hitRadius={hitRadius}
+                radius={toLocal(bubbleRadius(location.total, maxTotal))}
+                hitRadius={toLocal(tapRadius(location.total, maxTotal))}
                 fill={bubbleColor(location.newCount, location.soldCount)}
                 strokeWidth={strokeWidth}
                 label={`${location.label} — ${location.total} mouvement${location.total > 1 ? 's' : ''}`}
@@ -230,13 +228,13 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
           return (
             <Marker key={key} coordinates={[lon, lat]}>
               <Bubble
-                radius={Math.max(3, bubbleRadius(total, maxTotal) / zoomScale)}
-                hitRadius={hitRadius}
+                radius={toLocal(bubbleRadius(total, maxTotal))}
+                hitRadius={toLocal(tapRadius(total, maxTotal))}
                 fill={bubbleColor(newCount, soldCount)}
                 strokeWidth={strokeWidth}
                 label={`Zone groupée — ${members.length} secteurs, ${total} mouvement${total > 1 ? 's' : ''}`}
                 badge={members.length}
-                badgeFontSize={Math.max(9, 11 / zoomScale)}
+                badgeFontSize={toLocal(11)}
                 onClick={() => onClusterClick({ key, lon, lat }, zoomScale < MAX_ZOOM)}
               />
             </Marker>
@@ -249,7 +247,7 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
         // clickable bubble, even though they're still geographically (and
         // therefore visually) identical at MAX_ZOOM.
         const [cx, cy] = projection([lon, lat]) ?? [0, 0];
-        const stepPx = SPIDERFY_STEP_PX / zoomScale;
+        const stepPx = toLocal(SPIDERFY_STEP_PX);
         return (
           <g key={key}>
             {members.map((member, i) => {
@@ -262,8 +260,8 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
                   <line x1={cx} y1={cy} x2={lx} y2={ly} stroke="#9ca3af" strokeWidth={strokeWidth} />
                   <g transform={`translate(${lx} ${ly})`}>
                     <Bubble
-                      radius={Math.max(3, bubbleRadius(member.total, maxTotal) / zoomScale)}
-                      hitRadius={hitRadius}
+                      radius={toLocal(bubbleRadius(member.total, maxTotal))}
+                      hitRadius={toLocal(tapRadius(member.total, maxTotal))}
                       fill={bubbleColor(member.newCount, member.soldCount)}
                       strokeWidth={strokeWidth}
                       label={`${member.label} — ${member.total} mouvement${member.total > 1 ? 's' : ''}`}
@@ -280,8 +278,8 @@ function MapMarkers({ locations, spiderfiedKey, onSelectLocation, onClusterClick
               aria-label="Refermer la zone dépliée"
               style={{ cursor: 'pointer' }}
             >
-              <circle r={Math.max(hitRadius, 8 / zoomScale)} fill="transparent" />
-              <circle r={Math.max(4, 8 / zoomScale)} fill="#fff" stroke="#9ca3af" strokeWidth={strokeWidth} />
+              <circle r={toLocal(MIN_HIT_RADIUS)} fill="transparent" />
+              <circle r={toLocal(8)} fill="#fff" stroke="#9ca3af" strokeWidth={strokeWidth} />
             </g>
           </g>
         );

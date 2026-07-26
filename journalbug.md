@@ -53,3 +53,22 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   (aucun modèle requis, fonctionne) ; `query`/`vsearch` désactivés côté agents |
   leçon : sur ce poste, RAG = BM25 uniquement ; vectoriel à réactiver seulement si
   GPU (CUDA/Vulkan) configuré, puis `qmd embed --force`.
+- [2026-07-26] market-trends-map | bulles trop grosses et superposées, tous les
+  bateaux pas cliquables (4e retour, après 3 cycles clôturés "tout vert") |
+  DEUX causes : (A) espace d'unités — les floors étaient appliqués APRÈS la
+  division par `k` (`Math.max(3, r/k)`), donc en unités locales dans
+  `<g scale(k)>` : un plancher de 3 vaut 3·k px écran (rayon de clic 22px à
+  k=1 mais 768px à k=256) alors que le clustering ne garantit que 50px entre
+  centres ; (B) `bubbleRadius` sans clamp alors qu'un cluster somme ses
+  membres et que `maxTotal` est le max par lieu (83px pour un total de 300 vs
+  MAX_RADIUS=20), rayon réinjecté dans la décision de clustering → blob qui
+  avale ses voisins | géométrie extraite dans `lib/geo/bubble-geometry.ts`
+  (`bubbleRadius` clampé, `tapRadius` source de vérité unique clustering+rendu,
+  `toLocalUnits`), conversion px→unités locales **exactement une fois** dans
+  le composant | **leçon : (1) sur une carte SVG zoomable, ne JAMAIS plancher
+  une valeur déjà divisée par le zoom — planchers en px écran puis conversion
+  unique ; (2) un test de régression jamais observé ROUGE sur le code fautif
+  ne prouve rien : ici la 1re version passait au vert sur le code cassé car la
+  grille synthétique (17 unités) ne pouvait pas déclencher un bug qui n'existe
+  que pour `50/k < Δ < 6` — c'est exactement ce qui a laissé passer les cycles
+  9/10.**
