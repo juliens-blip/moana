@@ -1,4 +1,4 @@
-import { createClient } from './server';
+import { verifyPassword } from '@/lib/security';
 import { createAdminClient } from './admin';
 import { cookies } from 'next/headers';
 
@@ -18,54 +18,43 @@ export interface Session {
 export async function login(brokerName: string, password: string): Promise<Session | null> {
   // Use admin client to bypass RLS policies
   const supabase = createAdminClient();
+  const normalizedBrokerName = brokerName.trim();
 
   try {
-    console.log('[login] Attempting login for:', brokerName);
-    console.log('[login] Password provided:', password);
-
     // Récupérer le broker par broker_name
     const { data: broker, error } = await supabase
       .from('brokers')
       .select('*')
-      .eq('broker_name', brokerName)
+      .eq('broker_name', normalizedBrokerName)
       .single();
 
-    console.log('[login] Query error:', error);
-    console.log('[login] Broker data:', broker ? {
-      id: broker.id,
-      broker_name: broker.broker_name,
-      password_hash: broker.password_hash,
-      email: broker.email
-    } : 'null');
+    const resolvedBroker = broker ?? null;
+    const resolvedError = error;
 
-    if (error || !broker) {
-      console.error('[login] Broker not found:', brokerName, error);
+    const brokerRecord = resolvedBroker ??
+      (await supabase
+        .from('brokers')
+        .select('*')
+        .ilike('broker_name', normalizedBrokerName)
+        .maybeSingle()).data ?? null;
+
+    if ((!brokerRecord && resolvedError) || !brokerRecord) {
       return null;
     }
 
-    // Vérifier le mot de passe (à améliorer avec bcrypt)
-    // TODO: Hash passwords avec bcrypt
-    console.log('[login] Comparing passwords:', {
-      stored: broker.password_hash,
-      provided: password,
-      match: broker.password_hash === password
-    });
-
-    if (broker.password_hash !== password) {
-      console.error('[login] Invalid password - stored:', broker.password_hash, 'provided:', password);
+    const passwordCheck = await verifyPassword(password, brokerRecord.password_hash);
+    if (!passwordCheck.valid) {
       return null;
     }
 
     const session: Session = {
-      brokerId: broker.id,
-      broker: broker.broker_name,
+      brokerId: brokerRecord.id,
+      broker: brokerRecord.broker_name,
       expiresAt: Date.now() + SESSION_MAX_AGE * 1000,
     };
 
-    console.log('[login] Session created successfully:', session);
     return session;
-  } catch (error) {
-    console.error('[login] Exception:', error);
+  } catch {
     return null;
   }
 }
@@ -91,8 +80,7 @@ export async function getSession(): Promise<Session | null> {
     }
 
     return session;
-  } catch (error) {
-    console.error('[getSession] Session parse error:', error);
+  } catch {
     return null;
   }
 }

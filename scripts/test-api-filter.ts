@@ -5,19 +5,25 @@ import path from 'path';
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 
 async function testApiFilter() {
-  console.log('🧪 Testing API /api/listings?broker=Charles...\n');
+  const testBroker = process.env.TEST_BROKER_NAME;
+  const testPassword = process.env.TEST_BROKER_PASSWORD;
+  if (!testBroker || !testPassword) {
+    throw new Error('TEST_BROKER_NAME and TEST_BROKER_PASSWORD are required');
+  }
+
+  console.log(`🧪 Testing API /api/listings?broker=${testBroker}...\n`);
 
   try {
     // First, we need to login to get a session
-    console.log('Step 1: Logging in as Charles...');
+    console.log(`Step 1: Logging in as ${testBroker}...`);
     const loginResponse = await fetch('http://localhost:3000/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        broker: 'Charles',
-        password: 'changeme',
+        broker: testBroker,
+        password: testPassword,
       }),
     });
 
@@ -45,8 +51,8 @@ async function testApiFilter() {
     console.log(`Total listings: ${allListingsData.data?.length || 0}`);
 
     // Test 3: Get filtered listings
-    console.log('\n\nStep 3: Getting filtered listings (broker=Charles)...');
-    const filteredResponse = await fetch('http://localhost:3000/api/listings?broker=Charles', {
+    console.log(`\n\nStep 3: Getting filtered listings (broker=${testBroker})...`);
+    const filteredResponse = await fetch(`http://localhost:3000/api/listings?broker=${encodeURIComponent(testBroker)}`, {
       headers: {
         'Cookie': cookies || '',
       },

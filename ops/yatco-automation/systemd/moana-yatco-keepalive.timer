@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the Moana YATCO BOSS session alive every 4 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=4h
+AccuracySec=5min
+RandomizedDelaySec=15min
+Unit=moana-yatco-keepalive.service
+
+[Install]
+WantedBy=timers.target

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/lib/supabase/auth';
 import { LoginForm } from '@/components/auth/LoginForm';
 
 // Force dynamic rendering to avoid SSR errors

@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Mail, Phone, Globe, Anchor, Calendar, MapPin,
   ExternalLink, MessageSquare, User, Clock, Building2,
-  CheckCircle, XCircle, PhoneCall, Trophy, ShieldCheck, RefreshCw
+  CheckCircle, XCircle, PhoneCall, Trophy, ShieldCheck, ShieldAlert, RefreshCw
 } from 'lucide-react';
 import type { LeadWithBroker, LeadStatus } from '@/lib/types';
 import type { KycReport, KycSummary } from '@/lib/kyc/types';
+import type { SanctionsReport, SanctionsSummary } from '@/lib/sanctions/types';
 import { LeadStatusBadge, LeadStatusSelect } from './LeadStatusBadge';
 import { Button } from '@/components/ui';
 import { formatRelativeTime } from '@/lib/utils';
@@ -30,17 +31,24 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
   const [kyc, setKyc] = useState<KycSummary | undefined>();
   const [kycReport, setKycReport] = useState<KycReport | undefined>();
   const [kycLoading, setKycLoading] = useState(false);
+  const [sanctions, setSanctions] = useState<SanctionsSummary | undefined>();
+  const [sanctionsReport, setSanctionsReport] = useState<SanctionsReport | undefined>();
+  const [sanctionsLoading, setSanctionsLoading] = useState(false);
 
   useEffect(() => {
     if (!lead) {
       setNotes('');
       setKyc(undefined);
       setKycReport(undefined);
+      setSanctions(undefined);
+      setSanctionsReport(undefined);
       return;
     }
     setNotes(lead.lead_comments || '');
     setKyc(lead.kyc);
     setKycReport(undefined);
+    setSanctions(lead.sanctions);
+    setSanctionsReport(undefined);
   }, [lead]);
 
   useEffect(() => {
@@ -58,6 +66,27 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
       .catch((error) => {
         if (error instanceof Error && error.name !== 'AbortError') {
           console.error('Error loading KYC report:', error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [lead?.id, isOpen]);
+
+  useEffect(() => {
+    const leadId = lead?.id;
+    if (!leadId || !isOpen) return;
+
+    const controller = new AbortController();
+    void fetch(`/api/leads/${leadId}/sanctions`, { signal: controller.signal, cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.success) return;
+        setSanctions(data.data?.summary as SanctionsSummary | undefined);
+        setSanctionsReport(data.data?.report as SanctionsReport | undefined);
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error loading sanctions report:', error);
         }
       });
 
@@ -231,6 +260,30 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
     }
   };
 
+  const handleSanctionsRecheck = async () => {
+    setSanctionsLoading(true);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/sanctions`, { method: 'POST' });
+      const data = await response.json();
+      if (!data.success) {
+        toast.error(data.error || 'Filtrage sanctions impossible');
+        return;
+      }
+
+      const summary = data.data?.summary as SanctionsSummary | undefined;
+      const report = data.data?.report as SanctionsReport | undefined;
+      setSanctions(summary);
+      setSanctionsReport(report);
+      if (summary) onLeadUpdated?.({ ...lead, sanctions: summary });
+      toast.success('Filtrage sanctions relancé');
+    } catch (error) {
+      console.error('Error refreshing sanctions screening:', error);
+      toast.error('Erreur de connexion sanctions');
+    } finally {
+      setSanctionsLoading(false);
+    }
+  };
+
   const kycStatusLabel: Record<KycSummary['status'], string> = {
     pending: 'En attente',
     running: 'Analyse en cours',
@@ -262,6 +315,20 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
     court_record: 'Justice',
     maritime_db: 'Maritime',
     other: 'Source publique',
+  };
+
+  const sanctionsStatusLabel: Record<SanctionsSummary['status'], string> = {
+    no_match: 'Aucune correspondance',
+    possible_match: 'Correspondance possible',
+    insufficient_data: 'Donnée insuffisante',
+    error: 'Erreur technique',
+  };
+
+  const sanctionsTopicLabel: Record<string, string> = {
+    sanction: 'Sanctions',
+    'sanction.linked': 'Lié à une sanction',
+    'role.pep': 'PEP',
+    debarment: 'Exclusion marchés publics',
   };
 
   return (
@@ -485,6 +552,96 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdated }: LeadDe
                       ) : (
                         <p className="text-sm text-gray-600">
                           Aucun contrôle KYC enregistré pour cette demande.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sanctions screening (OpenSanctions) - separate from KYC/OSINT */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                    Filtrage Sanctions (OpenSanctions)
+                  </h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSanctionsRecheck}
+                    disabled={sanctionsLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${sanctionsLoading ? 'animate-spin' : ''}`} />
+                    {sanctions ? 'Revérifier' : 'Lancer'}
+                  </Button>
+                </div>
+
+                <div className={`p-4 rounded-lg border ${
+                  sanctions?.status === 'possible_match'
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className={`h-5 w-5 mt-0.5 ${
+                      sanctions?.status === 'possible_match' ? 'text-amber-600' : 'text-primary-600'
+                    }`} />
+                    <div className="flex-1 space-y-3">
+                      {sanctions ? (
+                        <>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1">
+                              {sanctionsStatusLabel[sanctions.status]}
+                            </span>
+                            {sanctions.match_count > 0 && (
+                              <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1">
+                                {sanctions.match_count} candidat{sanctions.match_count > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+
+                          {sanctions.status === 'possible_match' && sanctionsReport && sanctionsReport.matches.length > 0 && (
+                            <div className="rounded-md bg-white border border-slate-200 p-3 space-y-3">
+                              {sanctionsReport.matches.map((match) => (
+                                <div key={match.entity_id} className="text-sm border-t border-slate-100 pt-2 first:border-0 first:pt-0">
+                                  <a
+                                    href={match.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline break-all"
+                                  >
+                                    {match.caption} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                  </a>
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {match.schema === 'Person' ? 'Personne' : match.schema === 'Company' ? 'Entreprise' : match.schema}
+                                    {' · Score '}{Math.round(match.score * 100)}%
+                                    {match.countries.length > 0 && ` · ${match.countries.join(', ')}`}
+                                  </p>
+                                  {match.topics.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {match.topics.map((topic) => (
+                                        <span key={topic} className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] text-amber-800">
+                                          {sanctionsTopicLabel[topic] ?? topic}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {sanctions.status === 'error' && sanctions.error_message && (
+                            <p className="text-xs text-gray-500">{sanctions.error_message}</p>
+                          )}
+
+                          <p className="text-xs text-gray-500">
+                            Aide à la décision uniquement. Revue humaine requise avant toute décision de conformité.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          Aucun filtrage sanctions enregistré pour cette demande.
                         </p>
                       )}
                     </div>

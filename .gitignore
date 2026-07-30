@@ -38,6 +38,14 @@ yarn-error.log*
 .env.kyc
 /secrets/
 
+# Broker exports contain credentials and must stay outside version control.
+/backup/brokers.csv
+/backup/brokers.json
+
+# Graphify keeps the portable graph/report in version control; AST cache is
+# machine-local and too noisy to commit.
+/graphify-out/cache/
+
 # vercel
 .vercel
 

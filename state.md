@@ -11,8 +11,269 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
   `journalbug.md`/`CLAUDE.md` unifié/`tasks/README.md` créés. **Outil #1
   `kyc-company-enrichment`** (acteur `harvestapi/linkedin-company`, flag
   `APIFY_COMPANY_ENRICH`) : 35/35 tests, live OK, **déployé EC2** (PR #17, flag ON).
+- **Cycle 2 (2026-07-20)** — QMD 2.5.3 installé (BM25 uniquement, CPU sans GPU),
+  branché dans les 8 fichiers agents + CLAUDE.md + mémoire ([[qmd-rag-search]]).
+- **Cycle 3 (2026-07-20)** — Outil #2 `kyc-adverse-media` codé+testé (47/47),
+  gardes anti-diffamation + condition LinkedIn ≥600 car., **déployé EC2 flag ON**.
 
 ## Cycles récents (<18h)
+
+### [2026-07-26] Cycle 12 — `market-trends-map` : la VRAIE cause (espace d'unités SVG) — 4e retour utilisateur
+- **Fait** : demande explicite de l'utilisateur de traiter le bug moi-même
+  (pas de délégation à `test-code`). Deux causes racines, reproduites
+  numériquement AVANT tout changement de code :
+  (A) **erreur d'espace d'unités** — `ZoomableGroup` rend
+  `<g transform="… scale(k)">`, donc tout ce qui est dessiné dedans est en
+  unités locales et apparaît k× plus grand. Or tous les floors du composant
+  (`Math.max(3, r/k)`, `Math.max(0.5, 1/k)`, `Math.max(9, 11/k)`,
+  `Math.max(4, 8/k)`) étaient appliqués **après** la division : un plancher
+  de `3` vaut en fait `3·k` pixels écran. Rayon de clic mesuré : 22px à k=1,
+  48px à k=16, 192px à k=64, 768px à k=256 — alors que le clustering ne
+  garantit que 50px entre centres (22+22+6). Recouvrement de 46px dès k=16,
+  atteint au 2e clic puisqu'un clic sur cluster zoome ×4. La zone de clic
+  invisible enflant aussi, les bulles voisines devenaient inatteignables :
+  le symptôme rapporté, mot pour mot.
+  (B) **rayon non plafonné** — `Math.sqrt(total / maxTotal)` sans clamp, mais
+  un cluster **somme** ses membres alors que `maxTotal` est le max par lieu :
+  34px pour un total de 40, 83px pour 300, contre `MAX_RADIUS`=20. Ce rayon
+  étant réinjecté dans la décision de clustering, le gros cluster continuait
+  d'« avaler » ses voisins (blob au zoom monde = « les ronds sont trop gros »).
+  CODE : `lib/geo/bubble-geometry.ts` (nouveau — `bubbleRadius` clampé,
+  `tapRadius` = **source de vérité unique** partagée par le clustering ET le
+  rendu, `toLocalUnits`), `MarketMovementsMap.tsx` (toute la géométrie en px
+  écran, convertie **exactement une fois** via `toLocal()`, bloc
+  « UNIT CONVENTION »). `MAX_RADIUS`/`MIN_HIT_RADIUS` volontairement non
+  touchés : le plafonnement fait déjà passer le pire blob de 166px à 40px de
+  diamètre. Doc : `tasks/market-trends-map/07_unit_space_bug.md`.
+- **Tests** : 45/45 ✅, `next lint` 0/0 ✅, `tsc --noEmit` ✅, `next build` ✅.
+  Surtout : **chaque assertion vérifiée ROUGE sur le code d'avant correctif**.
+  1re tentative ratée — l'assertion anti-chevauchement passait au VERT sur le
+  code cassé (grille synthétique à 17 unités d'écart, alors que le bug ne se
+  manifeste que pour `50/k < Δ < 6` unités projetées), soit exactement le mode
+  d'échec des cycles 9/10 ; remplacée par un jeu réaliste (hubs Côte d'Azur
+  sub-unitaires, bande 3–6 unités, poids lourds au rayon plafonné, points
+  strictement coïncidents).
+- **Leçon retenue** : sur une carte SVG zoomable, une valeur en pixels et une
+  valeur en unités locales ne sont **pas comparables** — un plancher posé du
+  mauvais côté de la division devient une valeur qui croît avec le zoom. Et un
+  test de régression jamais observé **rouge** ne prouve rien.
+- **Reste à faire** : QA tactile réelle sur mobile (pas de navigateur ici).
+  Point secondaire noté, non traité : `<ComposableMap width={800}>` dans un
+  conteneur responsive → sur un écran 375px le viewBox est réduit d'environ
+  0,47, donc la cible tactile de 44px ne fait plus que ~20 px CSS réels. La
+  géométrie de recouvrement étant invariante d'échelle, ce n'est pas le bug
+  rapporté, mais c'est une vraie limite mobile.
+
+### [2026-07-25] Cycle 11 — LOOP `market-trends-map` : MAX_ZOOM + spiderfy insuffisants à l'échelle (3e retour utilisateur)
+- **Fait** : après Cycle 10 (tout vert lint/tsc/build/tests, jamais commit/push),
+  3e retour utilisateur — carte toujours mauvaise. EXPLORE : script de vérif
+  `tasks/market-trends-map/_verify-cluster.ts` trouvé corrompu (octets nuls,
+  append Bash heredoc antérieur) → réparé (réécrit via `Write` + `Copy-Item`,
+  jamais de `>>` heredoc sur ce fichier). Re-exécuté : `clusterByOverlap`
+  toujours correct (0 chevauchement, Pass 1), mais deux nouveaux contrôles
+  géométriques ajoutés révèlent 2 bugs jamais couverts par les cycles 9/10 :
+  (A) `MAX_ZOOM=20` mathématiquement trop bas — aucun hub proche-mais-distinct
+  (Antibes/Monaco 24km, besoin zoom≥75 ; Antibes/Cannes 9km, besoin zoom≥209)
+  ne pouvait jamais se séparer par zoom, tombait systématiquement en spiderfy ;
+  (B) `SPIDERFY_STEP_PX=26` insuffisant à l'échelle — sweep N=2..50 montre
+  41.7px d'espacement pire-cas dès 4 membres (cible 50px), donc le spiderfy
+  lui-même laissait des bulles superposées, violant l'invariant dur "aucun
+  bateau jamais caché". PLAN : `tasks/market-trends-map/06_zoom_spiderfy_fix.md`
+  (apex, avant tout code). CODE : `MAX_ZOOM` 20→256 (=4⁴, 4 clics de
+  `CLUSTER_ZOOM_FACTOR` depuis 1), `SPIDERFY_STEP_PX` 26→38 (marge ~22%
+  au-dessus du minimum 34 trouvé par sweep) dans `MarketMovementsMap.tsx`.
+  Aucun autre changement — clustering et rendu déjà corrects.
+- **Tests** : `_verify-cluster.ts` → `ALL PASSES CLEAN` (0 chevauchement
+  toutes passes, Antibes/Cannes et Antibes/Monaco séparent maintenant
+  proprement par zoom, seul Ft. Lauderdale/Miami à 5km tombe légitimement
+  en spiderfy). Agent test-code indépendant : lint ✅, `tsc --noEmit` ✅,
+  `npm run build` ✅ (16/16 pages, route carte 79.5 kB), 26/26 tests
+  unitaires ✅, dev server smoke test ✅. 2 bugs consignés dans `journalbug.md`
+  (`market-trends-map-clustering-v3`).
+- **Leçon retenue** : lint/tsc/build/tests unitaires ne peuvent PAS détecter
+  un chevauchement pixel réel — c'est pourquoi cycles 9/10 ont clôturé
+  "tout vert" avec le bug encore présent. `_verify-cluster.ts` (géométrie
+  rejouée mathématiquement) est le seul contrôle qui l'a détecté ; à garder
+  comme étape de vérif systématique pour tout futur changement sur cette carte.
+- **Prochaine étape** : commit + push (autorisation utilisateur déjà donnée),
+  puis QA manuelle mobile réelle dès qu'un environnement le permet.
+
+### [2026-07-24] Cycle 10 — LOOP `market-trends-map` : clustering définitif par recouvrement réel (2e retour utilisateur)
+- **Fait** : après déploiement du Cycle 9 (commit `b6ef2e6`), retour utilisateur —
+  toujours des bulles superposées/inaccessibles. Cause racine identifiée :
+  le clustering v1 fusionnait sur un **seuil de distance fixe** entre centres
+  (26px), indépendant du rayon réel des bulles (jusqu'à 20-25px, plus après
+  fusion) — deux grosses bulles pouvaient rester "proches mais pas assez pour
+  le seuil" tout en se chevauchant visuellement à l'écran.
+  `tasks/market-trends-map/05_overlap_aware_clustering.md`. Remplacement
+  complet : `lib/geo/screen-cluster.ts` → `clusterByOverlap()` (union-find
+  agglomératif **à point fixe**, fusionne deux groupes dès que leurs cercles
+  — rayon réel = même valeur que la zone tactile invisible — se touchent,
+  recalcule après chaque fusion pour capter les cascades qu'une passe unique
+  raterait). Spiderfy de secours passé d'un cercle fixe à une spirale
+  (angle doré ≈137,5°) pour rester propre au-delà de 2-3 zones coïncidentes.
+- **Tests** : lint ✅ (0 avertissement, `react-hooks/exhaustive-deps` inclus —
+  accesseur de rayon inliné dans le `useMemo`, pas de règle désactivée),
+  `tsc --noEmit` ✅, `npm run build` ✅ (16/16 pages, route carte 79.5 kB,
+  stable), 26/26 tests unitaires ✅ (7 nouveaux `clusterByOverlap`, dont un
+  qui encode directement le bug trouvé et un qui prouve la cascade multi-passe).
+  Agent test-code indépendant ✅ verdict "Prêt" — relecture manuelle confirme
+  terminaison correcte, aucune paire chevauchante non fusionnée, cohérence
+  d'unités position/rayon vérifiée par script Node à plusieurs niveaux de zoom.
+  Graphify réindexé + interrogé : plus aucune référence à l'ancienne fonction
+  supprimée (`clusterByProjectedDistance`), périmètre confirmé isolé.
+- **Non fait** : contrôle visuel/tactile réel en navigateur — même limite que
+  les cycles précédents (pas de credentials broker, pas d'outil navigateur).
+  La preuve de correction repose sur des tests unitaires qui encodent
+  directement la géométrie du bug, pas sur une capture d'écran réelle.
+- **Prochaine étape** : commit + push (demandé explicitement par l'utilisateur),
+  puis QA manuelle mobile réelle dès qu'un environnement le permet.
+
+### [2026-07-24] Cycle 9 — LOOP `market-trends-map` : clustering/spiderfy des bulles (retour UX mobile)
+- **Fait** : retour utilisateur — bulles de `MarketMovementsMap.tsx` trop collées
+  en vue monde, imperceptibles au clic surtout mobile. `tasks/market-trends-map/
+  04_clustering_ux_fix.md` (EXPLORE : confirmé `react-simple-maps`/SVG, pas
+  Leaflet, donc pas de lib de clustering marker-based existante ; `ZoomableGroup`
+  accepte `center`/`zoom` **contrôlés**, vérifié dans le bundle de la lib).
+  Ajout `lib/geo/screen-cluster.ts` (union-find générique sur distance
+  projetée) branché dans un nouveau sous-composant `MapMarkers` qui recalcule
+  le clustering en **pixels écran live** (`useMapContext`/`useZoomPanContext`)
+  à chaque pan/zoom : clic sur cluster multi-zones → zoom programmatique
+  (×4, plafonné `MAX_ZOOM=20`) ; si déjà au max et toujours fusionné →
+  **spiderfy** (éventail de bulles individuelles) ; cercle de hit-area
+  invisible ≥22px de rayon sous chaque bulle (design visuel inchangé) ;
+  boutons zoom +/-/reset (44×44px) superposés + `touchAction:'none'` pour le
+  tactile mobile.
+- **Bug trouvé et corrigé en LOOP** : agent test-code a détecté que `maxTotal`
+  (échelle de taille des bulles) était recalculé depuis le clustering courant
+  au lieu d'un maximum global fixe → "pulsation" de taille au pan/zoom.
+  Corrigé (calcul unique sur `locations` complet) ; lint/tsc rejoués verts.
+  Voir [[journalbug]].
+- **Tests** : lint ✅, `tsc --noEmit` ✅, `npm run build` ✅ (route
+  `/dashboard/market-trends` toujours code-split seule), 25/25 tests unitaires
+  ✅ (6 nouveaux `screen-cluster.test.ts` + 19 préexistants inchangés), agent
+  test-code indépendant ✅ verdict global après correctif du point mineur.
+- **Non fait** : contrôle visuel authentifié/tactile réel (même limite que le
+  cycle 8 — pas de credentials broker ni d'outil navigateur ici). Rien commité.
+- **Prochaine étape** : QA manuelle mobile réelle (pan/pinch, tap cluster,
+  spiderfy, boutons +/-/reset) dès qu'un environnement navigateur/credentials
+  est disponible, puis décision utilisateur pour commit + déploiement.
+
+### [2026-07-23] Cycle 8 — Outil #5 `market-trends-map` : tunnel complet EXPLORE→APEX→CODE→TEST
+- **Fait** : tunnel complet (`tasks/market-trends-map/01_analysis.md`/`02_plan.md`/
+  `03_implementation_log.md`). Bloc A de `/dashboard/market-trends` (3 courbes
+  `MarketReviewCharts`) remplacé par une carte monde interactive
+  (`components/listings/MarketMovementsMap.tsx`, `react-simple-maps` + atlas
+  topojson vendored ~105 KB, 0 dépendance réseau runtime) : bulles new/sold par
+  ville, clic→liste bateaux, zoom/pan. Géocodage offline (`lib/geo/geocode.ts` +
+  `country-centroids.json`/`city-coords.json`, ville→repli pays, 0 non-localisé
+  observé sur les 35 lieux réels en base). Lecture serveur agrégée+dédupliquée
+  (`lib/supabase/market-pulse-map.ts`, `vid+feed_type`). Fenêtre **14 jours**
+  et crawl **48 h** (au lieu de 72 h, `ops/yatco-automation/systemd/
+  moana-yatco-refresh.timer` + README) sur demande utilisateur. Bloc B
+  (`MarketPulseTrendChart`) strictement intact ; `MarketReviewCharts.tsx`
+  conservé sur disque, juste dé-exporté (rollback trivial).
+- **Bug trouvé et corrigé en LOOP** : agent test-code a détecté que le barrel
+  `components/listings/index.ts` regroupait `react-simple-maps`/`d3-geo`/l'atlas
+  (~141 KB gzip) dans un chunk partagé par 6 routes dashboard non liées à la
+  carte. Corrigé par `next/dynamic(..., {ssr:false})` + retrait de l'export du
+  barrel — vérifié par rebuild (routes hors carte repassées à leur poids normal).
+- **Tests** : lint ✅, `tsc --noEmit` ✅, `npm run build` ✅ (16/16 pages, aucun
+  souci de transpilation ESM), 13/13 tests unitaires ✅ (géocodage + dédup/
+  agrégation), agent test-code indépendant ✅ verdict global sans point restant.
+- **Non fait** : contrôle visuel authentifié (pas de credentials broker, pas
+  d'outil navigateur dans cette session) — limite documentée, non contournée.
+  Rien commité (git repo confirmé sous `moana/`, aucune demande de commit).
+  Le nouveau timer 48 h n'est modifié que dans le repo : **pas déployé sur
+  l'EC2 live** (pas d'accès SSH — `Permission denied (publickey)` constaté).
+- **Prochaine étape** : décision utilisateur — commit + déploiement (Vercel
+  pour l'app, SSH/clé à fournir pour appliquer le timer 48 h sur l'EC2), puis
+  contrôle visuel authentifié (credentials broker ou accès navigateur requis).
+
+### [2026-07-22] Cycle 7 — Reprise APEX segmentée : YATCO Stats, Market Trends, cybersécurité
+- **Fait** : QMD 2.5.3 vérifié et utilisé en BM25 ; Graphiti/Graphyphy non disponible.
+  Analyses/plans APEX créés pour `vessel-visibility-stats`, `market-trends` et
+  `cybersecurity`. Nouvel agent `.claude/agents/cybersecurity.md` créé.
+- **Bugs enregistrés** : contrats TypeScript YATCO incomplets, Market Trends non
+  câblé, build dépendant des Google Fonts, auth/session/debug/credentials à durcir.
+- **Tests** : état de départ confirmé : lint vert, type-check rouge, build bloqué
+  par TLS Google Fonts ; tests Python bloqués par l’environnement LiteLLM/TLS.
+- **Prochaine étape** : agents code segmentés YATCO Stats + Market Trends + cyber,
+  puis agent test-code sans modification du code et boucle APEX jusqu’au vert.
+
+### [2026-07-22] Complément — CODE + durcissement sécurité
+- **Fait** : YATCO Stats compile et gère les états UI ; Market Trends est câblé
+  sur `/dashboard/market-trends`, nav, exports et lecture bornée ; auth/session,
+  brokers, debug, webhook YATCO, scripts credentials et RLS ont été durcis.
+- **Tests** : `npm run lint`, `npm run type-check`, `npm run build`,
+  `git diff --check`, KYC déterministe 12/12 et crypto scrypt/HMAC verts ; les
+  avertissements restants concernent uniquement la fraîcheur Browserslist/
+  Baseline.
+- **Reste** : variables `MOANA_SESSION_SECRET`/`YATCO_WEBHOOK_SECRET`, rotation
+  des credentials historiques, application des schémas/syncs Supabase et
+  validation HTTP en environnement intégré.
+
+### [2026-07-22] Complément — Installation Graphify CLI
+- **Fait** : Graphify 0.9.23 confirmé via `uv`; intégration Codex installée
+  (`AGENTS.md`, `.codex/hooks.json`). Extraction AST + SQL locale validée avec
+  `uvx --from "graphifyy[sql]"` : 1 284 nœuds, 3 001 relations brutes, 2 646
+  relations après clustering, 118 communautés.
+- **Tests** : requête ciblée auth/webhook renvoie les modules de session,
+  sécurité, route YATCO et Supabase ; aucune API LLM utilisée.
+- **Reste** : le tool env global `uv` est verrouillé pour une réinstallation
+  de l'extra SQL ; `uvx --from` est le chemin reproductible retenu.
+
+### [2026-07-22] Complément — Automatisation AWS YATCO 72 h
+- **Fait** : paquet `ops/yatco-automation` créé via le tunnel APEX, image
+  Playwright 1.55.1 construite sur EC2, Supabase readiness 4/4, service/timer
+  systemd installés et durcis (score 2.4 OK), aucun impact sur le worker KYC.
+- **Tests** : automation 6/6, lint/type-check/build verts, npm audit 0,
+  `systemd-analyze verify` vert, garde d'auth absente vérifiée.
+- **Final** : session BOSS renouvelée, schéma Market Review appliqué, run live
+  3/3 vert ; timers refresh 72 h + keepalive 4 h actifs. Retry idempotent et
+  disque EC2 ramené de 82 % à 64 % après retrait de l'image vulnérable obsolète.
+
+### [2026-07-21 ~16:45] Cycle 6 — Outil #4 `market-pulse` : CODE + TEST complet
+- **Fait** : EXPLORE confirme le pipeline Search module (`useractionid` 75/76/77,
+  New/Modified/Sold, MLS-wide 5j glissants) avec `div.HistoryText` donnant le texte
+  littéral du changement ("Price was X changed to Y.") — pas de diff maison requis
+  pour détecter les baisses de prix. Limite trouvée : chaque feed a un vrai total
+  (190 vu ce jour) mais seules les ~12 lignes triées "Largest" se rendent (pagination
+  non résolue, décision produit : segment Moana = 27-85m donc pas bloquant pour v1).
+  Codé : `yatco_market_pulse` (event-stream, SQL appliquée par l'utilisateur),
+  scraper standalone `D:\dev\scrape-mcp\scripts\market-pulse-scrape.mjs`, ingestion
+  `scripts/sync-market-pulse.ts`, section app `/dashboard/market-pulse`
+  (`MarketPulseCard`/`MarketPulseGrid`, bandeau rouge si baisse de prix, tag "(Moana)"
+  si le broker est Moana lui-même), nav Header mise à jour.
+- **Tests** : `tsc`/`eslint` 0 erreur ; scraper live 30/30 lignes OK (12 new/12
+  modified/6 sold, 0 price drop sur ce batch précis) ; ingestion 30 synced/0 erreur ;
+  QA visuelle `next dev` + cookie broker local → 200, données réelles confirmées.
+- **Non fait** : pagination complète des feeds (top ~12-25 actuel) ; pas de refresh
+  auto ; rien commité (même caveat `lib/types.ts`/`package.json`).
+- **Prochaine étape** : décision utilisateur — commit sélectif des 2 features (#3+#4)
+  + déploiement Vercel, ou enchaîner sur `kyc-company-registry` (LEI/VAT/dirigeants,
+  backlog secondaire, rien commencé).
+
+### [2026-07-21 ~14:30] Cycle 5 — Outil #3 `fleet-content-audit` : CODE + TEST complet
+- **Fait** : pipeline scraping BOSS craqué (`tasks/fleet-content-audit/02_scraping_findings.md`
+  BREAKTHROUGH #1+#2) — Insight Analytics « Active Listings Report » rend en headless,
+  et cliquer le bouton photo d'une ligne charge le détail complet inline (photos, specs,
+  description, broker's message, days on market). Plan écrit (`03_plan.md`), puis codé :
+  schéma `yatco_fleet_listings` (SQL appliqué par l'utilisateur dans Supabase),
+  scraper standalone réutilisable `D:\dev\scrape-mcp\scripts\fleet-audit-scrape.mjs`
+  (pas besoin de Claude/MCP pour les futurs refresh), ingestion `scripts/
+  sync-yatco-fleet-listings.ts`, nouvelle section app `/dashboard/listings-yatco`
+  (`FleetAuditCard`/`FleetAuditGrid`), nav Header mise à jour.
+- **Tests** : `tsc --noEmit` + `eslint` 0 erreur ; run live scraper 25/25 vessels OK ;
+  ingestion 25 synced / 6 liés à des listings Moana / 0 erreur ; QA visuelle via
+  `next dev` + cookie de session broker construit localement (pas de mot de passe
+  utilisé) → 200, données réelles confirmées dans le HTML, aucune erreur.
+- **Non fait** : couverture limitée aux 25 listings Actifs (34 vessels au total avec
+  Expired/Withdrawn/Sold) ; pas de refresh automatique (manuel) ; rien commité —
+  `lib/types.ts` et `package.json` contiennent du WIP non lié, à stager sélectivement.
+- **Prochaine étape** : décision utilisateur — commit sélectif + déploiement Vercel,
+  ou étendre la couverture aux 34 vessels / vidéo (signal absent pour l'instant, à
+  vérifier si c'est réel ou un angle mort du parsing).
 
 ### [2026-07-20 ~17:30] Cycle 4 — Outil #3 `fleet-content-audit` : EXPLORE (bloqué scrape-mcp)
 - **Fait** : EXPLORE (`tasks/fleet-content-audit/01_analysis.md`). Décision utilisateur :

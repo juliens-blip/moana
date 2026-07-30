@@ -9,6 +9,7 @@ import type { Listing } from '@/lib/types';
 import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
 import { MoanaLogoIcon } from './MoanaLogoIcon';
+import { YatcoStatsSection } from './YatcoStatsSection';
 
 interface ListingDetailModalProps {
   listing: Listing | null;
@@ -303,6 +304,14 @@ export function ListingDetailModal({
                       )}
                     </div>
                   </motion.div>
+                )}
+
+                {listing.yatco_vessel_id && (
+                  <YatcoStatsSection
+                    listingId={listing.id}
+                    yatcoVesselId={listing.yatco_vessel_id}
+                    apiBasePath={apiBasePath}
+                  />
                 )}
 
                 {/* Specs Grid */}

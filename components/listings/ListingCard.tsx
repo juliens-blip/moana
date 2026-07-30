@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Edit2, Trash2, Star } from 'lucide-react';
+import { Edit2, Trash2, Star, Link2 } from 'lucide-react';
 import type { Listing } from '@/lib/types';
 import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
@@ -57,12 +57,20 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, editHr
             <h3 className="text-xl font-bold text-white transition-smooth group-hover:translate-x-1">{listing.nom_bateau}</h3>
             <p className="text-primary-100 text-sm mt-1 transition-smooth group-hover:translate-x-1">{listing.constructeur}</p>
           </div>
-          {listing.etoile && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100 border border-amber-200/50">
-              <Star className="h-3 w-3" />
-              ⭐
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {listing.etoile && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100 border border-amber-200/50">
+                <Star className="h-3 w-3" />
+                ⭐
+              </span>
+            )}
+            {listing.yatco_vessel_id && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-400/20 px-2.5 py-1 text-xs font-semibold text-sky-100 border border-sky-200/50">
+                <Link2 className="h-3 w-3" />
+                YATCO
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,0 +1,43 @@
+[Unit]
+Description=Moana YATCO BOSS session keepalive
+Documentation=file:/home/ubuntu/moana-yatco/ops/yatco-automation/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/home/ubuntu/.config/moana-yatco/yatcoboss.json
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/moana-yatco
+ExecStart=/home/ubuntu/moana-yatco/ops/yatco-automation/bin/run-keepalive.sh
+TimeoutStartSec=10min
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/.config/moana-yatco /home/ubuntu/.local/share/moana-yatco
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

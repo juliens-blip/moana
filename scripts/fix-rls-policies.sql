@@ -1,28 +1,17 @@
--- ============================================
--- FIX RLS POLICIES FOR LOGIN
--- ============================================
--- Problem: Anonymous users cannot read brokers table to authenticate
--- Solution: Add policy to allow anonymous SELECT on brokers for login
+-- Secure RLS posture for the brokers table.
+--
+-- Authentication uses the server-side Supabase service-role client. The
+-- browser must never be able to enumerate brokers or password hashes, so the
+-- old anonymous SELECT policy is intentionally removed.
 
--- Drop existing restrictive policy
+ALTER TABLE public.brokers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anonymous login queries" ON public.brokers;
+DROP POLICY IF EXISTS "Authenticated brokers can view their own profile" ON public.brokers;
 DROP POLICY IF EXISTS "Brokers can view their own profile" ON public.brokers;
 
--- Create new policy allowing anonymous SELECT (for login)
-CREATE POLICY "Allow anonymous login queries"
-ON public.brokers
-FOR SELECT
-TO anon
-USING (true);
+REVOKE ALL PRIVILEGES ON TABLE public.brokers FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.brokers TO service_role;
 
--- Keep policy for authenticated users to view their own profile
-CREATE POLICY "Authenticated brokers can view their own profile"
-ON public.brokers
-FOR SELECT
-TO authenticated
-USING (auth.uid()::text = id::text);
-
--- Update policy should still be restricted to own profile
--- (already exists, no change needed)
-
-COMMENT ON POLICY "Allow anonymous login queries" ON public.brokers
-IS 'Allow anonymous users to read broker data for authentication (login flow)';
+COMMENT ON TABLE public.brokers IS
+  'Broker credentials and profiles; access is server-only through service_role.';

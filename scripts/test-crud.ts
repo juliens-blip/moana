@@ -7,17 +7,23 @@ dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 async function testCrud() {
   console.log('🧪 Testing CRUD operations...\n');
 
+  const testBroker = process.env.TEST_BROKER_NAME;
+  const testPassword = process.env.TEST_BROKER_PASSWORD;
+  if (!testBroker || !testPassword) {
+    throw new Error('TEST_BROKER_NAME and TEST_BROKER_PASSWORD are required');
+  }
+
   try {
     // Step 1: Login
-    console.log('Step 1: Logging in as Charles...');
+    console.log(`Step 1: Logging in as ${testBroker}...`);
     const loginResponse = await fetch('http://localhost:3000/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        broker: 'Charles',
-        password: 'changeme',
+        broker: testBroker,
+        password: testPassword,
       }),
     });
 
@@ -38,7 +44,7 @@ async function testCrud() {
       annee: 2020,
       proprietaire: 'Test Owner',
       capitaine: 'Test Captain',
-      broker: 'Charles',
+      broker: testBroker,
       localisation: 'Test Location',
       prix: "1,000,000 €",
       commentaire: 'Test boat for CRUD testing',

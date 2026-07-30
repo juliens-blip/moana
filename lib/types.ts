@@ -31,11 +31,141 @@ export interface Listing {
   created_at: string;
   updated_at: string;
   airtable_id?: string; // Pour référence migration
+  yatco_vessel_id?: string | null;
 }
 
 export interface ListingWithBroker extends Listing {
   broker_name: string;
   broker_email: string;
+}
+
+// ============================================
+// YATCO BOSS FLEET CONTENT AUDIT TYPES
+// ============================================
+
+export interface YatcoListingStats {
+  id: string;
+  listing_id: string;
+  snapshot_date: string;
+  impressions: number | null;
+  detail_views: number | null;
+  phone_clicks: number | null;
+  gallery_views: number | null;
+  leads: number | null;
+  source: 'manual_refresh' | 'backfill';
+  created_at: string;
+}
+
+export interface YatcoFleetListing {
+  id: string;
+  vid: string;
+  mls_id?: string;
+  vessel_name: string;
+  status?: string;
+  agreement_type?: string;
+  builder?: string;
+  model_year?: number;
+  asking_price_text?: string;
+  loa_text?: string;
+  broker_name?: string;
+  photo_count: number;
+  has_description: boolean;
+  has_broker_message: boolean;
+  has_hull_deck_specs: boolean;
+  has_engine_specs: boolean;
+  has_dimensions: boolean;
+  has_speed_capacity_specs: boolean;
+  days_on_market?: number;
+  linked_listing_id?: string;
+  stats_impressions?: number;
+  stats_detail_views?: number;
+  stats_phone_clicks?: number;
+  stats_gallery_views?: number;
+  stats_leads?: number;
+  stats_synced_at?: string;
+  last_synced_at: string;
+  created_at: string;
+}
+
+// ============================================
+// YATCO MLS MARKET PULSE TYPES (comps + price drops)
+// ============================================
+
+export interface YatcoMarketPulseEntry {
+  id: string;
+  feed_type: 'new' | 'modified' | 'sold';
+  vid: string;
+  mls_id?: string;
+  vessel_name: string;
+  builder?: string;
+  model_year?: number;
+  category?: string;
+  loa_text?: string;
+  price_text?: string;
+  location?: string;
+  broker_name?: string;
+  history_text?: string;
+  is_price_drop: boolean;
+  price_before_text?: string;
+  price_after_text?: string;
+  sold_date?: string;
+  scraped_at: string;
+  created_at: string;
+}
+
+// ============================================
+// MARKET MOVEMENTS MAP TYPES (geocoded new/sold vessels, last N days)
+// ============================================
+
+export interface MarketMovementVessel {
+  vid: string;
+  feed_type: 'new' | 'sold';
+  vessel_name: string;
+  builder?: string;
+  loa_text?: string;
+  price_text?: string;
+  sold_date?: string;
+  // The precise resolved place (city or country) this vessel geocoded to,
+  // preserved even after nearby places get merged into one map zone.
+  location_label: string;
+}
+
+export interface MarketMovementLocation {
+  key: string;
+  lat: number;
+  lon: number;
+  resolved: 'city' | 'country';
+  label: string;
+  country: string;
+  newCount: number;
+  soldCount: number;
+  total: number;
+  vessels: MarketMovementVessel[];
+}
+
+export interface MarketMovementsResult {
+  locations: MarketMovementLocation[];
+  totalMovements: number;
+  locatedPlaces: number;
+  unlocatedCount: number;
+  windowDays: number;
+}
+
+// ============================================
+// YATCO MARKET REVIEW SNAPSHOT TYPES (global market state)
+// ============================================
+
+export type MarketSizeBandTable = Record<string, Record<string, string>>;
+
+export interface YatcoMarketReviewSnapshot {
+  id: string;
+  size_bands: {
+    soldVessels: MarketSizeBandTable;
+    totalSoldValue: MarketSizeBandTable;
+    avgDaysOnMarket: MarketSizeBandTable;
+  };
+  scraped_at: string;
+  created_at: string;
 }
 
 // ============================================
@@ -254,6 +384,7 @@ export interface LeadWithBroker extends Lead {
   broker_name?: string;
   broker_email?: string;
   kyc?: import('@/lib/kyc/types').KycSummary;
+  sanctions?: import('@/lib/sanctions/types').SanctionsSummary;
 }
 
 // ============================================

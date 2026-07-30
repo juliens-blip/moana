@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/lib/supabase/auth';
 import { Header } from '@/components/layout/Header';
 import { InstallPrompt } from '@/components/pwa';
 

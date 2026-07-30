@@ -13,10 +13,10 @@ const config = {
 Airtable.configure({ apiKey: config.apiKey });
 const base = Airtable.base(config.baseId);
 
-async function exportTable(tableId: string, filename: string) {
+async function exportTable(tableId: string, outputPath: string) {
   const records: any[] = [];
 
-  console.log(`📥 Exporting ${filename}...`);
+  console.log(`📥 Exporting ${path.basename(outputPath)}...`);
 
   await base(tableId)
     .select()
@@ -31,9 +31,8 @@ async function exportTable(tableId: string, filename: string) {
       fetchNextPage();
     });
 
-  const outputPath = path.join(__dirname, '..', 'backup', filename);
   fs.writeFileSync(outputPath, JSON.stringify(records, null, 2));
-  console.log(`✅ Exported ${records.length} records to ${filename}`);
+  console.log(`✅ Exported ${records.length} records to ${path.basename(outputPath)}`);
 
   return records.length;
 }
@@ -47,8 +46,16 @@ async function main() {
 
   console.log('🚀 Starting Airtable export...\n');
 
-  const brokersCount = await exportTable(config.brokerTableId, 'brokers.json');
-  const listingsCount = await exportTable(config.listingsTableId, 'listings.json');
+  const brokerExportPath = process.env.BROKER_EXPORT_JSON;
+  if (!brokerExportPath) {
+    throw new Error('BROKER_EXPORT_JSON must point outside the repository; broker exports contain credentials');
+  }
+
+  const brokersCount = await exportTable(config.brokerTableId, brokerExportPath);
+  const listingsCount = await exportTable(
+    config.listingsTableId,
+    path.join(backupDir, 'listings.json'),
+  );
 
   console.log('\n✅ Export complete!');
   console.log(`📊 Summary: ${brokersCount} brokers, ${listingsCount} listings`);

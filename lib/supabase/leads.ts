@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Lead, LeadWithBroker, LeadStatus } from '@/lib/types';
 import { ManualLeadInput } from '@/lib/validations';
 import { getLatestKycSummaries } from '@/lib/supabase/kyc';
+import { getLatestSanctionsSummaries, screenLeadForSanctions } from '@/lib/supabase/sanctions';
 
 /**
  * Get all leads for a specific broker
@@ -21,8 +22,12 @@ export async function getLeadsByBroker(brokerId: string): Promise<LeadWithBroker
   }
 
   const leads = data as LeadWithBroker[];
-  const kycByLead = await getLatestKycSummaries(leads.map((lead) => lead.id));
-  return leads.map((lead) => ({ ...lead, kyc: kycByLead.get(lead.id) }));
+  const leadIds = leads.map((lead) => lead.id);
+  const [kycByLead, sanctionsByLead] = await Promise.all([
+    getLatestKycSummaries(leadIds),
+    getLatestSanctionsSummaries(leadIds),
+  ]);
+  return leads.map((lead) => ({ ...lead, kyc: kycByLead.get(lead.id), sanctions: sanctionsByLead.get(lead.id) }));
 }
 
 /**
@@ -47,8 +52,11 @@ export async function getLeadById(leadId: string, brokerId: string): Promise<Lea
   }
 
   const lead = data as LeadWithBroker;
-  const kycByLead = await getLatestKycSummaries([lead.id]);
-  return { ...lead, kyc: kycByLead.get(lead.id) };
+  const [kycByLead, sanctionsByLead] = await Promise.all([
+    getLatestKycSummaries([lead.id]),
+    getLatestSanctionsSummaries([lead.id]),
+  ]);
+  return { ...lead, kyc: kycByLead.get(lead.id), sanctions: sanctionsByLead.get(lead.id) };
 }
 
 /**
@@ -211,5 +219,12 @@ export async function createManualLead(brokerId: string, input: ManualLeadInput)
     throw new Error(`Failed to create manual lead: ${error.message}`);
   }
 
-  return data as Lead;
+  const lead = data as Lead;
+  try {
+    await screenLeadForSanctions(lead);
+  } catch (screeningError) {
+    console.warn('[Leads] Sanctions screening failed for manual lead:', screeningError);
+  }
+
+  return lead;
 }
