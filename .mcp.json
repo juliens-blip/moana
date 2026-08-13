@@ -15,10 +15,8 @@
       ]
     },
     "qmd": {
-      "command": "cmd",
+      "command": "/home/arrogant/.nvm/versions/node/v24.19.0/bin/qmd",
       "args": [
-        "/c",
-        "qmd",
         "mcp"
       ]
     }
