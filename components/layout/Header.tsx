@@ -20,6 +20,7 @@ export function Header() {
   const isBateauASuivrePage = pathname?.includes('/bateau-a-suivre');
   const isBateauChantierPage = pathname?.includes('/bateau-chantier');
   const isYatcoGlobalPage = pathname?.includes('/yatco-global');
+  const isListingsYatcoPage = pathname?.includes('/listings-yatco');
   const isMarketPulsePage = pathname?.includes('/market-pulse');
   const isMarketTrendsPage = pathname?.includes('/market-trends');
 
@@ -80,7 +81,7 @@ export function Header() {
               <Link
                 href="/dashboard"
                 className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
-                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isMarketPulsePage && !isMarketTrendsPage
+                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage
                     ? 'border-secondary-500 text-white'
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
@@ -96,6 +97,16 @@ export function Header() {
               >
                 <Globe2 className="h-4 w-4" />
                 <span className="uppercase tracking-wide">Yatco Global</span>
+              </Link>
+              <Link
+                href="/dashboard/listings-yatco"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isListingsYatcoPage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <Ship className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Listings YATCO</span>
               </Link>
               <Link
                 href="/dashboard/market-pulse"
@@ -225,7 +236,7 @@ export function Header() {
                     href="/dashboard"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
-                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isMarketPulsePage && !isMarketTrendsPage
+                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage
                         ? 'bg-secondary-600 text-white'
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
@@ -243,6 +254,18 @@ export function Header() {
                   >
                     <Globe2 className="h-5 w-5" />
                     <span>Yatco Global</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/listings-yatco"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isListingsYatcoPage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <Ship className="h-5 w-5" />
+                    <span>Listings YATCO</span>
                   </Link>
 
                   <Link

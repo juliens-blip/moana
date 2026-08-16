@@ -4,6 +4,8 @@ export { TrackedListingForm } from './TrackedListingForm';
 export { DeleteConfirmModal } from './DeleteConfirmModal';
 export { ListingFilters } from './ListingFilters';
 export { ListingDetailModal } from './ListingDetailModal';
+export { FleetAuditCard } from './FleetAuditCard';
+export { FleetAuditGrid } from './FleetAuditGrid';
 export { MarketPulseCard } from './MarketPulseCard';
 export { MarketPulseGrid } from './MarketPulseGrid';
 export { MarketPulseTrendChart, aggregateMarketPulseByDay } from './MarketPulseTrendChart';
