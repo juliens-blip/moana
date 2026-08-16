@@ -1,0 +1,40 @@
+services:
+  collector:
+    build:
+      context: ../..
+      dockerfile: workers/docker/Dockerfile.yatco-collector
+    volumes:
+      - yatco-data:/data
+    environment:
+      # Forme passthrough (sans `=`) : la variable n'est injectee dans le
+      # conteneur que si elle existe deja dans l'environnement hote ; sinon
+      # elle est simplement absente (jamais forcee a une chaine vide, ce qui
+      # casserait le parsing int/float de Settings cote script).
+      - YATCO_USER_AGENT
+      - YATCO_TIMEOUT_S
+      - YATCO_MAX_RETRIES
+      - YATCO_BACKOFF_BASE_S
+      - YATCO_BACKOFF_CAP_S
+      - YATCO_REQUEST_DELAY_S
+      - YATCO_PAGE_SIZE
+      - OSINT_SSH_KEY
+      - BRAVE_API_KEY
+      - SEARXNG_BASE_URL
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: workers/docker/Dockerfile.yatco-worker
+    volumes:
+      - yatco-data:/data
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - YATCO_INGEST_TIMEOUT_S
+      - YATCO_INGEST_MAX_RETRIES
+      - YATCO_INGEST_BACKOFF_BASE_S
+      - YATCO_INGEST_BACKOFF_CAP_S
+      - YATCO_INGEST_REQUEST_DELAY_S
+
+volumes:
+  yatco-data:

@@ -219,6 +219,45 @@ export const leadUpdateSchema = z.object({
   lead_comments: z.string().max(2000).optional()
 });
 
+// YATCO Global Listings Query Schema
+export const yatcoGlobalQuerySchema = z.object({
+  freshnessHours: z.preprocess(
+    parseIntInput,
+    z.number({ invalid_type_error: 'freshnessHours doit être un nombre' })
+      .int('freshnessHours doit être un nombre entier')
+      .positive('freshnessHours doit être positif')
+      .max(8760, 'freshnessHours invalide')
+      .optional()
+      .default(72)
+  ),
+  minLengthMeters: z.preprocess(
+    parseNumberInput,
+    z.number({ invalid_type_error: 'minLengthMeters doit être un nombre' })
+      .positive('minLengthMeters doit être positif')
+      .optional()
+      .default(26)
+  ),
+  minYear: z.preprocess(
+    parseIntInput,
+    z.number({ invalid_type_error: 'minYear doit être un nombre' })
+      .int('minYear doit être un nombre entier')
+      .positive('minYear doit être positif')
+      .optional()
+      .default(2010)
+  ),
+  country: optionalText(80),
+  page: z.preprocess(
+    parseIntInput,
+    z.number({ invalid_type_error: 'page doit être un nombre' })
+      .int('page doit être un nombre entier')
+      .positive('page doit être positive')
+      .optional()
+      .default(1)
+  )
+});
+
+export type YatcoGlobalQueryInput = z.infer<typeof yatcoGlobalQuerySchema>;
+
 // Types inferred from schemas
 export type ListingInput = z.infer<typeof listingSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

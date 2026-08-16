@@ -1,0 +1,77 @@
+<!--
+Fixture HTML hors-réseau pour scripts/test_yatco_collector.py.
+Reproduit la structure DOM réelle observée sur des pages détail YATCO
+(cf. samples/recon_notes.md de la session T2) : JSON-LD @graph Vehicle,
+span de localisation après l'icône pin, spans broker/agent après les icônes
+user/building, lien PDF "Spec Sheet". Trois pages, quatre annonces, variantes
+de champs : broker+agent+fiche technique, broker seul, champs source absents,
+pays alternatif avec email mailto.
+-->
+
+<!-- PAGE 1 -->
+<!-- LISTING dedup:yatco:454180 -->
+<html><head><title>Listing A</title>
+<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[{"@type":"Vehicle","name":"CARPE DIEM","mpn":454180,"sku":454180,"brand":{"@type":"Organization","name":"AZIMUT YACHTS"},"productionDate":2023,"additionalProperty":[{"@type":"PropertyValue","name":"Length","value":"31.27m","unitCode":"MTR"}],"offers":{"@type":"Offer","priceCurrency":"USD","price":11300000,"seller":{"@type":"Organization","name":"TJB Super Yachts Ltd"}}}]}</script>
+</head><body>
+<div class="flex items-center mt-2 text-gray-500">
+<svg><path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+<span>Miami, Florida, United States</span>
+</div>
+<!-- broker details -->
+<div class="bg-white p-4 rounded-lg shadow-md">
+<svg><path d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75" /></svg>
+<span>Tim Johnson</span>
+<svg><path d="M3.75 21h16.5M4.5 3h15M5.25 3v18" /></svg>
+<span>TJB Super Yachts Ltd</span>
+<svg><path d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75" /></svg>
+<span>Georgie Damianakis</span>
+</div>
+<a href="https://cloud.yatco.com/specs/454180.pdf" class="btn">Download Spec Sheet</a>
+</body></html>
+
+<!-- LISTING dedup:yatco:441909 -->
+<html><head><title>Listing B</title>
+<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[{"@type":"Vehicle","name":"NORTHERN STAR","mpn":441909,"sku":441909,"brand":{"@type":"Organization","name":"LURSSEN"},"productionDate":2003,"additionalProperty":[{"@type":"PropertyValue","name":"Length","value":"85.50m","unitCode":"MTR"}],"offers":{"@type":"Offer","priceCurrency":"EUR","price":49500000,"seller":{"@type":"Organization","name":"Ocean Independence"}}}]}</script>
+</head><body>
+<div class="flex items-center mt-2 text-gray-500">
+<svg><path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+<span>Monte Carlo, Monaco, Monaco</span>
+</div>
+<!-- broker details -->
+<div class="bg-white p-4 rounded-lg shadow-md">
+<svg><path d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75" /></svg>
+<span>Elena Petrova</span>
+<svg><path d="M3.75 21h16.5M4.5 3h15M5.25 3v18" /></svg>
+<span>Ocean Independence</span>
+</div>
+</body></html>
+<!-- END PAGE 1 -->
+
+<!-- PAGE 2 -->
+<!-- LISTING dedup:yatco:457094 -->
+<html><head><title>Listing C</title>
+<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[{"@type":"Vehicle","name":"BLUE HORIZON","brand":{"@type":"Organization","name":"MERIDIAN"}}]}</script>
+</head><body>
+<!-- Pas de localisation, pas de prix, pas de broker : champs absents a la source -->
+</body></html>
+<!-- END PAGE 2 -->
+
+<!-- PAGE 3 -->
+<!-- LISTING dedup:yatco:483964 -->
+<html><head><title>Listing D</title>
+<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[{"@type":"Vehicle","name":"HOLLAND SPIRIT","mpn":483964,"sku":483964,"brand":{"@type":"Organization","name":"HOLLAND JACHTBOUW"},"productionDate":2004,"additionalProperty":[{"@type":"PropertyValue","name":"Length","value":"48.90m","unitCode":"MTR"}],"offers":{"@type":"Offer","priceCurrency":"GBP","price":8200000,"seller":{"@type":"Organization","name":"Camper & Nicholsons"}}}]}</script>
+</head><body>
+<div class="flex items-center mt-2 text-gray-500">
+<svg><path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+<span>Southampton, England, United Kingdom</span>
+</div>
+<!-- broker details -->
+<div class="bg-white p-4 rounded-lg shadow-md">
+<svg><path d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75" /></svg>
+<span>James Fitzgerald</span>
+<svg><path d="M3.75 21h16.5M4.5 3h15M5.25 3v18" /></svg>
+<span>Camper &amp; Nicholsons</span>
+<a href="mailto:james.fitzgerald@camperandnicholsons.example">Email James</a>
+</div>
+</body></html>
+<!-- END PAGE 3 -->

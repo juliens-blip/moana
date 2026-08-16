@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Anchor, LogOut, User, Ship, Inbox, Menu, X } from 'lucide-react';
+import { Anchor, LogOut, User, Ship, Inbox, Menu, X, Globe2, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useNewLeadsCount } from '@/lib/hooks';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +19,9 @@ export function Header() {
   const isLeadsPage = pathname?.includes('/leads');
   const isBateauASuivrePage = pathname?.includes('/bateau-a-suivre');
   const isBateauChantierPage = pathname?.includes('/bateau-chantier');
+  const isYatcoGlobalPage = pathname?.includes('/yatco-global');
+  const isMarketPulsePage = pathname?.includes('/market-pulse');
+  const isMarketTrendsPage = pathname?.includes('/market-trends');
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -77,12 +80,42 @@ export function Header() {
               <Link
                 href="/dashboard"
                 className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
-                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage
+                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isMarketPulsePage && !isMarketTrendsPage
                     ? 'border-secondary-500 text-white'
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
                 <Ship className="h-4 w-4" />
                 <span className="uppercase tracking-wide">Listings</span>
+              </Link>
+              <Link
+                href="/dashboard/yatco-global"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isYatcoGlobalPage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <Globe2 className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Yatco Global</span>
+              </Link>
+              <Link
+                href="/dashboard/market-pulse"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isMarketPulsePage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Market Pulse</span>
+              </Link>
+              <Link
+                href="/dashboard/market-trends"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isMarketTrendsPage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Market Trends</span>
               </Link>
               <Link
                 href="/dashboard/bateau-a-suivre"
@@ -192,12 +225,48 @@ export function Header() {
                     href="/dashboard"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
-                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage
+                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isMarketPulsePage && !isMarketTrendsPage
                         ? 'bg-secondary-600 text-white'
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
                     <Ship className="h-5 w-5" />
                     <span>Listings</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/yatco-global"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isYatcoGlobalPage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <Globe2 className="h-5 w-5" />
+                    <span>Yatco Global</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/market-pulse"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isMarketPulsePage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <TrendingUp className="h-5 w-5" />
+                    <span>Market Pulse</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/market-trends"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isMarketTrendsPage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <TrendingUp className="h-5 w-5" />
+                    <span>Market Trends</span>
                   </Link>
 
                   <Link

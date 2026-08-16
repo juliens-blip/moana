@@ -60,6 +60,77 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================
+// YATCO MLS MARKET PULSE TYPES
+// ============================================
+
+export interface YatcoMarketPulseEntry {
+  id: string;
+  feed_type: 'new' | 'modified' | 'sold';
+  vid: string;
+  mls_id?: string;
+  vessel_name: string;
+  builder?: string;
+  model_year?: number;
+  category?: string;
+  loa_text?: string;
+  price_text?: string;
+  location?: string;
+  broker_name?: string;
+  history_text?: string;
+  is_price_drop: boolean;
+  price_before_text?: string;
+  price_after_text?: string;
+  sold_date?: string;
+  scraped_at: string;
+  created_at: string;
+}
+
+export interface MarketMovementVessel {
+  vid: string;
+  feed_type: 'new' | 'sold';
+  vessel_name: string;
+  location_label?: string;
+  builder?: string;
+  loa_text?: string;
+  price_text?: string;
+  sold_date?: string;
+}
+
+export interface MarketMovementLocation {
+  key: string;
+  lat: number;
+  lon: number;
+  resolved: 'city' | 'country';
+  label: string;
+  country: string;
+  newCount: number;
+  soldCount: number;
+  total: number;
+  vessels: MarketMovementVessel[];
+}
+
+export interface MarketMovementsResult {
+  locations: MarketMovementLocation[];
+  totalMovements: number;
+  locatedPlaces: number;
+  unlocatedCount: number;
+  windowDays: number;
+}
+
+export type MarketSizeBandTable = Record<string, Record<string, string>>;
+
+export interface YatcoMarketReviewSnapshot {
+  id: string;
+  size_bands: {
+    soldVessels: MarketSizeBandTable;
+    totalSoldValue: MarketSizeBandTable;
+    avgDaysOnMarket: MarketSizeBandTable;
+  };
+  scraped_at: string;
+  created_at: string;
+}
+
+// ============================================
 // FORM TYPES
 // ============================================
 
@@ -254,6 +325,48 @@ export interface LeadWithBroker extends Lead {
   broker_name?: string;
   broker_email?: string;
   kyc?: import('@/lib/kyc/types').KycSummary;
+}
+
+// ============================================
+// YATCO GLOBAL LISTINGS TYPES
+// ============================================
+
+// Miroir de public.yatco_global_listings (server-only, service_role)
+export interface YatcoPriceFluctuation {
+  previous_price_usd: number | null;
+  current_price_usd: number | null;
+  price_delta_usd: number | null;
+  price_delta_pct: number | null;
+}
+
+export interface YatcoGlobalListing {
+  id: string;
+  source: string;
+  external_id: string;
+  listing_url?: string;
+  boat_name?: string;
+  builder?: string;
+  model?: string;
+  model_year?: number;
+  length_m?: number;
+  price_amount?: number;
+  price_currency?: string;
+  price_usd?: number;
+  country?: string;
+  country_code?: string;
+  city?: string;
+  source_updated_at?: string;
+  price_fluctuation: YatcoPriceFluctuation | null;
+}
+
+export interface YatcoGlobalListingsResponse {
+  listings: YatcoGlobalListing[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 // ============================================
