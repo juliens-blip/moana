@@ -11,56 +11,67 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
   `journalbug.md`/`CLAUDE.md` unifié/`tasks/README.md` créés. **Outil #1
   `kyc-company-enrichment`** (acteur `harvestapi/linkedin-company`, flag
   `APIFY_COMPANY_ENRICH`) : 35/35 tests, live OK, **déployé EC2** (PR #17, flag ON).
+- **Cycle 2 (2026-07-20)** — QMD (BM25 local) installé et branché au tunnel (MCP `qmd`,
+  collections memory/wiki/archive/tasks, [[qmd-rag-search]]). `qmd embed` indisponible
+  (CPU sans GPU) → BM25 uniquement, `query`/`vsearch` désactivés.
+- **Cycle 3 (2026-07-20)** — **Outil #2 `kyc-adverse-media`** (négative news AML, acteur
+  `regdata/adverse-media-screener`) : 45/45 tests, déployé EC2, flag
+  `APIFY_ADVERSE_MEDIA` OFF par défaut (~$0.14/lead).
+- **Cycle 4 (2026-07-20)** — Adverse-media conditionné au contenu LinkedIn (≥600 car.)
+  puis **activé ON** sur EC2 (47/47 tests). Outil #3 `fleet-content-audit` : EXPLORE fait
+  (`tasks/fleet-content-audit/01_analysis.md`), **bloqué sur scrape-mcp déconnecté**,
+  jamais repris depuis (pas de `02_plan.md`).
+- **2026-08-13** — Fix MCP `qmd` : commande `cmd /c qmd mcp` (syntaxe Windows) invalide
+  sous Linux → binaire direct dans `.mcp.json` (commit `e83e8b1`).
+- **Cycles 5–7 (2026-08-14)** — `yatco-global` : migrations Supabase
+  (`yatco_global_listings`/`yatco_scrape_runs`, critères 72h/26m/2010 sans plancher
+  prix), endpoint `GET /api/yatco-global`, collecteur OSINT `scripts/yatco_collector.py`,
+  worker d'ingestion `workers/yatco_ingest_worker.py`, dashboard frontend
+  (`components/yatco-global/`, `app/dashboard/yatco-global/`). Conteneurisation Docker
+  bloquée par `.dockerignore` (whitelist stricte n'autorisant ni `workers/` ni
+  `scripts/yatco_collector.py`) — root cause posée et fix routé mais non exécuté sur ce
+  cycle. Tunnel formel jamais ouvert (pas de `tasks/yatco-global/`), rien commité ni
+  déployé.
 
 ## Cycles récents (<18h)
 
-### [2026-07-20 ~17:30] Cycle 4 — Outil #3 `fleet-content-audit` : EXPLORE (bloqué scrape-mcp)
-- **Fait** : EXPLORE (`tasks/fleet-content-audit/01_analysis.md`). Décision utilisateur :
-  créer une **nouvelle section app « Listings YATCO » + audit** (car seuls ~10/59 Actifs
-  ont un `yatco_vessel_id`). Portée = ingestion flotte BOSS→Supabase + UI + audit
-  photos/vidéo/specs. Ordre code explicite donné (zones protégées levées).
-- **Bloqueur** : scrape-mcp déconnecté (build+auth présents) → **redémarrer Claude Code**
-  pour re-spawn ; re-auth BOSS si cookies expirés ([[scrape-mcp-setup]]).
-- **Adverse-media** : ajout d'une **condition LinkedIn** (screen seulement si contenu
-  LinkedIn ≥ `ADVERSE_MEDIA_MIN_LINKEDIN_CHARS`=600) → **activé ON** sur EC2 (coût
-  ciblé sur les leads substantiels). 47/47 tests.
-- **Prochaine étape** : dès scrape-mcp OK, inspecter les pages Fleet Manager/listing BOSS,
-  figer schéma Supabase + plan UI (`02_plan.md`), puis CODE→TEST→DEPLOY.
+### [2026-08-16 ~14:30] Cycle 8 — `yatco-global` : fix `.dockerignore` appliqué, validation Docker en attente
+- **Fait (non commité)** : fix `.dockerignore` appliqué localement : ajout des negations
+  `!workers/` et `!scripts/yatco_collector.py` pour allowlister les nouveaux chemins
+  (confirmé Git diff). Conteneurs `Dockerfile.yatco-collector` et
+  `Dockerfile.yatco-worker` prêts à la validation.
+- **État réel** : tous les fichiers non tracés du tunnel `yatco-global` (Cycles 5–7)
+  sont présents localement (`workers/`, `supabase/`, `tests/backend/`,
+  `app/api/yatco-global/`, `app/dashboard/yatco-global/`, `components/yatco-global/`,
+  `lib/supabase/yatco-global.ts`) ; rien n'a été stagé ni commité ; rien n'est déployé
+  sur EC2. Tous les fichiers documentaires (state/log/bugs/journalbug) ont été mis à
+  jour pour les Cycles 5–7.
+- **Prochaine étape** : valider que les deux `docker build` réussissent avec le nouvel
+  `.dockerignore` (leçon [[journalbug]] 2026-08-14 Docker). Une fois vert, décider du
+  formalisme tunnel (`tasks/yatco-global/02_plan.md`) avant staging/commit/déploiement.
 
-### [2026-07-20 ~16:00] Cycle 3 — Outil #2 `kyc-adverse-media` (négative news AML)
-- **Fait** : tunnel complet (01/02/03). Nouveau module `scripts/apify_adverse_media.py`
-  + `enrich_adverse_media` dans `kyc_worker.py` (câblé après enrich société). Acteur
-  `regdata/adverse-media-screener` remplit `adverse_media`. Gardes anti-diffamation :
-  identité confirmé/probable uniquement, drop rôle victime/plaignant + `entityMatchConfidence`
-  bas + sans source_url. Flag `APIFY_ADVERSE_MEDIA` **OFF par défaut** (~$0.14/lead).
-- **Tests** : 45/45 unitaires OK (10 nouveaux) ; agent test-code ✅ 5/5 ; live EC2
-  (Madoff → HIGH, 5 hits financial_crime) → forme de sortie confirmée.
-- **Prochaine étape** : déployer EC2 (flag OFF) ; **décision utilisateur** : activer ON
-  (~$0.14/lead) ? Puis outil #3 `fleet-content-audit` ou `kyc-company-registry`.
+### [2026-08-16 ~21:30] Cycle 9 — `yatco-global` : Docker validé vert, wiki créée, tunnel formel toujours absent
+- **Fait** : les deux `docker build` (`Dockerfile.yatco-collector`,
+  `Dockerfile.yatco-worker`) réussissent avec le `.dockerignore` corrigé du Cycle 8
+  (images de test construites puis supprimées) — le blocage Docker du 2026-08-14 est
+  résolu. `wiki/YATCO-Global.md` créé (pipeline collecte/ingestion/timer/déploiement/
+  rollback, sans duplication opérationnelle, source de vérité = scripts). Backlink
+  ajouté dans `wiki/Architecture.md`. Smoke test `tests/rag/test_rag_scope_smoke.py`
+  ajouté (résout un avertissement ruff E902 sur ce dossier).
+- **Tests** : `python -m pytest tests/backend/ tests/rag/` → 58 passed / 6 skipped
+  (local, hors réseau). `ruff check scripts/` : 26 avertissements mineurs non bloquants
+  (alias `re.S`/`re.I`), inchangé depuis Cycle 6.
+- **État réel** : toujours rien commité ni déployé sur EC2 (voir `git status`) ;
+  aucun `tasks/yatco-global/` — le tunnel formel (EXPLORE/PLAN) n'a jamais été ouvert
+  pour cet outil malgré plusieurs cycles de code et documentation.
+- **Prochaine étape** : formaliser `tasks/yatco-global/01_analysis.md`/`02_plan.md`
+  (a posteriori) avant tout staging/commit, puis déploiement EC2 (timer systemd +
+  script de déploiement déjà documentés dans `wiki/YATCO-Global.md`).
 
-### [2026-07-20 ~14:00] Cycle 2 — QMD (moteur de recherche RAG Obsidian) + branchement tunnel
-- **Fait** : QMD 2.5.3 installé (modèles GGUF locaux, no API key). Collections
-  `memory` / `moana-wiki` / `moana-archive` / `moana-tasks` + contextes. MCP `qmd`
-  (`cmd /c qmd mcp`) dans `.mcp.json` + activé. Consigne « QMD d'abord pour
-  contexte/mémoire/Obsidian » gravée dans les 4 agents du tunnel (× 2 copies) +
-  `CLAUDE.md` + mémoire ([[qmd-rag-search]], [[agentic-tunnel]]). Tunnel suivi :
-  `tasks/qmd-rag-search/` (01/02/03).
-- **Tests** : BM25 `qmd search` OK (tunnel, quirks YATCO, KYC, adverse media, avec
-  contextes + scoring) ; scoping `-c` OK ; `qmd update` (nouveaux fichiers) OK ;
-  `qmd get` (source + n° ligne) OK ; serveur MCP démarre OK.
-- **Bloqueur** : `qmd embed` bloque (poste CPU sans GPU, llama.cpp « 0 math cores ») →
-  pivot **BM25 uniquement**, `query`/`vsearch` désactivés (caveat dans les 8 agents +
-  CLAUDE.md, bug dans journalbug.md). Vectoriel à réactiver si GPU un jour.
-- **Prochaine étape** : **Outil #2 `kyc-adverse-media`** (négative news AML) dans le tunnel.
+### [2026-08-16 ~23:30] Cycle 10 — `yatco-global` : déploiement distant validé
+- **Fait** : déploiement distant collecteur+worker validé sur ubuntu@51.44.220.145 via workers/deploy/. Timer systemd 24h ordonné (collecte puis ingestion) configuré et actif. Pages wiki/YATCO-Global.md et wiki/Architecture.md mises à jour. Réindexation QMD lexicale effectuée (reindex).
+- **Tests** : smoke test distant validé (smoke) avec succès.
+- **État réel** : collecteur+worker et timer systemd 24h opérationnels sur instance ubuntu@51.44.220.145.
+- **Prochaine étape** : suivi de l'exécution automatique 24h et monitoring des métriques d'ingestion.
 
-### [2026-07-18 ~20:00] Cycle 1 — Tunnel + Outil #1 (enrichissement entreprise KYC)
-- **Fait** : (1) tunnel agentique gravé en mémoire ([[agentic-tunnel]]),
-  `state.md` + `journalbug.md` créés, `CLAUDE.md` unifié (<150 l.), backlog dans
-  `tasks/README.md`. (2) Outil #1 `kyc-company-enrichment` traversé dans le
-  tunnel (01_analysis/02_plan/03_impl) : acteur Apify `harvestapi/linkedin-company`
-  remplit `company_profile` (URL de position retenue ou fallback nom), fusion non
-  destructive, garde prudence, flag `APIFY_COMPANY_ENRICH`.
-- **Tests** : 35/35 unitaires OK ; live Apify OK (Golden Suisse, Ferretti Group) ;
-  agent test-code ✅ prêt.
-- **Prochaine étape** : déployer sur EC2 (build + `APIFY_COMPANY_ENRICH=1`), puis
-  outil #2 `kyc-adverse-media` (négative news AML) dans le tunnel.
+

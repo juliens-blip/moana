@@ -43,7 +43,8 @@ Les handlers exigent généralement une session. Les routes de modification et s
 
 - Listing : validation Zod → résolution éventuelle du nom broker en UUID → écriture Supabase.
 - Lead manuel : `POST /api/leads` → validation → création associée au broker.
-- Lead externe : webhook `/api/leads/yatco` → validation, déduplication et routage broker → Supabase.
+- Lead externe : webhook `/api/leads/yatco` (push Boats Group) → validation, déduplication et routage broker → Supabase.
+- Pipeline OSINT YATCO : collecte active planifiée décrite dans [[YATCO-Global]], distincte de la ligne webhook `/api/leads/yatco` (push Boats Group).
 - Image : multipart → contrôle du type/taille → Storage → mise à jour de l’URL en base.
 
 ## Repères
@@ -54,6 +55,7 @@ Les handlers exigent généralement une session. Les routes de modification et s
 - Tests actuels : `tests/` et scripts `test-*`.
 - MCP Airtable autonome : `mcp/airtable-moana-mcp/`.
 - Agents et orchestration : `.claude/`, `agents_library/`, `orchestratoragent/`.
+- Pipeline OSINT YATCO (collecte/ingestion/timer/déploiement) : [[YATCO-Global]].
 
 ## Pièges
 

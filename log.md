@@ -1,86 +1,34 @@
 # Journal
 
-## 2026-07-15
+## 2026-08-16
 
-[2026-07-15] Audit de la documentation et de l’état réel du dépôt | Racine, `docs/`, `tasks/`, routes et modules Supabase lus | Plan de consolidation validé
+[2026-08-16] `yatco-global` : déploiement distant validé sur ubuntu@51.44.220.145 | `state.md`, `log.md`, `workers/deploy/` | Déploiement distant du collecteur et worker validé sur ubuntu@51.44.220.145 via workers/deploy/ ; timer systemd 24h (collecte puis ingestion) configuré ; smoke test distant validé ; wiki à jour et réindexation QMD lexicale effectuée (reindex) ; sans recopie d'artefacts.
 
-[2026-07-15] Création de la mémoire compacte | `index.md`, `bugs.md`, `wiki/*`, `archive/Legacy.md`, `raw/` | Point d’entrée Obsidian et connaissance stable
 
-[2026-07-15] Installation et validation de Crawl4AI 0.9.2 | Python 3.11 utilisateur, Playwright/Patchright | Setup, doctor et crawl Markdown réussis sans dépendance projet
+[2026-08-16] `yatco-global` : validation Docker verte, documentation wiki créée | `state.md`, `bugs.md`, `journalbug.md`, `wiki/YATCO-Global.md`, `wiki/Architecture.md`, `tests/rag/test_rag_scope_smoke.py` | Les deux `docker build` (`Dockerfile.yatco-collector`, `Dockerfile.yatco-worker`) réussissent avec le `.dockerignore` corrigé du Cycle 8 — bug Docker passé à `#fix #done` ; page wiki de bout en bout créée (collecte/ingestion/timer/déploiement/rollback) avec backlink depuis `Architecture.md` ; tests backend+rag 58 passed/6 skipped ; toujours rien commité ni déployé sur EC2, `tasks/yatco-global/` (EXPLORE/PLAN) toujours absent
 
-[2026-07-15] Création de la mémoire Crawl4AI | `wiki/Crawl4AI.md`, `index.md`, `log.md` | Fichier dédié justifié par le runtime Python 3.11 et le workflow de collecte vers `raw/`
+[2026-08-16] Audit et mise à jour de la documentation du tunnel agentique | `state.md`, `bugs.md`, `log.md` | Cycle 8 ajouté (2026-08-16) ; fix `.dockerignore` confirmé appliqué localement (allowliste `workers/` et `scripts/yatco_collector.py`) ; bug Docker passé de `#blocked` à `#in-progress` ; tous les fichiers non tracés du tunnel `yatco-global` confirmés présents, rien commité ni déployé ; validation Docker et formalisme `tasks/yatco-global/` restent prochaines étapes
 
-[2026-07-15] Ajout du cahier KYC/OSINT yacht et de l’objectif CRM Supabase | `wiki/KYC-OSINT.md`, `wiki/Crawl4AI.md`, `wiki/Decisions.md`, `wiki/Roadmap.md`, `index.md` | Contrat JSON, règles anti-hallucination et future intégration mémorisés
+## 2026-08-15
 
-[2026-07-15] Création du schéma KYC Supabase sans exécution distante | `scripts/kyc-enrichment-schema.sql`, `wiki/KYC-OSINT.md`, `wiki/Decisions.md`, `wiki/Roadmap.md` | Historique JSON, queue automatique par lead et RLS serveur uniquement
+[2026-08-15] `yatco-global` : worker d'ingestion et dashboard frontend livrés, conteneurisation Docker toujours bloquée | `workers/yatco_ingest_worker.py`, `workers/docker/` (Dockerfiles collector/worker + compose), `components/yatco-global/`, `app/dashboard/yatco-global/` | Sessions Software Factory `20260814T205236-114e94` et `20260814T211920-9cc86f` (done) : worker et section dashboard 72h/delta prix passés ; `docker build` échoue toujours (`.dockerignore` racine n'allowliste pas `workers/`) — session correctrice `20260814T232658-b9643e` routée mais non exécutée (bug consigné dans `journalbug.md`) ; tests backend locaux 57 passed/3 skipped ; rien commité ni déployé
 
-[2026-07-15] Implémentation du worker KYC asynchrone | `scripts/kyc_worker.py`, `scripts/requirements-kyc.txt`, `tests/test_kyc_worker.py`, mémoire wiki | Claim Supabase, crawl borné, synthèse LiteLLM, validation prudente et persistance JSON
+## 2026-08-14
 
-[2026-07-15] Validation locale du worker sans données réelles | 5 tests unitaires, compilation Python, dry-run `example.com` | Tests réussis; configuration Supabase/LLM locale encore absente
+[2026-08-14] Documentation de l’infrastructure RAG/MCP Memory | `rag_mcp_memory.md`, serveur MCP local, SQLite WAL, configurations multi-LLMs et timer systemd | Architecture, tests de concurrence et limite Claude documentés
 
-[2026-07-15] Réduction des consignes et de l’accueil | `CLAUDE.md`, `README.md` | Règles sous 150 lignes, aucun secret documenté
+[2026-08-14] Nouveau serveur MCP `memory` (graphe conceptuel) branché au projet | `.mcp.json` (serveur `memory` ajouté, env `HOME`/`PATH` ajouté sur tous les serveurs), `memory/README.md`, `memory/graph.db` | Graphe SQLite WAL servi par `software_factory/memory_server.py`, complémentaire à QMD (BM25) qui reste la recherche RAG de référence ; changement non commité
 
-[2026-07-15] Fusion des anciennes notes d’architecture et de migration | `docs/*.md`, rapports et guides racine → `wiki/*`, `archive/Legacy.md` | Ancien état Airtable séparé de l’état Supabase
+[2026-08-14] Ébauche outil `yatco-global` (listings YATCO mondiaux dédupliqués) | `supabase/migrations/20260814T0031__yatco_global_listings*.sql`, `app/api/yatco-global/route.ts`, `lib/supabase/yatco-global.ts`, `lib/types.ts`, `lib/validations.ts`, `tests/backend/` | Endpoint `GET /api/yatco-global` filtrable prix/fraîcheur/pays avec pagination ; tests backend 20/21 OK (1 skip, DB live non configurée en local) ; pas de dossier `tasks/` ni commit — tunnel agentique non tracé formellement, rien déployé
 
-[2026-07-15] Fusion de l’historique des tâches | `tasks/*/*.md` → `wiki/Decisions.md`, `wiki/Roadmap.md`, `archive/Legacy.md` | Plans et journaux redondants retirés
+[2026-08-14] Critères de sélection `yatco-global` corrigés + collecteur OSINT ajouté | `supabase/migrations/20260814T1930__replace_yatco_selection_criteria*.sql`, `scripts/yatco_collector.py`, `scripts/test_yatco_collector.py`, `scripts/fixtures/` | Critères en vigueur : fenêtre glissante 72h créa/modif, longueur > 26 m, année ≥ 2010, aucun plancher de prix (remplace 24h/prix>2M$) ; collecteur paginé avec throttling et reprise sur erreur ; tests backend 47 passed/3 skipped ; worker d'ingestion idempotent bloqué au routing (voir `journalbug.md`) puis relancé (session Software Factory `20260814T202649-c0bd78`, non exécutée à ce stade) ; rien commité ni déployé
 
-[2026-07-15] Suppression des rapports de tests, correctifs, handoff et sauvegardes fusionnés | Sources listées dans `archive/Legacy.md` | Forte baisse du volume documentaire actif
+## 2026-08-13
 
-[2026-07-15] Suppression des logs et dumps sans valeur durable | Logs racine, `test-results/test-summary.txt` | `raw/` laissé vide
-
-[2026-07-15] Activation du KYC déterministe Vercel sans LLM | Backend leads, `/api/leads/[id]/kyc`, fiche CRM, tests et wiki | Nouveau lead contrôlé automatiquement; résumé prudent stocké dans Supabase et visible avec la demande
-
-[2026-07-15] Stabilisation de la collecte KYC Vercel | `lib/kyc/deterministic.ts`, tests et mémoire KYC | Mojeek retiré; sources structurées, filtre exact, requêtes séquentielles et panne fournisseur visible
-
-[2026-07-16] Activation de Crawl4AI dans Vercel | `api/kyc-crawl.py`, worker Python, backend KYC, configuration Vercel, tests et wiki | Collecte HTTP bornée sans Render ni LLM obligatoire; rapport sourcé stocké dans Supabase
-
-[2026-07-16] Correction de l’authentification KYC inter-fonctions | Endpoint Python, appel Node, tests et bugs | Jeton interne dérivé dans un en-tête privé; suppression du 401 transformé en 500 côté CRM
-
-[2026-07-16] Correction du routage KYC Vercel | `lib/supabase/kyc.ts`, bugs et log | Alias Production prioritaire; évite le 401 de protection sur l’URL unique du déploiement
-
-[2026-07-16] Affichage du dossier KYC détaillé et classement prudent des homonymes | Fiche client, worker, tests et mémoire KYC | Profil, entreprise, contrôles et sources cliquables; proximité yachting priorisée sans confirmer l’identité
-
-[2026-07-16] Ajout d’une capacité de clic/interaction au MCP scrape-mcp | `D:\dev\scrape-mcp\src\engines\browser.ts`, `src\tools\interact.ts`, `src\index.ts`, mémoire du projet | Nouvel outil `interact` (Playwright click/fill/select/press/wait) pour débloquer les modules AJAX de BOSS (Search, Insight Analytics, Vessel Stats) restés vides sous simple scraping
-
-[2026-07-16] Découverte de l’URL de recherche MLS complète de BOSS | mémoire du projet (`yatco-boss-scraping-quirks.md`) | Le module Search fonctionne en `scrape` simple via l’URL exacte du lien de nav (`?code=` en base64) sans clic; 6372 annonces réelles accessibles, filtre prix/localisation encore non résolu
-
-[2026-07-16] Correction d’un bug de scrape-mcp qui masquait de vrais menus sur BOSS | `D:\dev\scrape-mcp\src\processing\content-cleaner.ts`, mémoire et bugs du projet | `button` retiré de la liste de suppression; les menus « vides » (Search Category, Insight Analytics, actions d’annonce) contenaient en réalité de vrais boutons cliquables (Listing History, Photos, etc.), confirmé par capture d’écran
-
-[2026-07-16] Localisation du rapport BOSS des impressions/vues publiques par bateau | `content-cleaner.ts` (retrait de `form`), mémoire du projet | Insight Analytics → Fleet/Inventory → "YATCO.com Vessel Statistics Report" expose Impressions/Detail Views/Phone Clicks/Gallery Views/Leads par bateau; filtre Office/Broker requis, pas encore rempli
-
-[2026-07-16] Extraction réussie des stats d'impressions par bateau (7 derniers jours) | mémoire du projet (`scrape-mcp-interact-tool.md`) | Filtre Kendo "Office" rempli via clic + flèche-bas/entrée (le clic direct sur l'option échouait); 20 bateaux avec impressions/vues/leads récupérés pour Moana Yachting
-
-[2026-07-16] Préparation du worker KYC sur VPS AWS | `Dockerfile.kyc`, `compose.kyc.yml`, backend KYC, fiche CRM, worker et mémoire | Vercel enqueue sans crawler; traitement Crawl4AI/Chromium asynchrone, suivi automatique et reprise des tâches interrompues
-
-[2026-07-16] Déploiement du worker KYC AWS | EC2 Ubuntu 26.04, Docker, PR #3, Supabase et Vercel | Crawl Chromium et connexion queue validés; worker permanent actif sans port public, déploiement Vercel réussi
-
-[2026-07-16] Correction découverte KYC AWS | worker, Compose, SearXNG, tests et mémoire | Métamoteur privé gratuit validé sur EC2; 3 sources Crawl4AI pour le test Gaetano Nicolosi, homonymes conservés séparément
-
-[2026-07-16] Tour complet des données disponibles dans YATCO BOSS | mémoire du projet (`moana-boss-business-data-tour.md`) | 173 annonces historiques cataloguées, pipeline CRM à 0 sur toutes les étapes avancées (226 leads jamais qualifiés), 34 salons nautiques disponibles mais aucun bateau Moana inscrit, benchmarks marché 5 ans récupérés
-
-[2026-07-16] Extraction des flux de marché MLS en temps quasi-réel (Search) | mémoire du projet (`moana-boss-business-data-tour.md`) | 257 annonces modifiées, 46 nouvelles (dont 2 de Moana), 5 ventes mondiales sur 5 jours, dernières 5 jours, tous courtiers confondus
-
-[2026-07-17] Adaptateur LinkedIn authentifié ajouté au worker KYC | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `compose.kyc.yml`, dépendance et tests | Session optionnelle montée en lecture seule, un profil/job, détection rate-limit stricte; aucun secret ajouté au dépôt
-[2026-07-17] Test LinkedIn réel Gaetano Nicolosi | profil `gaetano-nicolosi-22211433`, session locale | HTTP 999; fallback public conservé, aucun contournement supplémentaire
-[2026-07-17] Test LinkedIn réel Foulques de Raigniac | profil `foulques`, session locale | HTTP 999; profil public trouvé mais accès authentifié bloqué, fallback conservé
-[2026-07-17] Test Crawl4AI recherche OpenSanctions | URL publique `/search/?q=Gaetano+Nicolosi`, venv local | `robots.txt` refuse le crawl; aucun contournement, SearXNG/API conservés
-
-[2026-07-17] Proxy Webshare pour LinkedIn testé et documenté | `scripts/linkedin_compat.py`, `scripts/kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `tasks/kyc-multi-source-screening/proxy.md`, PR #6/#7 | Routage proxy vérifié fonctionnel (IP de sortie confirmée) mais HTTP 999 persiste sur LinkedIn; deux bugs de déploiement préexistants corrigés au passage; piste proxy abandonnée au profit d'Apify
-
-[2026-07-17] LinkedIn migré vers Apify (`harvestapi/linkedin-profile-search-by-name`) | `scripts/apify_linkedin.py` (nouveau), suppression de `scripts/linkedin_compat.py` et `linkedin-scraper`, `kyc_worker.py`, `Dockerfile.kyc`, `.dockerignore`, `compose.kyc.yml`, `tests/test_kyc_worker.py`, `wiki/KYC-OSINT.md`, `tasks/kyc-multi-source-screening/proxy.md` | Recherche par nom sans session/proxy à gérer; testé en local sur Gaetano Nicolosi (profil retrouvé, $0.004/recherche mode Short); déploiement EC2 pas encore fait
-
-[2026-07-18] Filtrage sanctions OpenSanctions par lead, carte distincte du KYC | `scripts/opensanctions-schema.sql`, `lib/sanctions/types.ts`, `lib/supabase/sanctions.ts`, `app/api/leads/[id]/sanctions/route.ts`, `lib/supabase/leads.ts`, `app/api/leads/yatco/route.ts`, `lib/types.ts`, `components/leads/LeadDetailModal.tsx`, `.env.local` | Appel synchrone à l'API Screening payante d'OpenSanctions (0,10 €/requête) après chaque nouveau lead, licence CC BY-NC du bulk export écartée car usage commercial (screening clients); vocabulaire prudent hérité du KYC, clé `OPENSANCTIONS_API_KEY` restant à fournir par l'utilisateur
-
-[2026-07-18] Résumé exécutif KYC LinkedIn allégé et enrichi | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `tests/test_kyc_worker.py`, `tasks/kyc-multi-source-screening/cahier-des-charges-linkedin.md` | Ligne « Sanctions et PEP non conclusifs… » routinière retirée (conservée uniquement si sanctions_db/pep_db trouve une correspondance) ; localisation LinkedIn et extrait du "about" ajoutés à la ligne d'activité ; testé en réel sur Daniel Weitmann (about) et Gaetano Nicolosi (localisation), 25 tests unitaires OK
-
-[2026-07-18] Correction collision URL LinkedIn par sous-domaine pays | `scripts/kyc_worker.py` (`canonical_url`), `tests/test_kyc_worker.py` | `it.linkedin.com`/`fr.linkedin.com` (chemins `/in/`) normalisés vers `www.linkedin.com` ; le profil enrichi Apify et un snippet SearXNG du même profil fusionnent au lieu de concourir, la source riche l'emporte
-
-[2026-07-18] Résumé exécutif KYC en template structuré (Métier / Entreprise / Rôle et missions / Localisation) | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `components/leads/LeadDetailModal.tsx`, `tests/test_kyc_worker.py` | `currentPosition` (titre, entreprise, description) émis en lignes préfixées `Métier:`/`Entreprise:`/`Missions:` ; résumé reconstruit en champs distincts sous la ligne d'attribution (garde-fou homonyme conservé) ; cap résumé 4→8 (backend `normalize_report` et modal) ; 28 tests unitaires OK
-
-[2026-07-18] Mise en place du tunnel agentique + journaux | `CLAUDE.md` (unifié <150 l.), `state.md`, `journalbug.md`, `tasks/README.md`, mémoire `agentic-tunnel` | Process obligatoire pour tout nouvel outil (EPCT→apex→test-code loop, backend AWS) ; `state.md` (cycles 6h/fenêtre 18h auto-résumée) ; `journalbug.md` (bugs testing)
-
-[2026-07-18] Outil #1 — enrichissement entreprise du KYC | `scripts/apify_linkedin.py`, `scripts/kyc_worker.py`, `tests/test_kyc_worker.py`, `tasks/kyc-company-enrichment/*` | Acteur Apify `harvestapi/linkedin-company` (par URL de la position retenue ou fallback nom) remplit `company_profile` (nom, site, industrie, adresse, juridiction, année, forme, employés) ; fusion non destructive + garde prudence homonyme ; flag `APIFY_COMPANY_ENRICH` ; testé live (Golden Suisse, Ferretti Group) + 35 tests unitaires + agent test-code ✅ ; déployé EC2
+[2026-08-13] Correction du serveur MCP `qmd` sous Linux | `.mcp.json` (commit `e83e8b1`) | Commande `cmd /c qmd mcp` (syntaxe Windows) invalide sous Linux, remplacée par le binaire direct `qmd`
 
 ## Historique condensé
 
 De décembre 2025 à février 2026 : migration Airtable vers Supabase, ajout du CRM leads, des listes « à suivre » et « chantier », puis mise en place d’outils d’orchestration multi-agents. Détails utiles dans [[Legacy]].
+
+De juillet 2026 (15 au 18) : bascule KYC vers un pipeline déterministe puis un worker asynchrone (Vercel → Crawl4AI/EC2) ; LinkedIn migré vers Apify après échecs proxy/session ; filtrage OpenSanctions par lead ; résumé exécutif KYC en template structuré ; exploration BOSS/YATCO via scrape-mcp (Search MLS, Insight Analytics, stats par bateau) ; mise en place du tunnel agentique (`state.md`/`journalbug.md`/`tasks/`) et outil #1 `kyc-company-enrichment` déployé EC2. Détails dans l'historique git et la mémoire QMD.
