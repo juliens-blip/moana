@@ -1,0 +1,11 @@
+[Unit]
+Description=Déclenche périodiquement moana-yatco-ingest.service
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=24h
+Unit=moana-yatco-ingest.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

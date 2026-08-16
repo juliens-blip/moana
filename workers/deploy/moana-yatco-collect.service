@@ -1,0 +1,13 @@
+[Unit]
+Description=Moana YATCO collect worker (docker compose run --rm collector)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/moana
+EnvironmentFile=-/home/ubuntu/moana/.env.yatco
+ExecStart=/usr/bin/flock -n /run/lock/moana-yatco.lock -c '/usr/bin/docker compose -f workers/docker/docker-compose.yatco.yml run --rm collector'
+TimeoutStartSec=600
