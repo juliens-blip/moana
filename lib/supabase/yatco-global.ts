@@ -69,10 +69,12 @@ async function getLatestPriceFluctuations(
 }
 
 /**
- * List deduplicated YATCO global listings selected on freshness (created or
- * updated within freshnessHours), minLengthMeters, and minYear, ordered by
- * source_updated_at DESC, enriched with price fluctuation. Server-only:
- * relies on the service_role admin client, never import from client-side code.
+ * List deduplicated YATCO global listings selected on freshness
+ * (first_seen_at/updated_at — our ingestion timestamps, not YATCO's own
+ * source_created_at/source_updated_at which barely ever fall within a 72h
+ * window) within freshnessHours, minLengthMeters, and minYear, ordered by
+ * updated_at DESC, enriched with price fluctuation. Server-only: relies on
+ * the service_role admin client, never import from client-side code.
  */
 export async function getYatcoGlobalListings(
   filters: YatcoGlobalQueryInput
@@ -92,11 +94,11 @@ export async function getYatcoGlobalListings(
       'id, source, external_id, listing_url, boat_name, builder, model, model_year, length_m, price_amount, price_currency, price_usd, country, country_code, city, source_updated_at, dedup_key',
       { count: 'exact' }
     )
-    .order('source_updated_at', { ascending: false, nullsFirst: false });
+    .order('updated_at', { ascending: false, nullsFirst: false });
 
   const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).toISOString();
   query = query.or(
-    `source_created_at.gte.${freshnessThreshold},source_updated_at.gte.${freshnessThreshold}`
+    `first_seen_at.gte.${freshnessThreshold},updated_at.gte.${freshnessThreshold}`
   );
   query = query.gt('length_m', minLengthMeters);
   query = query.gte('model_year', minYear);
