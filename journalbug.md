@@ -12,13 +12,63 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   (`a.name`, `a.title`, `a.stats.total_runs`), jamais `.get()`.
 - Environnement local : SSL strict échoue (litellm, curl) → utiliser `curl -k` /
   UTF-8 file pour diagnostics ; jamais en prod.
-- Tests worker KYC : lancer avec `py -3.11` + `PYTHONPATH="repo:repo/scripts"`
-  (import sibling `apify_linkedin`), pas `python` (3.14 sans deps).
+- **[2026-08-18, corrigé]** Tests worker KYC : la leçon « `py -3.11` +
+  `PYTHONPATH=...` » référençait une AUTRE machine (Windows, wiki/Crawl4AI.md
+  citait encore `C:\Users\beatr\...`) — `py` n'existe pas sur ce poste Linux.
+  Vrai fix : venv canonique créé à la racine du repo (`.venv/`, dépendances de
+  `scripts/requirements-kyc.txt` + `pytest`), résolu automatiquement par la
+  Software Factory pour tout `test_commands` déclarant `python3`/`python`
+  (`Config.venv_python`, `dev/software_factory/workflows/adw_sdlc.py`) — plus
+  besoin de `PYTHONPATH` manuel, `.venv/bin/python3 -m pytest tests/backend`
+  suffit. Leçon : avant de reprendre une note d'environnement ancienne,
+  vérifier qu'elle décrit CETTE machine, pas une précédente.
 - Apify `.call(...)` : passer `timeout=timedelta(...)`, JAMAIS `timeout_secs=` (TypeError).
 - Objet Apify `Run` = pydantic : `run.default_dataset_id` / `run.status` (jamais `run.get()`).
+- Software Factory / orchestrateur : sans vérification préalable du blocage connu
+  (ex. secret manquant), une session relancée redécompose la même tâche et se
+  reheurte au même blocage sans progrès — vérifier `state.md`/mémoire pour un
+  blocage déjà identifié avant de relancer une session sur la même tâche.
+- **[2026-08-18, résolu] MOANA_SSH_KEY « non défini » récurrent (obs 664, 706,
+  714, 722, S28-S45 et ~8 sessions supplémentaires 2026-08-14→18) : la vraie
+  cause n'était PAS l'absence de la variable dans `.env`, mais le mode
+  `tmux.mode=interactive` de la factory — les 4 panes d'agent par équipe sont
+  des shells créés UNE FOIS par `tmux_factory.sh` et réutilisés pendant toute
+  la durée de vie de la session (des jours). `tmux set-environment -g` ne
+  touche que les panes créés APRÈS l'appel ; un pane déjà ouvert garde
+  l'environnement du moment où la session tmux a démarré. Un secret ajouté à
+  `.env` après coup restait donc invisible tant qu'on ne tuait pas toute la
+  session tmux — d'où les relances répétées sans progrès malgré la clé
+  « fournie ». Fix côté `dev/software_factory/workflows/adw_sdlc.py` : chaque
+  appel d'agent en pane écrit désormais un relais `env.sh` (0600, supprimé en
+  fin d'appel) avec les secrets à jour lus depuis `os.environ`, et le `source`
+  avant la commande — jamais tapé en clair dans le pane. Leçon : pour tout
+  outil qui garde un shell tmux long-vivant, ne JAMAIS supposer qu'un
+  `set-environment` atteint un pane déjà ouvert ; revérifier à chaque run.
 
 ## Bugs bruts
 
+- [2026-08-14→2026-08-16] yatco-global (conteneurisation Docker) | `docker build`
+  échouait sur `workers/docker/Dockerfile.yatco-collector` et `Dockerfile.yatco-worker`
+  (`COPY ... not found`), confirmé sur deux sessions Software Factory successives
+  (`20260814T205236-114e94`, `20260814T211920-9cc86f`) | `.dockerignore` racine est
+  une whitelist stricte (`*` puis `!` par fichier) qui n'autorisait ni `workers/` ni
+  `scripts/yatco_collector.py` | négations `!workers/`, `!scripts/yatco_collector.py`
+  ajoutées au `.dockerignore` (2026-08-16) ; **les deux `docker build` validés verts
+  le 2026-08-16 ~21:30** | leçon : même pattern que le bug adverse-media du
+  2026-07-20 (whitelist `.dockerignore` à mettre à jour à chaque nouveau module
+  worker/scripts) — recontrôler `.dockerignore` en phase DEPLOY dès qu'un nouveau
+  chemin `workers/`/`scripts/` apparaît.
+- [2026-08-14] yatco-global (worker ingestion) | sous-tâche backend T3 (session
+  Software Factory `20260814T193044-bcae56`) jamais exécutée, bloquée avant
+  `plan.json` | l'Orchestrator a assigné la tâche à `scripts/` alors que le périmètre
+  de l'équipe backend exclut ce dossier — conflit de scope entre routing et
+  contrainte planner | table `workspace_scope` par équipe ajoutée à
+  `prompts/orchestrator_system.md` (vérification des chemins avant écriture de
+  `route.json`) + whitelist stricte retirée de `prompts/backend/planner.md`, dans le
+  dépôt `software_factory` (hors `moana`) | leçon : la validation de périmètre
+  fichiers doit se faire **à l'assignation** (Orchestrator), pas seulement au
+  planning (Planner), sinon une tâche mal routée bloque silencieusement toute la
+  session.
 - [2026-07-20] kyc-adverse-media | worker EC2 en crash-loop après deploy :
   `ModuleNotFoundError: No module named 'apify_adverse_media'` | `Dockerfile.kyc`
   COPY les modules scripts **un par un, par nom** (pas `scripts/`) → tout NOUVEAU
@@ -33,3 +83,46 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   (aucun modèle requis, fonctionne) ; `query`/`vsearch` désactivés côté agents |
   leçon : sur ce poste, RAG = BM25 uniquement ; vectoriel à réactiver seulement si
   GPU (CUDA/Vulkan) configuré, puis `qmd embed --force`.
+- [2026-08-19] yatco-global (déploiement prod, Software Factory) | session
+  `20260819T131649-454095` bloquée en `BLOCKED_BY_SCOPE` sur `T1` (T2/T3 en
+  cascade) | `DEPLOY_ARTIFACTS` de `deploy.py` copie obligatoirement
+  `scripts/yatco_collector.py` vers l'hôte distant, mais `scripts/**` était
+  hors du `scope_paths` accordé à l'équipe backend pour cette tâche | requête
+  relancée (session `20260819T141201-b98e8a`) avec le scope backend élargi
+  explicitement à `scripts/yatco_collector.py` ; issue en attente (pas de
+  `summary.json` à 16:13) | leçon : quand un artefact de déploiement fixe
+  (`DEPLOY_ARTIFACTS`) référence un chemin hors du périmètre habituel d'une
+  équipe (ici `scripts/` pour l'équipe backend), le déclarer explicitement
+  dans la requête de routage dès le premier essai plutôt que de découvrir le
+  blocage après coup — cf. bug de routing similaire du 2026-08-14.
+- [2026-08-17→2026-08-18, résolu] yatco-global (mode `check`/préflight `deploy.py`)
+  | préflight réel échouait systématiquement contre l'hôte distant sur ~15 tentatives
+  Software Factory (2026-08-17, 01h→23h32) sans progrès | `MOANA_SSH_KEY` absent du
+  contexte local de session précédente, pas fourni ni escaladé | `MOANA_SSH_KEY` fourni
+  et actif en environnement (2026-08-18 ~04:00) ; préflight validé, déploiement complété
+  et services vérifiés | voir leçon « relances répétées » ci-dessus.
+- [2026-08-19, résolu côté code] yatco-global (`deploy.py` health-check) |
+  `moana-yatco-ingest.service` (`Type=oneshot`) traite les données avec succès mais
+  `deploy.py` le déclarait en échec de déploiement (session Software Factory
+  `20260819T201106-1c3a21`, T1 échoué après 3 tentatives) | le health-check sondait
+  `ActiveEnterTimestamp`/`MainPID`, remis à vide dès qu'un oneshot termine — même en
+  succès | `trigger_and_verify_unit` réécrit : force un état frais
+  (`reset-failed`→`start`) et juge sur `InvocationID`/`ExecMainStartTimestamp`, seuls
+  signaux fiables pour ce type d'unité | leçon : pour une unité `Type=oneshot` sans
+  `RemainAfterExit`, ne jamais sonder `ActiveEnterTimestamp`/`MainPID` post-succès —
+  ils sont remis à vide par design.
+- [2026-08-19→2026-08-20, non résolu] yatco-global (suite backend) | après la
+  réécriture du health-check `deploy.py` (ci-dessus), 10 tests locaux échouent :
+  `test_deploy_env.py` (2), `test_deploy_service_trigger.py` (8, non commité) |
+  les mocks `systemctl show` de ces tests simulent encore les anciennes propriétés
+  `ActiveEnterTimestamp,MainPID` au lieu de `InvocationID,ExecMainStartTimestamp` —
+  régression de synchronisation test/code, pas un bug fonctionnel de `deploy.py` |
+  pas encore corrigé (`.venv/bin/python3 -m pytest tests/backend -q` → 75 passed,
+  6 skipped, 10 failed le 2026-08-20) | leçon : après toute réécriture de sonde
+  distante, grep les mocks de test qui hardcodent le nom exact des propriétés
+  `systemctl show`, ils cassent silencieusement sans erreur de syntaxe.
+- **[2026-08-19/20, à traiter] ⚠️ sécurité** — le relais `env.sh` introduit au Cycle 14
+  (`dev/software_factory`, hors moana) pour propager les secrets aux panes tmux
+  écrit `MOANA_SSH_KEY` en clair sur disque (0600, supprimé après l'appel, mais
+  présent en clair pendant l'exécution) | pas encore durci (ex. named pipe / lecture
+  unique) ; à vérifier avant la prochaine campagne de déploiement prod.

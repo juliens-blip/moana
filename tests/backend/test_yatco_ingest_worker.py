@@ -141,6 +141,20 @@ def test_ingest_listings_missing_external_id_goes_to_dead_letter_without_blockin
     assert summary.dead_letters[0].listing is broken
 
 
+def test_ingest_listings_non_dict_goes_to_dead_letter_without_blocking():
+    fake = _FakeSupabase()
+    settings = _settings()
+    broken = "not-a-listing"
+    healthy = _listing("441909")
+
+    summary = ingest_listings([broken, healthy], settings, post=fake.post)
+
+    assert summary.written == [{"source": "yatco", "external_id": "441909"}]
+    assert len(summary.dead_letters) == 1
+    assert summary.dead_letters[0].reason == "invalid_listing_type"
+    assert summary.dead_letters[0].listing is broken
+
+
 def test_ingest_listings_retries_transient_error_then_succeeds():
     fake = _FakeSupabase(fail_statuses={"454180": 503}, fail_times=2)
     settings = _settings(max_retries=3)

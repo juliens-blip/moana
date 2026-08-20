@@ -58,7 +58,7 @@ def _read_remote_env() -> dict[str, str]:
 
 
 def remote_access_or_skip() -> dict[str, str]:
-    """Skip before any subprocess is spawned unless every access var and tool is present."""
+    """Skip before any subprocess is spawned unless every access var, tool and valid SSH connection is present."""
     env = _read_remote_env()
     missing = [name for name, value in env.items() if not value]
     if missing:
@@ -67,6 +67,46 @@ def remote_access_or_skip() -> dict[str, str]:
         pytest.skip("psql is not installed")
     if shutil.which("ssh") is None:
         pytest.skip("ssh is not installed")
+
+    key_path = _write_ssh_key(env["MOANA_SSH_KEY"])
+    try:
+        # Validate key format locally first (0.01s) before network connection
+        keygen_res = subprocess.run(
+            ["ssh-keygen", "-y", "-f", key_path],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+            check=False,
+        )
+        if keygen_res.returncode != 0:
+            pytest.skip(f"MOANA_SSH_KEY is not a valid SSH key (exit {keygen_res.returncode})")
+
+        ssh_target = f"{REMOTE_USER}@{REMOTE_HOST}"
+        ssh_opts = [
+            "-i",
+            key_path,
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=1",
+        ]
+        result = subprocess.run(
+            ["ssh", *ssh_opts, ssh_target, "true"],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+            check=False,
+        )
+        if result.returncode != 0:
+            pytest.skip(f"remote host {REMOTE_HOST} unreachable over SSH (exit {result.returncode})")
+    except Exception as exc:
+        pytest.skip(f"remote host {REMOTE_HOST} SSH check failed: {exc}")
+    finally:
+        if os.path.exists(key_path):
+            os.remove(key_path)
+
     return env
 
 

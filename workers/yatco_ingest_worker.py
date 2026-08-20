@@ -118,7 +118,7 @@ class Settings:
 
 
 class DeadLetter(NamedTuple):
-    listing: dict[str, Any]
+    listing: Any
     reason: str
 
 
@@ -217,7 +217,7 @@ def _upsert_with_retry(
 
 
 def ingest_listings(
-    listings: list[dict[str, Any]],
+    listings: list[Any],
     settings: Settings,
     post: PostFn = default_post,
 ) -> IngestSummary:
@@ -225,13 +225,18 @@ def ingest_listings(
 
     Rejouable : la même fixture appliquée deux fois ne produit qu'une ligne
     par couple source/external_id (upsert PostgREST sur dedup_key). Une
-    annonce sans external_id, ou dont l'écriture échoue définitivement, va au
-    dead-letter sans bloquer les annonces suivantes du lot.
+    annonce sans external_id, dont le type n'est pas un mapping, ou dont
+    l'écriture échoue définitivement, va au dead-letter sans bloquer les
+    annonces suivantes du lot.
     """
     written: list[dict[str, str]] = []
     dead_letters: list[DeadLetter] = []
 
     for listing in listings:
+        if not isinstance(listing, dict):
+            dead_letters.append(DeadLetter(listing=listing, reason="invalid_listing_type"))
+            continue
+
         external_id = validate_external_id(listing)
         if external_id is None:
             dead_letters.append(DeadLetter(listing=listing, reason="missing_external_id"))
