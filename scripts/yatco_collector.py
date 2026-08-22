@@ -12,6 +12,7 @@ interdites et sont rendues côté serveur. Voir samples/recon_notes.md (S1).
 from __future__ import annotations
 
 import argparse
+import html as html_module
 import json
 import logging
 import os
@@ -51,6 +52,16 @@ SPEC_SHEET_RE = re.compile(
     r'href="([^"]+\.pdf)"[^>]*>(?:(?!</a>).)*?(?:spec(?:ification)? sheet|download specs?)',
     re.I | re.S,
 )
+BROCHURE_URL_RE = re.compile(
+    r'name=["\']BrochureUrl["\'][^>]*value=["\']([^"\']+)', re.I
+)
+MODEL_RE = re.compile(
+    r'<span[^>]*>\s*Boat\s+Model\s*</span>\s*<span[^>]*>(.*?)</span>', re.I | re.S
+)
+CABINS_RE = re.compile(
+    r'<span[^>]*>\s*(?:Cabins|Staterooms)\s*</span>\s*<span[^>]*>(.*?)</span>', re.I | re.S
+)
+STATUS_CLASS_RE = re.compile(r'vessel_status_([a-z0-9_]+)', re.I)
 LENGTH_M_RE = re.compile(r"([\d.]+)\s*m", re.I)
 EXTERNAL_ID_FROM_URL_RE = re.compile(r"-(\d+)/?$")
 
@@ -190,6 +201,8 @@ def parse_listing(html: str, listing_url: str, source_updated_at: str | None = N
         "model": None,
         "model_year": None,
         "length_m": None,
+        "cabins": None,
+        "listing_status": None,
         "price_amount": None,
         "price_currency": None,
         "country": None,
@@ -211,7 +224,10 @@ def parse_listing(html: str, listing_url: str, source_updated_at: str | None = N
         if isinstance(brand, dict):
             listing["builder"] = brand.get("name")
         listing["model_year"] = _safe_int(vehicle.get("productionDate"))
-        listing["length_m"] = _extract_length_m(vehicle.get("additionalProperty"))
+        additional_properties = vehicle.get("additionalProperty")
+        listing["length_m"] = _extract_length_m(additional_properties)
+        listing["cabins"] = _extract_integer_property(additional_properties, ("cabins", "cabin", "staterooms", "bedrooms"))
+        listing["listing_status"] = _extract_text_property(additional_properties, ("status", "availability", "condition"))
         offers = vehicle.get("offers")
         if isinstance(offers, dict):
             listing["price_amount"] = _safe_float(offers.get("price"))
@@ -253,7 +269,31 @@ def parse_listing(html: str, listing_url: str, source_updated_at: str | None = N
     if spec_sheet_match:
         listing["spec_sheet_url"] = spec_sheet_match.group(1)
 
+    # Model, cabins and status are rendered in the specification block, not
+    # in the public Vehicle JSON-LD node. Brochures can be broker-generated;
+    # keep the public YATCO URL separately in listing_url.
+    model_match = MODEL_RE.search(html)
+    if model_match:
+        listing["model"] = _clean_html_text(model_match.group(1)) or listing["model"]
+
+    cabins_match = CABINS_RE.search(html)
+    if cabins_match:
+        listing["cabins"] = _safe_int(_clean_html_text(cabins_match.group(1)))
+
+    status_match = STATUS_CLASS_RE.search(html)
+    if status_match:
+        listing["listing_status"] = status_match.group(1).replace("_", " ").title()
+
+    brochure_match = BROCHURE_URL_RE.search(html)
+    if brochure_match and not listing["spec_sheet_url"]:
+        listing["spec_sheet_url"] = html_module.unescape(brochure_match.group(1)).strip()
+
     return listing
+
+
+def _clean_html_text(value: str) -> str:
+    value = re.sub(r"<[^>]+>", " ", value)
+    return html_module.unescape(value).strip()
 
 
 def _extract_vehicle_node(html: str) -> dict[str, Any] | None:
@@ -279,6 +319,32 @@ def _extract_length_m(additional_properties: Any) -> float | None:
             match = LENGTH_M_RE.search(str(prop.get("value", "")))
             if match:
                 return _safe_float(match.group(1))
+    return None
+
+
+def _extract_integer_property(additional_properties: Any, names: tuple[str, ...]) -> int | None:
+    if not isinstance(additional_properties, list):
+        return None
+    wanted = {name.lower() for name in names}
+    for prop in additional_properties:
+        if not isinstance(prop, dict) or str(prop.get("name", "")).strip().lower() not in wanted:
+            continue
+        match = re.search(r"\d+", str(prop.get("value", "")))
+        if match:
+            return int(match.group(0))
+    return None
+
+
+def _extract_text_property(additional_properties: Any, names: tuple[str, ...]) -> str | None:
+    if not isinstance(additional_properties, list):
+        return None
+    wanted = {name.lower() for name in names}
+    for prop in additional_properties:
+        if not isinstance(prop, dict) or str(prop.get("name", "")).strip().lower() not in wanted:
+            continue
+        value = str(prop.get("value", "")).strip()
+        if value:
+            return value
     return None
 
 

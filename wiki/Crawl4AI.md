@@ -1,44 +1,50 @@
 # Crawl4AI
 
-## État validé — 2026-07-16
+## État validé — 2026-08-18 (machine Linux actuelle)
 
 - Version stable : `0.9.2`.
-- Interpréteur : Python 3.11, `C:\Users\beatr\AppData\Local\Programs\Python\Python311\python.exe`.
-- CLI disponibles sur `PATH` : `crwl`, `crawl4ai-setup`, `crawl4ai-doctor`.
-- Données locales : `C:\Users\beatr\.crawl4ai`.
-- Navigateurs Playwright/Patchright : `C:\Users\beatr\AppData\Local\ms-playwright`.
-- `crawl4ai-doctor` et crawl CLI de `https://example.com` réussis.
+- Interpréteur : venv canonique du repo, `.venv/bin/python3` (créé à la racine
+  moana, dépendances de `scripts/requirements-kyc.txt` + `pytest`). Le `python3`
+  système (3.14) ne contient PAS Crawl4AI — ne jamais l'utiliser directement.
+- Software Factory (`dev/software_factory`) résout automatiquement tout
+  `python3`/`python` déclaré en `test_commands` vers ce même `.venv` (voir
+  `Config.venv_python` dans `workflows/adw_sdlc.py`) — les agents Builder/
+  Tester en sont informés en tête de prompt et n'ont pas à en recréer un.
 
-Le `python` par défaut est Python 3.14 et ne contient pas Crawl4AI. Pour les commandes Python, utiliser explicitement `py -3.11`.
+> Note historique : la section précédente référençait un chemin Windows
+> (`C:\Users\beatr\...`, `py -3.11`, `rtk py -3.11 ...`) — c'était une autre
+> machine, plus d'actualité ici. Sur CE poste, `py` n'existe pas ; toute
+> commande `py -3.11 ...` échouera. Utiliser `.venv/bin/python3` (ou activer
+> le venv : `source .venv/bin/activate`).
 
 ## Maintenance
 
-```powershell
-rtk py -3.11 -X utf8 -m pip install --upgrade crawl4ai
-rtk crawl4ai-setup
-rtk crawl4ai-doctor
+```bash
+.venv/bin/python3 -X utf8 -m pip install --upgrade crawl4ai
+.venv/bin/crawl4ai-setup
+.venv/bin/crawl4ai-doctor
 ```
 
 Si le navigateur manque malgré le setup :
 
-```powershell
-rtk py -3.11 -m playwright install chromium
+```bash
+.venv/bin/python3 -m playwright install chromium
 ```
 
 ## CLI
 
-```powershell
+```bash
 # Markdown sur stdout
-rtk crwl https://example.com -o markdown
+.venv/bin/crwl https://example.com -o markdown
 
 # Sortie transitoire dans le projet
-rtk crwl https://example.com -o markdown -O raw/example.md
+.venv/bin/crwl https://example.com -o markdown -O raw/example.md
 
 # Crawl profond borné
-rtk crwl https://docs.crawl4ai.com --deep-crawl bfs --max-pages 10 -o markdown
+.venv/bin/crwl https://docs.crawl4ai.com --deep-crawl bfs --max-pages 10 -o markdown
 
 # Question/extraction LLM; nécessite la configuration du fournisseur utilisé
-rtk crwl https://example.com/products -q "Extraire les prix des produits"
+.venv/bin/crwl https://example.com/products -q "Extraire les prix des produits"
 ```
 
 ## Python
@@ -55,7 +61,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Exécuter un script avec `rtk py -3.11 script.py`.
+Exécuter un script avec `.venv/bin/python3 script.py`.
 
 ## Usage dans ce projet
 

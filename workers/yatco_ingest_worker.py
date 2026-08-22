@@ -41,6 +41,8 @@ MAPPED_LISTING_FIELDS = (
     "model",
     "model_year",
     "length_m",
+    "cabins",
+    "listing_status",
     "price_amount",
     "price_currency",
     "price_usd",

@@ -59,9 +59,9 @@ def _temp_files() -> set[str]:
 class _Recorder:
     """Simule ``run`` en capturant les commandes et le .env lors de son scp.
 
-    Le cycle de trigger (S1) exige un ``ActiveEnterTimestamp``/``MainPID`` qui
+    Le cycle de trigger (S1) exige un ``InvocationID``/``ExecMainStartTimestamp`` qui
     change réellement entre la capture pré- et post-``start``, et un
-    ``is-failed`` dont le returncode SSH est strictement 0 : ce mock simule un
+    ``is-failed`` dont le returncode SSH est strictly 0 : ce mock simule un
     état périmé avant ``sudo systemctl start`` puis un état frais et changé
     ensuite, pour rester un test valide du contrat .env sans se faire bloquer
     par le verdict du trigger.
@@ -88,9 +88,9 @@ class _Recorder:
         if isinstance(remote_cmd, str) and remote_cmd.startswith("systemctl show "):
             if self.started:
                 return subprocess.CompletedProcess(
-                    command, 0, stdout="ActiveEnterTimestamp=Wed 2026-08-19 18:00:00 UTC\nMainPID=1234\n", stderr=""
+                    command, 0, stdout="InvocationID=22222222-2222-2222-2222-222222222222\nExecMainStartTimestamp=Wed 2026-08-19 18:00:00 UTC\n", stderr=""
                 )
-            return subprocess.CompletedProcess(command, 0, stdout="ActiveEnterTimestamp=\nMainPID=0\n", stderr="")
+            return subprocess.CompletedProcess(command, 0, stdout="InvocationID=11111111-1111-1111-1111-111111111111\nExecMainStartTimestamp=Wed 2026-08-19 10:00:00 UTC\n", stderr="")
         if isinstance(remote_cmd, str) and remote_cmd.startswith("systemctl is-failed "):
             return subprocess.CompletedProcess(command, 0, stdout="active\n", stderr="")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")

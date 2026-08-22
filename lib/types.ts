@@ -380,6 +380,8 @@ export interface YatcoGlobalListing {
   model?: string;
   model_year?: number;
   length_m?: number;
+  cabins?: number;
+  listing_status?: string;
   price_amount?: number;
   price_currency?: string;
   price_usd?: number;
@@ -387,7 +389,22 @@ export interface YatcoGlobalListing {
   country_code?: string;
   city?: string;
   source_updated_at?: string;
+  source_created_at?: string;
+  first_seen_at?: string;
+  updated_at?: string;
+  broker_name?: string;
+  broker_company?: string;
+  agent_name?: string;
+  agent_email?: string;
+  spec_sheet_url?: string;
+  raw_payload?: Record<string, unknown>;
+  dedup_key: string;
   price_fluctuation: YatcoPriceFluctuation | null;
+}
+
+export interface YatcoFavoriteHistoryEntry {
+  observed_at: string;
+  listing_snapshot: Record<string, unknown>;
 }
 
 export interface YatcoGlobalListingsResponse {

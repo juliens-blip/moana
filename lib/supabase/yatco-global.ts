@@ -4,6 +4,16 @@ import { YatcoGlobalQueryInput } from '@/lib/validations';
 
 const PAGE_SIZE = 25;
 
+// Closed whitelist of sortable columns; never interpolate a raw sortBy value
+// into .order() so the API contract stays bounded to known DB columns.
+const SORT_COLUMNS = {
+  updated_at: 'updated_at',
+  source_updated_at: 'source_updated_at',
+  price_usd: 'price_usd',
+  model_year: 'model_year',
+  length_m: 'length_m'
+} as const;
+
 interface YatcoSelectionCandidateRow {
   id: string;
   source: string;
@@ -14,6 +24,7 @@ interface YatcoSelectionCandidateRow {
   model?: string;
   model_year?: number;
   length_m?: number;
+  cabins?: number;
   price_amount?: number;
   price_currency?: string;
   price_usd?: number;
@@ -21,7 +32,11 @@ interface YatcoSelectionCandidateRow {
   country_code?: string;
   city?: string;
   source_updated_at?: string;
+  source_created_at?: string;
+  first_seen_at?: string;
+  updated_at?: string;
   dedup_key: string;
+  raw_payload?: Record<string, unknown>;
 }
 
 interface YatcoPriceDeltaRow {
@@ -72,9 +87,12 @@ async function getLatestPriceFluctuations(
  * List deduplicated YATCO global listings selected on freshness
  * (first_seen_at/updated_at — our ingestion timestamps, not YATCO's own
  * source_created_at/source_updated_at which barely ever fall within a 72h
- * window) within freshnessHours, minLengthMeters, and minYear, ordered by
- * updated_at DESC, enriched with price fluctuation. Server-only: relies on
- * the service_role admin client, never import from client-side code.
+ * window) within freshnessHours, minLengthMeters, and minYear, optionally
+ * refined by model_year, length_m, country, and price_usd_min/max, ordered
+ * by the requested sortBy/sortDir (whitelisted columns only, default
+ * updated_at DESC) then id for a stable order across pages, enriched with
+ * price fluctuation. Server-only: relies on the service_role admin client,
+ * never import from client-side code.
  */
 export async function getYatcoGlobalListings(
   filters: YatcoGlobalQueryInput
@@ -87,14 +105,21 @@ export async function getYatcoGlobalListings(
   const freshnessHours = filters.freshnessHours ?? 72;
   const minLengthMeters = filters.minLengthMeters ?? 26;
   const minYear = filters.minYear ?? 2010;
+  const sortColumn = SORT_COLUMNS[filters.sortBy ?? 'updated_at'];
+  const sortAscending = filters.sortDir === 'asc';
 
+  // Query the base table directly so every filter is evaluated by Postgres
+  // before range() applies pagination. The old view is intentionally not used
+  // here: it has a fixed selection policy and made debugging cross-page
+  // filtering unnecessarily opaque.
   let query = supabase
-    .from('yatco_selection_candidates')
+    .from('yatco_global_listings')
     .select(
-      'id, source, external_id, listing_url, boat_name, builder, model, model_year, length_m, price_amount, price_currency, price_usd, country, country_code, city, source_updated_at, dedup_key',
+      'id, source, external_id, listing_url, boat_name, builder, model, model_year, length_m, cabins, listing_status, price_amount, price_currency, price_usd, country, country_code, city, source_updated_at, source_created_at, first_seen_at, updated_at, broker_name, broker_company, agent_name, agent_email, spec_sheet_url, raw_payload, dedup_key',
       { count: 'exact' }
     )
-    .order('updated_at', { ascending: false, nullsFirst: false });
+    .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
+    .order('id', { ascending: true });
 
   const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).toISOString();
   query = query.or(
@@ -104,7 +129,28 @@ export async function getYatcoGlobalListings(
   query = query.gte('model_year', minYear);
 
   if (filters.country) {
-    query = query.ilike('country', filters.country);
+    const location = filters.country.replace(/[%_,()]/g, ' ').trim();
+    query = query.or(`city.ilike.%${location}%,country.ilike.%${location}%`);
+  }
+
+  if (filters.model_year !== undefined) {
+    query = query.eq('model_year', filters.model_year);
+  }
+
+  if (filters.length_m !== undefined) {
+    query = query.gte('length_m', filters.length_m);
+  }
+
+  if (filters.cabins !== undefined) {
+    query = query.gte('cabins', filters.cabins);
+  }
+
+  if (filters.price_usd_min !== undefined) {
+    query = query.gte('price_usd', filters.price_usd_min);
+  }
+
+  if (filters.price_usd_max !== undefined) {
+    query = query.lte('price_usd', filters.price_usd_max);
   }
 
   const { data, error, count } = await query.range(from, to);

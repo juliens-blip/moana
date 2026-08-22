@@ -1,8 +1,37 @@
 # Journal
 
+## 2026-08-22 — Pivot YATCO Global vers un flux live, favoris, brochure, outil commission
+
+[2026-08-22] `yatco-global` : bascule d'architecture vers un flux BOSS live à la demande, favoris persistés | `lib/yatco-boss/live.ts`, `lib/supabase/yatco-favorites.ts`, `app/api/yatco-global/favorites/`, `supabase/migrations/20260821T0900__yatco_global_favorites_and_tracking*.sql`, `supabase/migrations/20260822T0900__yatco_live_favorites_only.sql` (non commités) | Le dashboard n'affiche plus les annonces via la table `yatco_global_listings` alimentée en continu par le collecteur/worker/timer systemd (Cycles 5-17), mais interroge YATCO BOSS à la demande via SSH (bouton « Actualiser le flux live »). `yatco_global_listings` ne conserve plus que les favoris (avec `listing_snapshot` JSONB) ; les annonces non favorites sont supprimées de la table. Question ouverte : le timer systemd d'ingestion tourne-t-il encore sur EC2, devient-il redondant ?
+
+[2026-08-22] `yatco-global` : téléchargement de brochure corrigé | `scripts/yatco-boss-brochure.mjs`, `app/api/yatco-global/brochure/route.ts` (non commités) | Le bouton appelait `/forsale/pdf/custompdf/` (page de configuration broker, 404 hors interface) ; remplacé par le workflow authentifié `quickpdf` → attente filestore → URL S3, validé avec un PDF réel de 6,86 Mo, sans stockage Supabase
+
+[2026-08-22] Nouvel outil dashboard `/dashboard/outils/commission` (calculateur de commission de courtage) livré via la Software Factory | `lib/commission.ts`, `app/dashboard/outils/commission/page.tsx`, `tests/frontend/commission.test.ts`, liens nav dans `components/layout/Header.tsx` (non commités) | 1er run factory bloqué par un bug de gate (commande de test optionnelle mal formée + notes tronquées à 600 caractères, corrigé côté `dev/software_factory`) malgré un calcul déjà correct ; 2e run vert en 1 tentative (278s) ; 7/7 tests passent, `tsc --noEmit` propre
+
+[2026-08-22] `yatco-global` : redémarrage local fiable | en cas de `ENOSPC`/500
+pendant l’actualisation, vérifier `df -h`, puis supprimer uniquement le cache
+reconstructible `/home/arrogant/Documents/dev/moana/.next`, relancer `npm run dev`
+avec `.env` et `.env.kyc` chargés, attendre `✓ Ready`, puis contrôler
+`http://localhost:3000/dashboard/yatco-global` ; une réponse `307` sans session
+est normale. Ne pas toucher à Supabase, aux favoris ou au code source. La première
+compilation peut être longue après la purge.
+
+[2026-08-22] `yatco-global` : réauthentification AWS conservée | cron horaire
+`/home/ubuntu/scrape-mcp/yatco-relogin.sh`, login via
+`scripts/auto-login-yatco.mjs`, écriture de `auth/yatcoboss.json`, puis
+redémarrage de `scrape-mcp` ; intervalle fixé à 20 h (27 h dépassait l’expiration
+effective du cookie). En cas de flux vide, vérifier `relogin.log`, `.last-relogin`
+et la présence de `Login - BOSS` dans la réponse pager avant de conclure à 0 annonce.
+
+## 2026-08-21
+
+[2026-08-21] `yatco-global` : filtres et tri ajoutés sur `yacht_global_listings` | `app/dashboard/yatco-global/page.tsx`, `app/api/yatco-global/route.ts`, `lib/validations.ts`, `tests/frontend/yatco-global.test.ts` (non commités) | Filtres par année de construction, longueur, zone géographique, prix min/max ; tri par défaut sur les annonces les plus récentes ; plusieurs sessions Software Factory sur la même demande restées bloquées sur un bug de synchronisation URL↔API (paramètres `sort`/`category` perdus au rechargement), corrigé directement ; 25 tests frontend passent
+
 ## 2026-08-20
 
-[2026-08-20] `yatco-global` : health-check `deploy.py` réécrit pour les unités `Type=oneshot`, suite de tests désynchronisée | `workers/deploy/deploy.py`, `workers/yatco_ingest_worker.py`, `tests/backend/test_yatco_ingest_worker.py`, `tests/backend/test_yatco_remote_smoke.py` (non commités), `state.md`, `bugs.md`, `journalbug.md` | `moana-yatco-ingest.service` traitait les données avec succès mais le health-check le déclarait en échec (sondait `ActiveEnterTimestamp`/`MainPID`, remis à vide par un oneshot terminé) ; `trigger_and_verify_unit` juge désormais sur `InvocationID`/`ExecMainStartTimestamp` ; `ingest_listings` met en dead-letter toute annonce dont le type n'est pas un `dict` ; 4 sessions Software Factory sur le déploiement prod bloquées/échouées/stallées (scope, health-check pré-fix, bug de synchronisation tmux côté factory) ; suite backend locale à 75 passed/6 skipped/**10 failed** (mocks `test_deploy_env.py`/`test_deploy_service_trigger.py` non mis à jour sur les nouvelles propriétés `systemctl show`)
+[2026-08-20] `yatco-global` : health-check `deploy.py` + fix `.env` confirmés en production, filtre de fraîcheur de la vue corrigé | `lib/supabase/yatco-global.ts`, `supabase/migrations/20260820T1615__fix_yatco_selection_freshness_signal*.sql` (commit `6791ade`) ; health-check + dead-letter (commit `0e01aa9`) ; `tests/backend/production_yatco_ingest_verification.json` (non commité) | Health-check `deploy.py` (unités `Type=oneshot`) et fix `.env` Compose du 2026-08-19 confirmés en production le 2026-08-20 (`Result=success`, `files=694 written=4435 dead_letters=2`, aucune erreur de config). Nouveau bug trouvé et corrigé le même jour : la vue `yatco_selection_candidates` filtrait sur les dates publiées par YATCO (`source_created_at` jamais rempli, `source_updated_at` quasi figé) au lieu de nos dates d'ingestion → 0 lignes retournées malgré 4438 annonces en base ; bascule sur `first_seen_at`/`updated_at`, vérifié en prod (780 lignes retournées). Suite backend locale : 83 passed/7 skipped/**12 failed** (mocks `systemctl show` de `test_deploy_env.py`/`test_deploy_service_trigger.py` toujours désynchronisés, voir `bugs.md`).
+
+[2026-08-20] `yatco-global` : migration d'index pour `yacht_global_listings` créée, non commitée | `supabase/migrations/20260820T2135__add_yacht_global_listings_indexes.sql` + `.down.sql`, `tests/backend/test_yacht_global_listings_indexes.py` | Index séparés sur `model_year`, `length_m`, `country`, `price_usd` (distinct de celui retiré par `20260814T1930`), `updated_at DESC, id` pour les filtres/tri du dashboard YATCO Global ; migration idempotente (`to_regclass`+`IF NOT EXISTS`), rollback `.down.sql` dédié ; 10 passed/1 skipped en local ; pas encore appliquée en production ni commitée
 
 ## 2026-08-19
 

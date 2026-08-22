@@ -1,24 +1,26 @@
 {
   "mcpServers": {
-    "context7": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@upstash/context7-mcp"
-      ]
-    },
-    "shadcn": {
-      "command": "npx",
-      "args": [
-        "shadcn@latest",
-        "mcp"
-      ]
-    },
     "qmd": {
       "command": "/home/arrogant/.nvm/versions/node/v24.19.0/bin/qmd",
       "args": [
         "mcp"
-      ]
+      ],
+      "env": {
+        "HOME": "/home/arrogant",
+        "PATH": "/home/arrogant/.nvm/versions/node/v24.19.0/bin:/home/arrogant/.local/bin:/usr/local/bin:/usr/bin:/bin"
+      }
+    },
+    "memory": {
+      "command": "/home/arrogant/Documents/dev/software_factory/.venv-memory/bin/python",
+      "args": [
+        "/home/arrogant/Documents/dev/software_factory/memory_server.py",
+        "--root",
+        "/home/arrogant/Documents/dev/moana"
+      ],
+      "env": {
+        "HOME": "/home/arrogant",
+        "PATH": "/home/arrogant/.nvm/versions/node/v24.19.0/bin:/home/arrogant/.local/bin:/usr/local/bin:/usr/bin:/bin"
+      }
     }
   }
 }

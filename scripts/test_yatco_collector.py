@@ -113,6 +113,21 @@ def test_parse_listing_fixture_alternate_country_and_email():
     assert listing["agent_email"] == "james.fitzgerald@camperandnicholsons.example"
 
 
+def test_parse_listing_extracts_broker_specification_fields_and_brochure_endpoint():
+    html = '''
+      <body class="vessel_status_on_the_market">
+        <div><span>Boat Model</span><span>50 Pilothouse</span></div>
+        <div><span>Cabins</span><span>2</span></div>
+        <input type="hidden" name="BrochureUrl" value="https://www.yatcoboss.com/ForSale/PDF/PDFCreateOnDemand?enc=abc&amp;x=1">
+      </body>
+    '''
+    listing = parse_listing(html, "https://www.yatco.com/yacht/50-symbol-483828/")
+    assert listing["model"] == "50 Pilothouse"
+    assert listing["cabins"] == 2
+    assert listing["listing_status"] == "On The Market"
+    assert listing["spec_sheet_url"] == "https://www.yatcoboss.com/ForSale/PDF/PDFCreateOnDemand?enc=abc&x=1"
+
+
 def _entries_from_fixture() -> list[dict[str, str]]:
     return [
         {"url": f"https://www.yatco.com/yacht/x-{external_id}/", "lastmod": "2026-01-01"}

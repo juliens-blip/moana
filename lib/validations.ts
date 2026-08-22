@@ -18,6 +18,18 @@ const parseIntInput = (value: unknown) => {
   return Number.isNaN(parsed) ? value : parsed;
 };
 
+// Unlike parseIntInput (Number.parseInt), rejects trailing garbage such as
+// "2020abc" instead of silently truncating it to 2020.
+const parseStrictIntInput = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim();
+  if (normalized.length === 0) return undefined;
+  if (!/^-?\d+$/.test(normalized)) return value;
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isNaN(parsed) ? value : parsed;
+};
+
 const normalizeOptionalText = (value: unknown) => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
@@ -246,6 +258,38 @@ export const yatcoGlobalQuerySchema = z.object({
       .default(2010)
   ),
   country: optionalText(80),
+  model_year: z.preprocess(
+    parseStrictIntInput,
+    z.number({ invalid_type_error: 'model_year doit être un nombre' })
+      .int('model_year doit être un nombre entier')
+      .positive('model_year doit être positif')
+      .optional()
+  ),
+  length_m: z.preprocess(
+    parseNumberInput,
+    z.number({ invalid_type_error: 'length_m doit être un nombre' })
+      .nonnegative('length_m doit être positif ou nul')
+      .optional()
+  ),
+  cabins: z.preprocess(
+    parseStrictIntInput,
+    z.number({ invalid_type_error: 'cabins doit être un nombre' })
+      .int('cabins doit être un nombre entier')
+      .positive('cabins doit être positif')
+      .optional()
+  ),
+  price_usd_min: z.preprocess(
+    parseNumberInput,
+    z.number({ invalid_type_error: 'price_usd_min doit être un nombre' })
+      .nonnegative('price_usd_min doit être positif ou nul')
+      .optional()
+  ),
+  price_usd_max: z.preprocess(
+    parseNumberInput,
+    z.number({ invalid_type_error: 'price_usd_max doit être un nombre' })
+      .nonnegative('price_usd_max doit être positif ou nul')
+      .optional()
+  ),
   page: z.preprocess(
     parseIntInput,
     z.number({ invalid_type_error: 'page doit être un nombre' })
@@ -253,8 +297,20 @@ export const yatcoGlobalQuerySchema = z.object({
       .positive('page doit être positive')
       .optional()
       .default(1)
-  )
-});
+  ),
+  sortBy: z.enum(['updated_at', 'source_updated_at', 'price_usd', 'model_year', 'length_m'], {
+    invalid_type_error: 'sortBy doit être updated_at, source_updated_at, price_usd, model_year ou length_m'
+  }).optional().default('updated_at'),
+  sortDir: z.enum(['asc', 'desc'], {
+    invalid_type_error: 'sortDir doit être asc ou desc'
+  }).optional().default('desc')
+}).refine(
+  (data) => data.price_usd_min === undefined || data.price_usd_max === undefined || data.price_usd_min <= data.price_usd_max,
+  {
+    message: 'price_usd_min doit être inférieur ou égal à price_usd_max',
+    path: ['price_usd_max']
+  }
+);
 
 export type YatcoGlobalQueryInput = z.infer<typeof yatcoGlobalQuerySchema>;
 

@@ -6,6 +6,28 @@ les patterns récurrents dans « Leçons » et supprimer les lignes brutes ancie
 
 Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
 
+- **[2026-08-22, résolu]** serveur local/YATCO Global | actualisation affichait une
+  déconnexion ou une erreur 500 | `ENOSPC` lors de l’écriture du cache webpack/Next
+  (disque presque plein) | purge ciblée de `.next`, redémarrage de `npm run dev`,
+  recompilation longue mais normale ; ne jamais supprimer les données Supabase.
+- **[2026-08-22, résolu AWS]** flux live vide | le pager renvoyait `Login - BOSS`,
+  cookie BOSS expiré avant le prochain rea​​uth | le cron était bien présent mais
+  son intervalle de 27 h dépassait la durée réelle du cookie | login automatique
+  relancé, conteneur `scrape-mcp` redémarré, intervalle réduit à 20 h ; le scraper
+  détecte maintenant une page login au lieu de la convertir en liste vide.
+- **[2026-08-22, résolu localement]** brochure en chargement continu/404 | lien
+  `custompdf` non téléchargeable et proxy qui pouvait scanner 600 pages avant de
+  générer le PDF | workflow remplacé par appel authentifié `quickpdf` direct, scan
+  limité au secours, téléchargement S3 attendu ; test réel `%PDF-` de 6,86 Mo.
+- **[2026-08-22, résolu]** actualisation rejetée avec `length_m=0` | zéro restauré
+  depuis l’URL était envoyé au schéma strict | `0` est maintenant traité comme
+  absence de filtre et omis de la requête API ; 25 tests frontend passent.
+
+- **[2026-08-22, résolu]** YATCO Global live — le flux affichait 0 annonce ; le pager AWS renvoyait en réalité `Login - BOSS`, car `BOSSAuthCookie` avait expiré à 16:00. Le scraper détecte désormais la page de connexion et remonte une erreur explicite au lieu de masquer l’expiration comme une liste vide. Session renouvelée dans `/app/auth/yatcoboss.json` via le rea​​uth automatique AWS.
+- **[2026-08-22, résolu AWS]** Le renouvellement automatique existait bien (`cron` horaire + `yatco-relogin.sh`) mais son intervalle était de 27 h, supérieur à la durée effective du cookie. La session expirait donc avant le prochain passage. Re-login exécuté avec succès à 17:47, conteneur `scrape-mcp` redémarré, intervalle réduit à 20 h.
+
+- **[2026-08-22, résolu localement]** YATCO Global — le bouton brochure utilisait directement `/forsale/pdf/custompdf/`, qui est une page de configuration broker et renvoie 404 sans le workflow de l’interface. Vérifié dans les traces Playwright : le parcours fonctionnel est `quickpdf` → attente du filestore → URL S3. Le script local `scripts/yatco-boss-brochure.mjs` reproduit ce parcours avec la session BOSS AWS ; test réel validé avec un PDF `%PDF-` de 6,86 Mo. L’interface passe désormais par `/api/yatco-global/brochure` et ne stocke pas le document dans Supabase.
+
 ## Leçons (patterns récurrents)
 
 - `apify_client` StoreListActor est un objet pydantic : accès par attribut
@@ -46,6 +68,13 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   `set-environment` atteint un pane déjà ouvert ; revérifier à chaque run.
 
 ## Bugs bruts
+
+- [2026-08-22] dashboard UI | le logo Moana apparaissait en très grand en
+  arrière-plan, particulièrement sur YATCO Global | le layout dashboard
+  appliquait une image JPEG 1600x800 en filigrane avec `background-repeat`,
+  rendu dépendant du cache/CSS et visuellement envahissant | filigrane retiré
+  du layout ; le logo reste uniquement dans le header | leçon : ne pas utiliser
+  une image de marque pleine largeur comme background répété du dashboard.
 
 - [2026-08-14→2026-08-16] yatco-global (conteneurisation Docker) | `docker build`
   échouait sur `workers/docker/Dockerfile.yatco-collector` et `Dockerfile.yatco-worker`
@@ -101,26 +130,41 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   contexte local de session précédente, pas fourni ni escaladé | `MOANA_SSH_KEY` fourni
   et actif en environnement (2026-08-18 ~04:00) ; préflight validé, déploiement complété
   et services vérifiés | voir leçon « relances répétées » ci-dessus.
-- [2026-08-19, résolu côté code] yatco-global (`deploy.py` health-check) |
-  `moana-yatco-ingest.service` (`Type=oneshot`) traite les données avec succès mais
-  `deploy.py` le déclarait en échec de déploiement (session Software Factory
-  `20260819T201106-1c3a21`, T1 échoué après 3 tentatives) | le health-check sondait
-  `ActiveEnterTimestamp`/`MainPID`, remis à vide dès qu'un oneshot termine — même en
-  succès | `trigger_and_verify_unit` réécrit : force un état frais
-  (`reset-failed`→`start`) et juge sur `InvocationID`/`ExecMainStartTimestamp`, seuls
-  signaux fiables pour ce type d'unité | leçon : pour une unité `Type=oneshot` sans
-  `RemainAfterExit`, ne jamais sonder `ActiveEnterTimestamp`/`MainPID` post-succès —
-  ils sont remis à vide par design.
+- [2026-08-19, résolu et confirmé en prod le 2026-08-20] yatco-global (`deploy.py`
+  health-check) | `moana-yatco-ingest.service` (`Type=oneshot`) traite les données
+  avec succès mais `deploy.py` le déclarait en échec de déploiement (session
+  Software Factory `20260819T201106-1c3a21`, T1 échoué après 3 tentatives) | le
+  health-check sondait `ActiveEnterTimestamp`/`MainPID`, remis à vide dès qu'un
+  oneshot termine — même en succès | `trigger_and_verify_unit` réécrit : force un
+  état frais (`reset-failed`→`start`) et juge sur `InvocationID`/
+  `ExecMainStartTimestamp`, seuls signaux fiables pour ce type d'unité ; déployé et
+  vérifié en production le 2026-08-20 (`production_yatco_ingest_verification.json` :
+  `Result=success`, `files=694 written=4435 dead_letters=2`) | leçon : pour une
+  unité `Type=oneshot` sans `RemainAfterExit`, ne jamais sonder
+  `ActiveEnterTimestamp`/`MainPID` post-succès — ils sont remis à vide par design.
 - [2026-08-19→2026-08-20, non résolu] yatco-global (suite backend) | après la
-  réécriture du health-check `deploy.py` (ci-dessus), 10 tests locaux échouent :
-  `test_deploy_env.py` (2), `test_deploy_service_trigger.py` (8, non commité) |
-  les mocks `systemctl show` de ces tests simulent encore les anciennes propriétés
+  réécriture du health-check `deploy.py` (ci-dessus), les tests locaux échouent :
+  `test_deploy_env.py`, `test_deploy_service_trigger.py` (non commités) | les mocks
+  `systemctl show` de ces tests simulent encore les anciennes propriétés
   `ActiveEnterTimestamp,MainPID` au lieu de `InvocationID,ExecMainStartTimestamp` —
   régression de synchronisation test/code, pas un bug fonctionnel de `deploy.py` |
-  pas encore corrigé (`.venv/bin/python3 -m pytest tests/backend -q` → 75 passed,
-  6 skipped, 10 failed le 2026-08-20) | leçon : après toute réécriture de sonde
-  distante, grep les mocks de test qui hardcodent le nom exact des propriétés
-  `systemctl show`, ils cassent silencieusement sans erreur de syntaxe.
+  pas encore corrigé (`.venv/bin/python3 -m pytest tests/backend -q` → 83 passed,
+  7 skipped, **12 failed** le 2026-08-20, en hausse depuis les 10 échecs initiaux) |
+  leçon : après toute réécriture de sonde distante, grep les mocks de test qui
+  hardcodent le nom exact des propriétés `systemctl show`, ils cassent
+  silencieusement sans erreur de syntaxe.
+- [2026-08-20, résolu] yatco-global (vue `yatco_selection_candidates`) | le
+  dashboard 72h renvoyait 0 résultat malgré 4438 annonces en base | la vue
+  filtrait sur `source_created_at`/`source_updated_at` — des dates PUBLIÉES PAR
+  YATCO (`source_created_at` jamais rempli, `source_updated_at` = lastmod
+  sitemap, quasi figé), pas nos dates d'ingestion | migration
+  `20260820T1615__fix_yatco_selection_freshness_signal` bascule filtre+tri sur
+  `first_seen_at`/`updated_at` ; `lib/supabase/yatco-global.ts` aligné ; vérifié en
+  prod, 780 lignes désormais retournées | leçon : pour une source externe agrégée,
+  toujours distinguer explicitement « date publiée par la source » de « date de
+  notre propre ingestion » avant de filtrer sur la fraîcheur — la première peut
+  être absente ou quasi statique sans que ce soit visible en base tant qu'on ne
+  compare pas les deux.
 - **[2026-08-19/20, à traiter] ⚠️ sécurité** — le relais `env.sh` introduit au Cycle 14
   (`dev/software_factory`, hors moana) pour propager les secrets aux panes tmux
   écrit `MOANA_SSH_KEY` en clair sur disque (0600, supprimé après l'appel, mais

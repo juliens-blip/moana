@@ -3,8 +3,8 @@ du service systemd moana-yatco-ingest (plan T1 : capture avant/après trigger,
 reset-failed -> start -> is-failed).
 
 Isole apply_deploy du réseau : subprocess, SSH et fichiers temporaires sont
-simulés via le paramètre ``run``. Vérifie que l'état (ActiveEnterTimestamp,
-MainPID) est capturé avant tout déclenchement puis de nouveau après, qu'un
+simulés via le paramètre ``run``. Vérifie que l'état (InvocationID,
+ExecMainStartTimestamp) est capturé avant tout déclenchement puis de nouveau après, qu'un
 état inchangé bloque le verdict, qu'un returncode SSH non nul sur la sonde
 is-failed est rejeté indépendamment de son stdout, que seul
 moana-yatco-ingest.service est visé par le cycle, et qu'aucun secret (clé SSH,
@@ -30,13 +30,13 @@ FAKE_SERVICE_KEY = "fake-service-role-jwt-token-value"
 FAKE_SSH_KEY = "-----BEGIN TEST KEY-----sentinel-----END TEST KEY-----"
 
 TARGET_UNIT = "moana-yatco-ingest.service"
-SHOW_CMD = f"systemctl show {TARGET_UNIT} --property=ActiveEnterTimestamp,MainPID"
+SHOW_CMD = f"systemctl show {TARGET_UNIT} --property=InvocationID,ExecMainStartTimestamp"
 IS_FAILED_CMD = f"systemctl is-failed {TARGET_UNIT}"
 RESET_CMD = f"sudo systemctl reset-failed {TARGET_UNIT}"
 START_CMD = f"sudo systemctl start {TARGET_UNIT}"
 
-STALE_STATE = "ActiveEnterTimestamp=Wed 2026-08-19 10:00:00 UTC\nMainPID=1111\n"
-FRESH_STATE = "ActiveEnterTimestamp=Wed 2026-08-19 18:00:00 UTC\nMainPID=4242\n"
+STALE_STATE = "InvocationID=11111111-1111-1111-1111-111111111111\nExecMainStartTimestamp=Wed 2026-08-19 10:00:00 UTC\n"
+FRESH_STATE = "InvocationID=22222222-2222-2222-2222-222222222222\nExecMainStartTimestamp=Wed 2026-08-19 18:00:00 UTC\n"
 
 
 def _settings() -> deploy.Settings:
@@ -128,7 +128,7 @@ def test_only_ingest_service_is_targeted(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_unchanged_state_after_trigger_blocks_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Si ActiveEnterTimestamp/MainPID sont identiques avant et après, le verdict doit échouer."""
+    """Si InvocationID/ExecMainStartTimestamp sont identiques avant et après, le verdict doit échouer."""
     _set_fake_env(monkeypatch)
 
     def unchanged_state_run(command, timeout, capture_output, text, check):
@@ -213,13 +213,13 @@ def test_no_secret_leaks_across_trigger_commands_or_errors(monkeypatch: pytest.M
 
 
 def test_missing_fresh_timestamp_and_pid_blocks_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Sans ActiveEnterTimestamp/MainPID frais après start, le service n'est jamais déclaré sain."""
+    """Sans InvocationID/ExecMainStartTimestamp frais après start, le service n'est jamais déclaré sain."""
     _set_fake_env(monkeypatch)
 
     def no_fresh_state_run(command, timeout, capture_output, text, check):
         remote_cmd = command[-1] if command else ""
         if remote_cmd == SHOW_CMD:
-            return _ok(command, stdout="ActiveEnterTimestamp=\nMainPID=0\n")
+            return _ok(command, stdout="InvocationID=\nExecMainStartTimestamp=\n")
         if remote_cmd == IS_FAILED_CMD:
             # Même si is-failed répondait "active", l'absence de preuve fraîche doit bloquer.
             return _ok(command, returncode=1, stdout="active\n")
@@ -229,7 +229,7 @@ def test_missing_fresh_timestamp_and_pid_blocks_verdict(monkeypatch: pytest.Monk
         deploy.apply_deploy(str(REPO_ROOT), _settings(), run=no_fresh_state_run)
 
     assert TARGET_UNIT in str(excinfo.value)
-    assert "timestamp" in str(excinfo.value).lower() or "pid" in str(excinfo.value).lower()
+    assert "invocationid" in str(excinfo.value).lower() or "timestamp" in str(excinfo.value).lower() or "pid" in str(excinfo.value).lower()
 
 
 def test_nonzero_ssh_returncode_fails_even_with_recognized_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,8 +256,8 @@ def test_nonzero_ssh_returncode_fails_even_with_recognized_stdout(monkeypatch: p
 
 
 def test_returncode_one_on_is_failed_fails_even_with_active_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Le plan exige de rejeter TOUT returncode SSH non nul avant le parsing du stdout,
-    y compris rc=1 dont le stdout ressemble à un état sain ("active\\n")."""
+    """Le plan exige de rejeter TOUT returncode SSH non standard (hors 0 et 1) avant le parsing du stdout,
+    y compris rc=255 dont le stdout ressemble à un état sain ("active\n")."""
     _set_fake_env(monkeypatch)
     recorder = _FreshStateRecorder()
 
@@ -267,7 +267,7 @@ def test_returncode_one_on_is_failed_fails_even_with_active_stdout(monkeypatch: 
             recorder.show_calls += 1
             return _ok(command, stdout=STALE_STATE if recorder.show_calls == 1 else FRESH_STATE)
         if remote_cmd == IS_FAILED_CMD:
-            return _ok(command, returncode=1, stdout="active\n")
+            return _ok(command, returncode=255, stdout="active\n")
         return _ok(command)
 
     with pytest.raises(deploy.DeploymentError) as excinfo:

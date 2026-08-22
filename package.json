@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "tsx",
     "export-airtable": "dotenv -e .env.local -- tsx scripts/export-airtable-data.ts",
     "import-supabase": "dotenv -e .env.local -- tsx scripts/import-to-supabase.ts",
     "import-csv": "dotenv -e .env.local -- tsx scripts/import-from-csv.ts",

@@ -42,6 +42,26 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
   backend 65+ passed) après résolution du blocage `MOANA_SSH_KEY` (fourni et
   validé) ; artefacts (`.dockerignore`, `.mcp.json`, `deploy.py` mode `check`,
   tests dédiés) restés non commités.
+- **Cycle 15 (2026-08-19)** — Audit de 72 sessions Software Factory (89
+  "blocked" en fait 70 "skipped" en cascade, nouveau statut dédié) ; 1re tâche
+  factory simple validée de bout en bout + trace SQLite (`workflows/trace_db.py`) ;
+  tiering réel décortiqué (`team_lead` non tiéré, suite pytest 772s/53% du run)
+  → `team_lead` tiéré sur les 4 équipes, `scope_pytest_to_delta` limite la suite
+  au delta si 100% `tests/**`. Côté `yatco-global` : `.env` Compose manquant en
+  prod (`ConfigurationError`) corrigé dans `deploy.py` (transfert 0600 sans
+  journalisation) ; session Software Factory bloquée en `BLOCKED_BY_SCOPE`
+  (`scripts/yatco_collector.py` hors périmètre backend) puis relancée avec
+  scope élargi (`20260819T141201-b98e8a`).
+- **Cycle 16 (2026-08-19 20:42→2026-08-20 01:13)** — Health-check `deploy.py`
+  réécrit pour les unités `Type=oneshot` (jugeait à tort
+  `moana-yatco-ingest.service` en échec, sondait `ActiveEnterTimestamp`/
+  `MainPID` remis à vide en fin de run réussi → bascule sur `InvocationID`/
+  `ExecMainStartTimestamp`) ; `ingest_listings` met en dead-letter les annonces
+  au type non-`dict`. 4 sessions Software Factory de déploiement prod
+  bloquées/stallées (scope, health-check pré-fix, bug de sync tmux côté
+  factory, corrigé en parallèle). Suite backend rouge (75 passed/6 skipped/
+  10 failed, mocks `systemctl` désynchronisés) ; rien confirmé en prod à ce
+  stade, artefacts non commités (confirmé et corrigé au Cycle 17).
 - **Cycle 14 (2026-08-18 21:48→22:50, `dev/software_factory`, hors moana)** —
   Cause racine des blocages `MOANA_SSH_KEY` récurrents trouvée : pas un secret
   absent mais `tmux.mode=interactive` (panes long-vivants, jamais rafraîchis) →
@@ -51,200 +71,104 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
   créé à la racine moana (corrige `wiki/Crawl4AI.md`, obsolète sur ce poste).
   Incident : clé `MOANA_SSH_KEY` affichée en clair dans la conversation lors
   d'un test bugué, historique tmux nettoyé, rotation refusée par l'utilisateur.
+- **Cycle 17 (2026-08-20 21:35→23:11)** — Health-check `deploy.py` + fix `.env`
+  Compose (Cycles 15-16) confirmés en production (`Result=success`,
+  `files=694 written=4435 dead_letters=2`). Bug trouvé et corrigé le même jour :
+  la vue `yatco_selection_candidates` filtrait sur les dates publiées par
+  YATCO (`source_created_at`/`source_updated_at`, quasi figées) au lieu de nos
+  dates d'ingestion → 0 lignes retournées malgré 4438 annonces en base ;
+  migration `20260820T1615` bascule sur `first_seen_at`/`updated_at`, 780
+  lignes vérifiées en prod. Migration d'index `yacht_global_listings`
+  (`20260820T2135`) créée mais pas encore appliquée en prod ni commitée. Suite
+  backend locale toujours rouge (83 passed/7 skipped/12 failed, mocks
+  `systemctl show` désynchronisés depuis Cycle 16, non corrigés).
 
 ## Cycles récents (<18h)
 
-### [2026-08-18 ~21:48] Cycle 14 — Software Factory (`dev/software_factory`, hors moana) : cause racine des blocages trouvée et corrigée
-- **Fait** : Comparaison archi avec `super-simple-software-factory` (disler) à la demande
-  de l'utilisateur, puis audit des ~40 dernières sessions factory. Cause racine du
-  blocage `MOANA_SSH_KEY non défini` (répété ~8× depuis Cycle 11) identifiée : PAS un
-  secret absent, mais `tmux.mode=interactive` — les panes d'agent sont des shells
-  créés une fois par `tmux_factory.sh` et jamais rafraîchis ; `tmux set-environment -g`
-  n'atteint que les panes créés après l'appel. Fix : `AgentRunner._write_env_relay`
-  (workflows/adw_sdlc.py) écrit un fichier `env.sh` (0600, jamais tapé en clair dans le
-  pane) sourcé avant chaque commande, avec les secrets à jour lus depuis `os.environ`.
-  `MOANA_SSH_KEY` ajoutée à `secrets.required_env` de `team_backend.yaml` (absente
-  jusqu'ici, donc invisible à `doctor`). Détection `STATE_MUTATION_DETECTED` assouplie :
-  1 réparation auto. (restauration depuis le cache SHA-256 immuable) par contrat avant
-  d'abandonner la sous-tâche — au lieu d'un abandon immédiat. Import ciblé de deux idées
-  SSSF : gate `plan_intent_quality` (avertissement non bloquant sur `goal`/`intent`
-  triviaux) et `workflows/envelope_types.py` (types Pydantic miroir, référence
-  documentaire seule — `gate_checks.py` reste l'autorité d'exécution). Exemption
-  `*.down.sql` du gate SQL destructif (DROP y est le comportement attendu). Prompt
-  `backend/planner.md` clarifié pour éviter l'auto-escalade `SCOPE_ESCALATION_REQUIRED`
-  sur un déploiement distant légitime (`op:"run"` + `remote:true` reste dans le scope).
-- **⚠️ Incident** : `MOANA_SSH_KEY` affichée en clair dans la conversation lors d'un test
-  de vérification bugué (`${VAR:-UNSET}` renvoie la valeur si définie, pas le mot
-  "UNSET"). Historique du pane tmux nettoyé immédiatement. Utilisateur informé,
-  rotation de clé refusée explicitement ("on s'en fou continue").
-- **Tests** : compile OK (`py_compile`), gate `plan_intent_quality` vérifié
-  (warning non bloquant), exemption `.down.sql` vérifiée (gate passe), relais env
-  vérifié en conditions réelles sur le pane `Backend.2` (clé bien propagée).
-- **Prochaine étape** : observer les prochaines sessions factory pour confirmer la
-  disparition des blocages `MOANA_SSH_KEY` ; envisager de tuer/recréer la session tmux
-  existante si un autre secret y a été ajouté après son démarrage.
+### [2026-08-20 21:35→2026-08-21 23:52] Cycle 18 — `yatco-global` : filtres/tri sur `yacht_global_listings`, bug de sync URL↔API trouvé et corrigé
+- **Fait** : filtres (année de construction, longueur, zone géographique, prix
+  min/max) + tri par défaut (plus récent d'abord) ajoutés à
+  `app/dashboard/yatco-global/page.tsx`, `app/api/yatco-global/route.ts`,
+  `lib/validations.ts`. Plusieurs sessions Software Factory sur la même
+  demande (`20260820T213502`, `20260821T130636`, `20260821T135535` — toutes
+  bloquées en tentative, T1 API validé mais T2 UI jamais passé proprement) :
+  la synchronisation URL↔API ne reconstruisait les query params qu'à partir
+  des filtres YATCO Global connus, perdant `sort`/`category`/autres déjà
+  présents. Bug lié trouvé en test manuel : une valeur `length_m=0` restaurée
+  depuis l'URL était envoyée telle quelle au schéma strict de validation et
+  rejetée — corrigé en traitant `0` comme absence de filtre (omis de la
+  requête API), fix appliqué directement (hors factory).
+- **Tests** : `tests/frontend/yatco-global.test.ts` — 25 tests passent.
+- **Prochaine étape** : appliquer la migration d'index `20260820T2135` en
+  prod ; commiter `lib/validations.ts`, `lib/types.ts`,
+  `app/api/yatco-global/route.ts`, `app/dashboard/yatco-global/page.tsx`,
+  `tests/frontend/yatco-global.test.ts`.
 
-### [2026-08-18 ~22:05] Cycle 14 (suite) — 2 imports SSSF supplémentaires : diff réel vs déclaré + continuation de session
-- **Fait** : (1) `enforce_declared_writes` (workflows/adw_sdlc.py) — snapshot `git
-  status` avant/après chaque appel Builder, comparé à `build.json.changes` déclaré.
-  Un fichier nouvellement modifié/non-suivi et non déclaré est annulé automatiquement
-  (`git checkout --`/suppression) ; un fichier déjà sale avant l'appel et toujours
-  non déclaré n'est que signalé (pas d'annulation à l'aveugle d'un travail antérieur
-  légitime). Implémente le principe SSSF « `writes:` est la frontière, `tools:` ne
-  l'est pas ». (2) Continuation de session pour le Builder : `--session-id`/`--resume`
-  côté providers `claude`/`claude_orchestrator` uniquement (seuls documentés sans
-  ambiguïté création/reprise ; codex/agy/cline assignent leurs propres IDs, laissés
-  en retry à froid par prudence). `builder` tourne sur `claude` dans les tiers
-  medium/hard des 4 équipes → couvre la boucle Build⟲Test, la plus coûteuse.
-- **Tests** : compile OK sur les 3 fichiers touchés ; `enforce_declared_writes` vérifié
-  sur 3 cas (déclaré conservé, nouveau non-déclaré annulé, déjà-sale-avant signalé
-  seulement) ; sélection de gabarit fresh/resume/fallback-silencieux vérifiée.
-- **Prochaine étape** : observer un vrai run Builder en tier medium/hard pour confirmer
-  que `--resume` fonctionne en conditions réelles (jamais testé avec un vrai appel
-  `claude` payant durant cette session).
+### [2026-08-21 22:55→2026-08-22 ~20:00] Cycle 19 — `yatco-global` : bascule d'architecture vers un flux BOSS live à la demande, favoris persistés, brochure corrigée
+- **Fait** : **pivot d'architecture** — le dashboard n'affiche plus les
+  annonces via la table `yatco_global_listings` alimentée en continu par le
+  collecteur/worker/timer systemd (déployés aux Cycles 5-17), mais interroge
+  YATCO BOSS **à la demande** via bouton « Actualiser le flux live »
+  (`lib/yatco-boss/live.ts`, SSH vers `ubuntu@51.44.220.145` où tourne
+  `scrape-mcp`). Migration `20260822T0900__yatco_live_favorites_only` : ajoute
+  `listing_snapshot` JSONB aux favoris, rend `listing_id` nullable, **supprime
+  toutes les annonces non favorites de `yatco_global_listings`** — cette table
+  ne sert plus qu'à conserver les favoris (avec snapshot pour affichage hors
+  ligne), plus le flux complet. Favoris ajoutés en amont (migration
+  `20260821T0900`) : tables `yatco_global_favorites`/`_favorite_history`,
+  `lib/supabase/yatco-favorites.ts`, `/api/yatco-global/favorites` (+
+  `[dedupKey]`). Brochure : bouton appelait `/forsale/pdf/custompdf/` (page de
+  config broker, 404 hors interface) — remplacé par le workflow authentifié
+  `quickpdf` → attente filestore → URL S3
+  (`scripts/yatco-boss-brochure.mjs`, `/api/yatco-global/brochure`), testé
+  avec un vrai PDF 6,86 Mo. Auth BOSS : cookie expirait avant le prochain
+  cron de réauthentification (intervalle 27h > durée réelle du cookie) →
+  intervalle réduit à 20h, scraper détecte maintenant une page de login au
+  lieu de la convertir en liste vide. Filigrane logo Moana retiré du layout
+  dashboard (`app/dashboard/layout.tsx`) — rendu envahissant/dépendant du
+  cache. Procédure locale documentée pour `ENOSPC`/500 au dev (purge ciblée
+  `.next`, jamais Supabase).
+- **Tests** : détails bugs/tests dans `journalbug.md` (2026-08-22).
+- **Question ouverte** : le timer systemd d'ingestion (collecteur+worker,
+  Cycles 10-17) tourne-t-il encore sur EC2 ? Il devient redondant avec le flux
+  live à la demande — décider s'il faut le désactiver ou le garder comme
+  fallback avant de committer/déployer ce pivot.
+- **Prochaine étape** : commiter les artefacts en attente (`lib/yatco-boss/`,
+  `lib/supabase/yatco-favorites.ts`, `app/api/yatco-global/favorites/`,
+  `app/api/yatco-global/brochure/`, migrations `20260821T0900`/`20260822T0900`,
+  scripts `probe_auth.mjs`/`sync_yatco_boss_global.py`/
+  `yatco-boss-brochure.mjs`/`yatco-boss-global-live.mjs`/
+  `backfill_yatco_details.py`) ; trancher la question ci-dessus.
 
-### [2026-08-18 ~22:50] Cycle 14 (suite) — venv Python canonique créé, cause d'échecs de tests trouvée
-- **Fait** : aucun venv Python n'existait pour moana sur cette machine ; `python3`
-  système (3.14) n'avait ni `apify_client`, ni `httpx`, ni `dotenv`, ni `litellm`,
-  ni `crawl4ai`. `wiki/Crawl4AI.md` référençait encore un chemin Windows
-  (`C:\Users\beatr\...`, `py -3.11`) — une autre machine, plus d'actualité ici (corrigé).
-  Fix : `.venv/` créé à la racine (`sudo apt install python3.14-venv` requis,
-  installé avec accord utilisateur), dépendances de `scripts/requirements-kyc.txt`
-  + `pytest` installées, `.venv` ajouté au `.gitignore`. Côté factory : nouvelle
-  propriété `Config.venv_python` (convention `<workspace>/.venv/bin/python3`,
-  générique pour tout futur projet ciblé, pas seulement moana) ; `TestRunner`
-  réécrit automatiquement tout `python3`/`python` de `test_commands` vers ce
-  binaire ; les agents (Builder/Planner/Tester) en sont informés en tête de
-  prompt (`_envelope_header`) avec consigne explicite de ne jamais en créer un
-  autre — but : que l'agent et le moteur tournent sur le MÊME interpréteur.
-- **Tests** : 77 tests backend + 2 tests rag collectés sans erreur d'import via
-  `.venv/bin/python3 -m pytest --collect-only` ; substitution automatique
-  `python3`→venv vérifiée en conditions réelles via `TestRunner.run_all()`.
-- **Prochaine étape** : si l'équipe OSINT redevient active, vérifier `tests/osint`
-  (dossier absent pour l'instant) collecte aussi proprement une fois créé.
+### [2026-08-21→2026-08-22, `dev/software_factory`, hors moana] Cycle 20 — Refactor factory après bascule orchestrateur GPT Sol (crashs fréquents)
+- **Fait** : passage de l'orchestrateur à GPT Sol a provoqué crashs/perf
+  dégradée ; diagnostic + fix de 4 causes racines : gate de verdict de test
+  incohérent avec le résultat réel (`gate_test_verdict` outrepassé par le
+  résultat brut `TestRunner`, filtrage des échecs sur commande de test
+  optionnelle), boucle de réparation JSON, budgets de tentatives par tier,
+  verrouillage de session. `notes` maxLength relevé de 600 à 1500 caractères
+  (tronquait les diagnostics du Tester). Même schéma que le Cycle 14 : le
+  vrai correctif est côté outillage factory, pas côté moana.
+- **Tests** : 26 tests factory passent après refactor (suite dédiée, hors
+  moana).
+- **Prochaine étape** : observer que le prochain run réel confirme
+  l'absence de régression (fait au Cycle 21, run commission calculator).
 
-### [2026-08-19 ~23:00] Cycle 15 — Audit complet factory + 1re tâche factory 100% réussie + trace SQLite
-- **Fait** : audit de 72 sessions / 130 sous-tâches historiques. Trouvaille majeure :
-  89 "blocked" (68%) affichés, mais 70/89 (79%) n'étaient que des sous-tâches sautées
-  en cascade (dépendance amont non satisfaite, 0 appel LLM dépensé) comptées avec le
-  même statut qu'un vrai blocage — le vrai taux de blocage réel était ~15-20, pas 89.
-  Fix : nouveau statut `"skipped"` distinct dans `adw_sdlc.py`/`main.py sessions`.
-  **Lancé une vraie tâche simple en direct** (`tests/backend/test_deploy_artifacts_shape.py`,
-  session `20260819T200713-86cf03`) : **PASSED** de bout en bout (team_lead→planner→
-  builder→test→tester), fichier réel vérifié correct. Le Tester a lui-même diagnostiqué
-  qu'un smoke test distant préexistant (pas mon changement) faisait échouer la suite,
-  et le Builder l'a corrigé en tentative 2 (skip gracieux si `MOANA_SSH_KEY` absent/
-  invalide) — validation en conditions réelles de tous les fixes du Cycle 14
-  (relais env, `enforce_declared_writes`, continuation de session, venv).
-  **Ajout `workflows/trace_db.py`** : miroir SQLite (WAL) des runs — sessions + events
-  (subtask_started/finished, agent_call par rôle/provider/statut/durée), additif au
-  `manifest.jsonl` qui reste source de vérité. Nouvelle commande `main.py trace`
-  (résumé par défaut, `--sql` pour requête libre). Import SSSF #3 (observabilité).
-- **Tests** : wiring vérifié en conditions réelles (dry-run gratuit + vraie session
-  passée) — sessions/events insérés et interrogeables correctement.
-- **Prochaine étape** : la base ne couvre que les runs à partir de maintenant (pas de
-  backfill des 72 sessions historiques) — normal, `main.py trace` restera clairsemé
-  jusqu'à accumulation de nouveaux runs.
-
-### [2026-08-20 ~00:40] Cycle 15 (suite) — tiering réel du run "easy" (24 min de la veille décortiquées)
-- **Fait** : décomposition du run passed d'hier (24 min) par timestamp : team_lead
-  62s, planner 54s, build1 29s, **tester1 772s (53% du total)**, build2 276s,
-  tester2 251s. Deux causes trouvées, toutes deux confirmées par l'utilisateur.
-  (1) `team_lead` n'était tiéré sur AUCUNE des 4 équipes — toujours `codex/gpt-5.6-sol`
-  quel que soit `--tier`. Fix : bloc `tiers: {easy: deepseek/deepseek-v4-flash}` ajouté
-  au `team_lead:` des 4 `team_*.yaml` ; `_team_lead()` (adw_sdlc.py) lit maintenant
-  `tier_hint` pour choisir son propre modèle avant même d'avoir tranché le tier final.
-  (2) Le gros du temps (772s) : `test_commands` de l'équipe fait TOUJOURS tourner toute
-  la suite (`pytest tests/backend`, 86 tests), même pour un changement d'un seul
-  fichier — un smoke test distant sans rapport a fait échouer le gate, forçant le
-  Tester à un diagnostic long. Fix conservateur (PAS un scoping façon `ruff` — perte de
-  couverture jugée trop risquée) : `gate_checks.scope_pytest_to_delta` ne restreint la
-  suite d'équipe au delta QUE si le delta entier est composé de fichiers `tests/**` ;
-  tout changement touchant un fichier hors `tests/` (ex. `workers/deploy.py`) garde la
-  suite complète, sans perte de couverture de régression.
-- **Tests** : 3 cas unitaires vérifiés (delta 100% test → scope ; delta non-test → suite
-  complète inchangée ; delta mixte → suite complète inchangée).
-- **Prochaine étape** : observer le prochain run `easy` en conditions réelles pour
-  confirmer le gain de temps (team_lead + scoping pytest quand applicable).
-
-### [2026-08-19 ~13:16→16:13] Cycle 15 — `yatco-global` : `.env` Docker Compose manquant sur l'hôte distant, scope backend trop étroit puis élargi
-- **Fait** : `moana-yatco-ingest.service` échouait en prod avec
-  `ConfigurationError: Missing configuration: NEXT_PUBLIC_SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY` (le `.env` Compose n'était jamais déployé sur
-  l'hôte distant). `workers/deploy/deploy.py` étendu (`load_env_value`,
-  `write_env_file`, `ENV_FILE_VARIABLES`, `ENV_FILE_REMOTE_PATH`) pour lire ces
-  deux variables exclusivement depuis `os.environ`, les écrire dans un `.env`
-  temporaire local 0600 puis le transférer vers
-  `workers/docker/.env` sur `ubuntu@51.44.220.145`, sans jamais les journaliser
-  (fichier local supprimé succès ou échec). `.dockerignore` ajouté à
-  `DEPLOY_ARTIFACTS` ; `REQUIRED_UNITS` figé
-  (`moana-yatco-collect.service`, `moana-yatco-ingest.service`,
-  `moana-yatco-ingest.timer`). Nouveaux tests `tests/backend/test_deploy_env.py`
-  (non commités).
-- **Session Software Factory `20260819T131649-454095`** (13:16→13:21) :
-  premier essai de déploiement prod routé à l'équipe backend, **bloqué en
-  `BLOCKED_BY_SCOPE`** sur `T1` — `DEPLOY_ARTIFACTS` copie obligatoirement
-  `scripts/yatco_collector.py` vers l'hôte distant alors que `scripts/**`
-  était hors du `scope_paths` accordé à l'équipe backend
-  (`authorized_scope_paths` limité à `workers/**`, `db/**`, `migrations/**`,
-  `supabase/**`, `tests/backend/**`, `.dockerignore`, `.gitignore`,
-  `requirements.txt`, `package.json`, `docker-compose.yml`) ; `reroute_required:
-  true`, T2/T3 restés bloqués en cascade (dépendance).
-- **Session Software Factory `20260819T141201-b98e8a`** (démarrée 14:12,
-  routée 14:13, **encore en cours à 16:13** — pas de `summary.json`) :
-  relancée avec le scope backend élargi explicitement à
-  `scripts/yatco_collector.py` dans la requête ; aucun résultat final
-  disponible à la clôture de ce cycle documentaire.
-- **Tests** : suite backend locale au vert — `.venv/bin/python3 -m pytest
-  tests/backend -q` → 71 passed, 6 skipped (2026-08-19).
-- **Prochaine étape** : suivre l'issue de la session `20260819T141201-b98e8a`
-  (déploiement prod réel + vérification SSH que `ConfigurationError` a
-  disparu du journal `moana-yatco-ingest.service` + cycle d'ingestion complet
-  exit 0) ; une fois confirmé, commiter les artefacts en attente
-  (`.dockerignore`, `.mcp.json`, `workers/deploy/deploy.py`,
-  `tests/backend/test_deploy_env.py`, `tests/backend/test_deploy_preflight.py`,
-  `tests/backend/conftest.py`, `scripts/test_yatco_collector.py`).
-
-### [2026-08-19 20:42→2026-08-20 01:13] Cycle 16 — `yatco-global` : health-check `deploy.py` réécrit (bug oneshot), déploiement prod toujours pas confirmé, suite de tests désynchronisée
-- **Fait** : la session `20260819T141201-b98e8a` du Cycle 15 a fini par échouer en
-  prod — `moana-yatco-ingest.service` (`Type=oneshot`) traite bien les données avec
-  succès mais le health-check de `deploy.py` le déclarait en échec, car il sondait
-  `ActiveEnterTimestamp`/`MainPID`, remis à vide dès qu'un oneshot termine (même en
-  succès). Réécrit : `trigger_and_verify_unit` force un état frais
-  (`reset-failed`→`start`) puis ne juge que sur `InvocationID`/`ExecMainStartTimestamp`
-  (seuls signaux fiables pour ce type d'unité) et sur `systemctl is-failed` avec
-  rc∈{0,1} attendu. `Settings.unit_start_timeout_s` (1200s) ajouté : `systemctl start`
-  sur un oneshot bloque jusqu'à la fin réelle du worker, budget distinct des sondes
-  courtes. `validate_external_id`/`ingest_listings` : une annonce dont le type n'est
-  pas un `dict` part désormais en dead-letter (`invalid_listing_type`) au lieu de
-  planter le lot (fix + test ajoutés, voir diff `workers/yatco_ingest_worker.py`).
-- **Déploiements bloqués** : `20260819T204237-95d40f` bloqué (T1, 2 tentatives —
-  déploiement prod hors scope du `plan.json`) ; `20260819T201106-1c3a21` échoué (T1,
-  3 tentatives — health-check pré-fix qui déclarait le service en échec malgré un
-  run réussi) ; `20260819T221907-d95ba9` et `20260819T231217-48414a` **jamais sortis
-  de la phase `route`** (aucun `summary.json`, `manifest.jsonl` arrêté juste après
-  `route` validé) — cause : bug de synchronisation tmux découvert en parallèle côté
-  `dev/software_factory` (pane vidé avant exécution de la commande, `stdout.log`
-  vide) et corrigé (`_confirm_started()`) vers 01:00, mais aucune session n'a encore
-  été relancée depuis pour confirmer le déploiement du fix health-check sur EC2.
-- **⚠️ Sécurité (à traiter)** : alerte factory — la clé privée `MOANA_SSH_KEY` est
-  écrite en clair dans le fichier relais `env.sh` (0600, supprimé après usage, mais
-  présent sur disque en clair le temps de l'appel) côté `dev/software_factory`, hors
-  périmètre moana mais concerne directement ce secret ; à vérifier/durcir avant
-  prochaine campagne de déploiement.
-- **Tests** : suite backend locale actuellement **rouge** —
-  `.venv/bin/python3 -m pytest tests/backend -q` → **75 passed, 6 skipped, 10 failed**.
-  Les 10 échecs (`test_deploy_env.py`×2, `test_deploy_service_trigger.py`×8, ce
-  dernier non commité) sont des mocks écrits avant la réécriture du health-check :
-  ils simulent encore `ActiveEnterTimestamp`/`MainPID` au lieu de
-  `InvocationID`/`ExecMainStartTimestamp` — régression de synchronisation test/code,
-  pas un bug de `deploy.py` lui-même.
-- **Prochaine étape** : mettre à jour les mocks de `test_deploy_service_trigger.py`/
-  `test_deploy_env.py` sur les nouvelles propriétés `systemctl show`, revalider suite
-  au vert, puis relancer un déploiement prod (scope explicitement élargi au
-  hostname/production) pour confirmer en conditions réelles que le health-check
-  oneshot ne déclare plus faussement `moana-yatco-ingest.service` en échec ;
-  artefacts toujours non commités (voir liste Cycle 15 ci-dessus, + `deploy.py`
-  santé oneshot et `test_deploy_service_trigger.py` en plus).
-
+### [2026-08-22 19:41→19:52] Cycle 21 — Outil `commission` livré au dashboard via la factory (1er run bloqué par le bug de gate du Cycle 20, 2e run vert)
+- **Fait** : nouvel outil `/dashboard/outils/commission` (calculateur de
+  commission de courtage : prix de vente, taux de commission %, taux de TVA
+  %) — `lib/commission.ts`, `app/dashboard/outils/commission/page.tsx`, lien
+  nav desktop+mobile dans `components/layout/Header.tsx`. 1er run factory
+  (`20260822T190208-cb18d7`, 927s, 3 tentatives) : le calcul de taux corrigé
+  dès la tentative 2 (tests/typage/lint/build tous verts) mais **rejeté par
+  le gate** à cause d'une commande de test optionnelle mal formée + notes
+  tronquées à 600 caractères — root-cause identique aux fixes du Cycle 20.
+  2e run (`20260822T194722-b2b11f`) après ces fixes : **passe en 1 tentative,
+  278s**. `package.json` : script `"test": "tsx"` ajouté (attendu par le gate
+  frontend de la factory).
+- **Tests** : `tests/frontend/commission.test.ts` — 7/7 passent ; `tsc
+  --noEmit` propre.
+- **Prochaine étape** : commiter `lib/commission.ts`,
+  `app/dashboard/outils/commission/`, `tests/frontend/commission.test.ts`,
+  diff `Header.tsx`/`package.json`.
 
