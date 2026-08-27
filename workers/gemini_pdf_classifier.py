@@ -36,7 +36,7 @@ from workers.pdf_image_extractor import ExtractedImage, PdfExtractionError
 
 LOGGER = logging.getLogger("moana.gemini_pdf_classifier")
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 
 # Preferred, non-exhaustive business categories for a yacht brochure image
 # (route_team.json constraints). The model is free to return any other
