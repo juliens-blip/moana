@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { Client as SshClient } from 'ssh2';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BROCHURE_UPLOAD_BUCKET, BROCHURE_UPLOAD_PATH_RE } from '@/lib/brochure-video-contract';
 
@@ -40,6 +41,20 @@ function resolveRemoteHost(): string {
     throw new Error('Configuration serveur manquante: MOANA_SSH_HOST');
   }
   return host;
+}
+
+interface RemoteTarget {
+  username: string;
+  hostname: string;
+}
+
+/** MOANA_SSH_HOST est au format `user@host` (ex. ubuntu@51.44.220.145). */
+function parseRemoteTarget(host: string): RemoteTarget {
+  const [username, hostname] = host.split('@');
+  if (!username || !hostname) {
+    throw new Error('Configuration serveur invalide: MOANA_SSH_HOST doit être au format user@host');
+  }
+  return { username, hostname };
 }
 
 function randomAlphanumeric(length: number): string {
@@ -129,40 +144,75 @@ export function boundedAppend(
   return { value: next, overflowed: false };
 }
 
+/**
+ * Client SSH pur Node (`ssh2`), sans dépendance au binaire système `ssh` —
+ * absent des fonctions serverless Vercel (runtime Node.js/AWS Lambda), ce qui
+ * faisait échouer `spawn('ssh', ...)` avec `ENOENT` en production. `ssh2`
+ * fonctionne en JS pur (repli sans bindings natifs si non compilables).
+ */
 function createSshRunner(keyPath: string, host: string): BrochureVideoDeps['runSsh'] {
+  const { username, hostname } = parseRemoteTarget(host);
   return (command, opts = {}) =>
     new Promise<SshResult>((resolve, reject) => {
-      const child = spawn('ssh', [
-        '-i', keyPath,
-        '-o', 'StrictHostKeyChecking=no',
-        '-o', 'ConnectTimeout=20',
-        '-o', 'BatchMode=yes',
-        host,
-        command,
-      ]);
-      let stdout = '';
-      let stderr = '';
-      let overflowed = false;
-      // Plafonne l'accumulation en mémoire pendant la lecture elle-même (pas
-      // seulement après coup) : un marker distant anormalement volumineux
-      // termine le process au lieu de gonfler stdout/stderr sans limite.
-      const onChunk = (buffer: string, chunk: string): string => {
-        const result = boundedAppend(buffer, chunk.toString(), MAX_MARKER_BYTES, overflowed);
-        overflowed = result.overflowed;
-        if (overflowed) {
-          child.kill('SIGTERM');
+      const timeoutMs = opts.timeoutMs ?? SSH_TIMEOUT_MS;
+      // Lue paresseusement ici (pas à la création du runner) : certains
+      // appelants construisent les deps sans jamais déclencher d'appel SSH
+      // réel (ex. génération de jobId seule), avec un keyPath fictif.
+      const privateKey = readFileSync(keyPath);
+      const conn = new SshClient();
+      let settled = false;
+
+      const finish = (result: { ok: true; value: SshResult } | { ok: false; error: Error }) => {
+        if (settled) {
+          return;
         }
-        return result.value;
-      };
-      child.stdout.on('data', (chunk) => { stdout = onChunk(stdout, chunk); });
-      child.stderr.on('data', (chunk) => { stderr = onChunk(stderr, chunk); });
-      child.on('error', reject);
-      const timer = setTimeout(() => child.kill('SIGTERM'), opts.timeoutMs ?? SSH_TIMEOUT_MS);
-      child.on('close', (code) => {
+        settled = true;
         clearTimeout(timer);
-        resolve({ code: code ?? 1, stdout, stderr });
+        conn.end();
+        if (result.ok) {
+          resolve(result.value);
+        } else {
+          reject(result.error);
+        }
+      };
+
+      const timer = setTimeout(() => finish({ ok: false, error: new Error('SSH command timed out') }), timeoutMs);
+
+      conn.on('ready', () => {
+        conn.exec(command, (err, stream) => {
+          if (err) {
+            finish({ ok: false, error: err });
+            return;
+          }
+          let stdout = '';
+          let stderr = '';
+          let overflowed = false;
+          // Plafonne l'accumulation en mémoire pendant la lecture elle-même (pas
+          // seulement après coup) : un marker distant anormalement volumineux
+          // termine le flux au lieu de gonfler stdout/stderr sans limite.
+          const onChunk = (buffer: string, chunk: Buffer): string => {
+            const result = boundedAppend(buffer, chunk.toString(), MAX_MARKER_BYTES, overflowed);
+            overflowed = result.overflowed;
+            if (overflowed) {
+              stream.close();
+            }
+            return result.value;
+          };
+          stream.on('data', (chunk: Buffer) => { stdout = onChunk(stdout, chunk); });
+          stream.stderr.on('data', (chunk: Buffer) => { stderr = onChunk(stderr, chunk); });
+          stream.on('close', (code: number | null) => {
+            finish({ ok: true, value: { code: code ?? 1, stdout, stderr } });
+          });
+          stream.end(opts.input ?? '');
+        });
       });
-      child.stdin.end(opts.input ?? '');
+      conn.on('error', (err) => finish({ ok: false, error: err }));
+      conn.connect({
+        host: hostname,
+        username,
+        privateKey,
+        readyTimeout: timeoutMs,
+      });
     });
 }
 

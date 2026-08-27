@@ -34,6 +34,13 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  // ssh2 (lib/brochure-video-upload.ts) compile un binding natif optionnel
+  // pour la crypto (sshcrypto.node) : webpack ne peut pas le bundler comme
+  // du JS ('Module parse failed'). Exclu du bundle serveur, require()-é
+  // directement au runtime Node.js à la place.
+  experimental: {
+    serverComponentsExternalPackages: ['ssh2'],
+  },
   images: {
     domains: ['dl.airtable.com'],
     formats: ['image/webp'],
