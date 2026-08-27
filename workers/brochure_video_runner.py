@@ -47,23 +47,28 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from workers.gemini_pdf_classifier import (
+    BrochureEditorialPlan,
     ClassificationTransientError,
     ClassificationSettings,
-    GeminiFlashClassifierTransport,
-    make_gemini_flash_classifier,
+    GeminiClassificationError,
+    GeminiFlashBrochureDirectorTransport,
+    make_gemini_brochure_director,
 )
 from workers.gemini_veo_generator import run_with_retry
 from workers.job_contract import JobError, JobPhase, JobStatus, UploadStatusResultJob
 from workers.pdf_image_extractor import (
     ClassifierStrategy,
+    ExtractedImage,
     ManifestEntry,
+    PdfImageManifest,
     PdfExtractionError,
     build_manifest,
     classify_image,
+    extract_pdf_images,
+    group_entries_by_section,
 )
 from workers.startup_checks import (
     GEMINI_API_KEY_VAR,
-    GEMINI_FREE_TIER_API_KEY_VAR,
     ROOT,
     load_worker_environment,
     validate_worker_startup,
@@ -89,6 +94,7 @@ from workers.video_assembler import (
     PublishCheckpoint,
     RunFn,
     SupabaseStoragePublishCheckpoint,
+    VideoBranding,
     assemble_and_publish,
     default_storage_request,
     ensure_supabase_configured,
@@ -116,6 +122,10 @@ class JobAlreadyRunningError(BrochureVideoRunnerError):
 
 class BrochureVideoTimeoutError(BrochureVideoRunnerError):
     """Raised when the run exceeds ``JOB_TIMEOUT_S`` before completing."""
+
+
+class BrochureEditorialDirectionError(BrochureVideoRunnerError):
+    """Raised before Veo when the required brochure-wide direction is unavailable."""
 
 
 def _validate_job_id(job_id: str) -> str:
@@ -275,6 +285,7 @@ def run_brochure_video_job(
     publish_checkpoint: PublishCheckpoint,
     idempotency_key: str | None = None,
     pdf_classifier: ClassifierStrategy | None = None,
+    editorial_director: Callable[[bytes, Sequence[ExtractedImage]], BrochureEditorialPlan] | None = None,
     veo_settings: VeoSettings | None = None,
     assembly_settings: AssemblySettings | None = None,
     run: RunFn = subprocess.run,
@@ -332,12 +343,42 @@ def run_brochure_video_job(
                 state_store.complete(job_id, start, result)
                 return _envelope_from_state(job_id, upload_ref, state_store.load(job_id))
 
-            manifest = build_manifest(pdf_bytes, pdf_classifier)
+            editorial_plan = BrochureEditorialPlan()
+            images = extract_pdf_images(pdf_bytes)
+            if editorial_director is not None:
+                try:
+                    editorial_plan = editorial_director(pdf_bytes, images)
+                except (ClassificationTransientError, GeminiClassificationError, RuntimeError) as exc:
+                    raise BrochureEditorialDirectionError(
+                        f"gemini brochure direction unavailable: {exc.__class__.__name__}"
+                    ) from exc
+
+            def classify_for_manifest(image) -> str:
+                image_id = f"{document_digest[:16]}:{image.page_index:04d}:{image.occurrence_index:04d}"
+                directed_section = editorial_plan.section_for(image_id)
+                if directed_section:
+                    return directed_section
+                return classify_image(image, pdf_classifier)
+
+            manifest = build_manifest(pdf_bytes, classify_for_manifest)
             _check_timeout(start, now, timeout_s)
+
+            logo_entry = next(
+                (entry for entry in manifest.entries if entry.image_id == editorial_plan.logo_image_id),
+                None,
+            )
+            video_entries = tuple(
+                entry for entry in manifest.entries if entry.image_id != editorial_plan.logo_image_id
+            )
+            video_manifest = PdfImageManifest(
+                document_digest=manifest.document_digest,
+                entries=video_entries,
+                groups=group_entries_by_section(video_entries),
+            )
 
             try:
                 veo_result = generate_section_clips(
-                    manifest,
+                    video_manifest,
                     veo_transport,
                     veo_checkpoint,
                     settings=veo_settings,
@@ -369,6 +410,11 @@ def run_brochure_video_job(
                 sleep=sleep,
                 rand=rand,
                 env=env,
+                branding=VideoBranding(
+                    logo_bytes=logo_entry.image_data if logo_entry is not None else None,
+                    yacht_name=editorial_plan.yacht_name,
+                    facts=tuple(fact.display_text for fact in editorial_plan.facts),
+                ),
             )
             _check_timeout(start, now, timeout_s)
         except (
@@ -662,29 +708,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     supabase_url = os.environ[SUPABASE_URL_VAR]
     supabase_key = os.environ[SUPABASE_SERVICE_ROLE_KEY_VAR]
     gemini_api_key = os.environ[GEMINI_API_KEY_VAR]
-    gemini_free_tier_key = os.environ[GEMINI_FREE_TIER_API_KEY_VAR]
-
-    gemini_pdf_classifier = make_gemini_flash_classifier(
-        GeminiFlashClassifierTransport(gemini_free_tier_key),
-        # La classification enrichit les sections mais ne doit pas bloquer la
-        # génération entière si le quota gratuit renvoie 429.
+    editorial_director = make_gemini_brochure_director(
+        GeminiFlashBrochureDirectorTransport(gemini_api_key),
         settings=ClassificationSettings(max_retries=0),
     )
-    classifier_available = True
-
-    def pdf_classifier(image):
-        nonlocal classifier_available
-        if not classifier_available:
-            return classify_image(image)
-        try:
-            return gemini_pdf_classifier(image)
-        except ClassificationTransientError as exc:
-            classifier_available = False
-            LOGGER.warning(
-                "gemini pdf classification unavailable (%s); using deterministic fallback",
-                exc,
-            )
-            return classify_image(image)
 
     pdf_path, manifest_marker_path, state_dir = _default_job_paths(job_id)
     envelope = run_brochure_video_job(
@@ -697,7 +724,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         veo_checkpoint=SupabaseVeoStorageCheckpoint(supabase_url, supabase_key),
         clip_source=SupabaseClipSource(supabase_url, supabase_key),
         publish_checkpoint=SupabaseStoragePublishCheckpoint(supabase_url, supabase_key),
-        pdf_classifier=pdf_classifier,
+        editorial_director=editorial_director,
     )
     if envelope.status == JobStatus.DONE.value:
         print(f"job {job_id!r}: done, result={envelope.result}")

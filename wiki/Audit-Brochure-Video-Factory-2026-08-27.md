@@ -191,12 +191,17 @@ Le prompt de production demande désormais :
   sans inventer de pièce ni de trajectoire impossible ;
 - interdiction de réduire une scène intérieure à un simple zoom/dézoom.
 
-Limite connue : un prompt ne garantit pas une identité graphique pixel-perfect sur
-tous les clips. Pour un filigrane strictement identique sur l’intégralité du montage,
-le logo devra être identifié puis superposé par FFmpeg. De plus, la vidéo existante
-d’un PDF identique reste volontairement réutilisée ; une évolution future devra
-versionner le prompt dans la clé de cache si l’on souhaite régénérer le même document
-après un changement créatif.
+Depuis la correction éditoriale complémentaire, Gemini analyse la brochure complète
+et les images candidates en un seul plan structuré : sections, logo réel de l’agence,
+nom exact du bateau et zéro à trois informations prioritaires. Le logo identifié est
+retiré de la liste des images à transformer en clip, puis FFmpeg le superpose à 10 %
+d’opacité pendant toute la vidéo. Le titre et les trois informations maximum sont
+répartis sans chevauchement. Si ce plan Gemini est indisponible ou invalide, le worker
+échoue avant Veo afin de ne pas dépenser de crédits pour une vidéo non conforme.
+
+La vidéo existante d’un PDF identique reste volontairement réutilisée ; une évolution
+future devra versionner le plan créatif dans la clé de cache si l’on souhaite régénérer
+le même document après un changement éditorial.
 
 ## 5. Preuves de validation
 
@@ -205,7 +210,7 @@ après un changement créatif.
 | TypeScript `tsc --noEmit` | succès |
 | Contrôleur frontend brochure-vidéo | 11/11 tests passés |
 | Routes et contrôleur frontend | 39/39 tests passés |
-| Suite backend ciblée brochure-vidéo | 180/180 tests passés |
+| Suite backend ciblée brochure-vidéo | 186/186 tests passés |
 | Compilation Python des workers corrigés | succès local et EC2 |
 | Parsing de la brochure réelle | 12 images extraites |
 | Lancement API asynchrone | HTTP 200 avec `jobId` et URL de statut |
@@ -245,8 +250,8 @@ s’appliquent au projet Google, pas séparément à chaque clé du même projet
    migration Infrastructure as Code.
 3. Le parseur PDF est volontairement spécialisé ; de nouveaux filtres ou codecs PDF
    peuvent nécessiter un fallback vers une bibliothèque PDF éprouvée.
-4. Le filigrane logo reste une instruction générative, pas encore un overlay FFmpeg
-   déterministe.
+4. L’identification du logo et la sélection éditoriale dépendent d’un plan Gemini
+   valide ; en cas d’indisponibilité, le pipeline s’arrête volontairement avant Veo.
 5. Le cache final est indexé par digest du PDF ; il ne tient pas encore compte d’une
    version du prompt.
 6. La progression est indéterminée ; le worker ne publie pas encore un pourcentage
@@ -273,8 +278,8 @@ s’appliquent au projet Google, pas séparément à chaque clé du même projet
    et demander une confirmation explicite pour un document non caché.
 9. Versionner prompt, modèle et paramètres dans les clés de checkpoint afin de
    distinguer reprise identique et régénération créative volontaire.
-10. Ajouter un overlay FFmpeg déterministe pour le logo et une progression structurée
-    (`extraction`, `classification`, `clip n/N`, `assembly`, `publish`).
+10. Ajouter une progression structurée (`extraction`, `direction éditoriale`,
+    `clip n/N`, `assembly`, `publish`).
 
 ## 8. Conclusion
 

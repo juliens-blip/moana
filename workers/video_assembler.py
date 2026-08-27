@@ -124,6 +124,19 @@ class PublishedArtifact:
     content_digest: str
 
 
+@dataclass(frozen=True)
+class VideoBranding:
+    """Deterministic editorial overlays selected from the brochure by Gemini."""
+
+    logo_bytes: bytes | None = None
+    yacht_name: str | None = None
+    facts: tuple[str, ...] = ()
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.logo_bytes and not self.yacht_name and not self.facts
+
+
 class ClipSource(Protocol):
     """Injectable clip download — no concrete Storage client is imported here."""
 
@@ -439,6 +452,69 @@ def _build_ffmpeg_command(input_paths: Sequence[Path], output_path: Path, clip_d
     return command
 
 
+def _editorial_schedule(total_duration_s: float, branding: VideoBranding) -> list[tuple[str, float, float, bool]]:
+    """At most one title and three facts, spread out without visual overload."""
+    overlays: list[tuple[str, float, float, bool]] = []
+    if branding.yacht_name:
+        overlays.append((branding.yacht_name, 0.25, min(3.0, total_duration_s), True))
+    facts = branding.facts[:3]
+    if facts and total_duration_s > 4.0:
+        start = 3.5 if branding.yacht_name else 1.0
+        available = max(0.0, total_duration_s - start - 0.5)
+        slot = available / len(facts)
+        for index, text in enumerate(facts):
+            show_at = start + index * slot
+            hide_at = min(total_duration_s - 0.25, show_at + min(3.2, max(1.8, slot * 0.65)))
+            overlays.append((text, show_at, hide_at, False))
+    return overlays
+
+
+def _build_branding_ffmpeg_command(
+    input_path: Path,
+    output_path: Path,
+    logo_path: Path | None,
+    text_files: Sequence[tuple[Path, float, float, bool]],
+) -> list[str]:
+    """Build a second deterministic pass for logo and sparse editorial text."""
+    command = ["ffmpeg", "-y", "-i", str(input_path)]
+    filters: list[str] = []
+    current = "0:v"
+    stage_index = 0
+    if logo_path is not None:
+        command += ["-loop", "1", "-i", str(logo_path)]
+        filters.append("[1:v]scale=180:-1,format=rgba,colorchannelmixer=aa=0.10[brokerlogo]")
+        filters.append(
+            f"[{current}][brokerlogo]overlay=W-w-W*0.025:H-h-H*0.035:format=auto[stage{stage_index}]"
+        )
+        current = f"stage{stage_index}"
+        stage_index += 1
+
+    for text_path, start_s, end_s, is_title in text_files:
+        output_label = f"stage{stage_index}"
+        fontsize = "h/15" if is_title else "h/27"
+        y_position = "h*0.72" if is_title else "h*0.82"
+        filters.append(
+            f"[{current}]drawtext=textfile='{text_path}':fontcolor=white:fontsize={fontsize}:"
+            f"box=1:boxcolor=black@0.42:boxborderw=14:x=(w-text_w)/2:y={y_position}:"
+            f"enable='between(t,{start_s:.2f},{end_s:.2f})'[{output_label}]"
+        )
+        current = output_label
+        stage_index += 1
+
+    command += [
+        "-filter_complex", ";".join(filters),
+        "-map", f"[{current}]",
+        "-an",
+        "-c:v", VIDEO_CODEC,
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+    ]
+    if logo_path is not None:
+        command.append("-shortest")
+    command += ["-f", CONTAINER_FORMAT, str(output_path)]
+    return command
+
+
 def assemble_and_publish(
     job_id: str,
     upload_ref: str,
@@ -452,6 +528,7 @@ def assemble_and_publish(
     sleep: Callable[[float], None] = time.sleep,
     rand: Callable[[], float] = random.random,
     env: Mapping[str, str] | None = None,
+    branding: VideoBranding | None = None,
 ) -> UploadStatusResultJob:
     """Assemble ``clips`` strictly in the given order and publish the MP4.
 
@@ -503,8 +580,8 @@ def assemble_and_publish(
                 input_path.write_bytes(clip_bytes)
                 input_paths.append(input_path)
 
-            output_path = tmp_path / f"{idempotency_key}.{CONTAINER_FORMAT}"
-            command = _build_ffmpeg_command(input_paths, output_path, CLIP_DURATION_S)
+            base_output_path = tmp_path / f"{idempotency_key}-base.{CONTAINER_FORMAT}"
+            command = _build_ffmpeg_command(input_paths, base_output_path, CLIP_DURATION_S)
 
             def _invoke() -> subprocess.CompletedProcess:
                 result = run(command, capture_output=True, timeout=settings.timeout_s, check=False)
@@ -525,6 +602,38 @@ def assemble_and_publish(
                     "ffmpeg assembly retry %s/%s in %.3fs", attempt, settings.max_retries, delay
                 ),
             )
+
+            output_path = base_output_path
+            active_branding = branding or VideoBranding()
+            if not active_branding.is_empty:
+                logo_path: Path | None = None
+                if active_branding.logo_bytes:
+                    logo_path = tmp_path / "brokerage-logo.img"
+                    logo_path.write_bytes(active_branding.logo_bytes)
+                total_duration_s = len(clips) * CLIP_DURATION_S - max(0, len(clips) - 1) * TRANSITION_DURATION_S
+                text_files: list[tuple[Path, float, float, bool]] = []
+                for index, (text, start_s, end_s, is_title) in enumerate(
+                    _editorial_schedule(total_duration_s, active_branding)
+                ):
+                    text_path = tmp_path / f"overlay-{index}.txt"
+                    text_path.write_text(text, encoding="utf-8")
+                    text_files.append((text_path, start_s, end_s, is_title))
+                branded_output_path = tmp_path / f"{idempotency_key}-branded.{CONTAINER_FORMAT}"
+                branding_command = _build_branding_ffmpeg_command(
+                    base_output_path,
+                    branded_output_path,
+                    logo_path,
+                    text_files,
+                )
+                branded_result = run(
+                    branding_command,
+                    capture_output=True,
+                    timeout=settings.timeout_s,
+                    check=False,
+                )
+                if branded_result.returncode != 0:
+                    raise AssemblyFfmpegError(branded_result.returncode, branded_result.stderr or b"")
+                output_path = branded_output_path
 
             output_bytes = output_path.read_bytes()
             artifact = PublishedArtifact(
