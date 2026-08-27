@@ -17,14 +17,31 @@ interface BrochureVideoStatusResponseBody {
   error?: unknown;
 }
 
+interface UploadTicketResponseBody {
+  bucket?: unknown;
+  path?: unknown;
+  token?: unknown;
+  error?: unknown;
+}
+
 export interface BrochureVideoJobTimer {
   setTimer(callback: () => void, delayMs: number): unknown;
   clearTimer(handle: unknown): void;
 }
 
+export type UploadPdfResult = { path: string } | { error: VideoJobError };
+
 export interface BrochureVideoJobDeps {
   fetchImpl: typeof fetch;
   timer: BrochureVideoJobTimer;
+  /**
+   * Dépose `file` directement vers Supabase Storage (URL de dépôt signée
+   * obtenue via POST /api/brochure-video/upload-url) et renvoie le chemin de
+   * l'objet — le PDF ne transite jamais par le corps de POST
+   * /api/brochure-video, qui excéderait sinon le plafond plateforme Vercel de
+   * 4,5 Mo par corps de requête de Vercel Function pour toute brochure réelle.
+   */
+  uploadPdf: (file: File) => Promise<UploadPdfResult>;
 }
 
 function jobError(code: string, message: string): VideoJobError {
@@ -114,12 +131,20 @@ export class BrochureVideoJobController {
 
     this.setStatus({ state: 'uploading' });
 
-    const formData = new FormData();
-    formData.set('file', file);
+    const uploadResult = await this.deps.uploadPdf(file);
+    if (this.disposed) return;
+    if ('error' in uploadResult) {
+      this.setStatus({ state: 'failed', jobId: null, error: uploadResult.error });
+      return;
+    }
 
     let response: Response;
     try {
-      response = await this.deps.fetchImpl('/api/brochure-video', { method: 'POST', body: formData });
+      response = await this.deps.fetchImpl('/api/brochure-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: uploadResult.path }),
+      });
     } catch {
       if (this.disposed) return;
       this.setStatus({
@@ -215,6 +240,44 @@ function createBrowserTimer(): BrochureVideoJobTimer {
   };
 }
 
+/**
+ * Dépose le PDF directement depuis le navigateur vers Supabase Storage : un
+ * aller-retour serveur (POST /api/brochure-video/upload-url) obtient un
+ * ticket à usage unique, puis le SDK Supabase envoie le fichier lui-même
+ * directement à Storage — jamais vers une Vercel Function, qui refuserait
+ * tout corps de requête au-delà de 4,5 Mo quel que soit le code applicatif.
+ */
+function createBrowserPdfUploader(): BrochureVideoJobDeps['uploadPdf'] {
+  return async (file: File): Promise<UploadPdfResult> => {
+    let ticketBody: UploadTicketResponseBody;
+    try {
+      const ticketResponse = await fetch('/api/brochure-video/upload-url', { method: 'POST' });
+      ticketBody = await ticketResponse.json();
+      if (!ticketResponse.ok || typeof ticketBody.bucket !== 'string' || typeof ticketBody.path !== 'string' || typeof ticketBody.token !== 'string') {
+        const message = typeof ticketBody.error === 'string' ? ticketBody.error : "Échec de la préparation de l'envoi.";
+        return { error: jobError('upload_ticket_failed', message) };
+      }
+    } catch {
+      return { error: jobError('network_error', "Impossible de contacter le serveur pour préparer l'envoi.") };
+    }
+
+    const { bucket, path, token } = ticketBody as { bucket: string; path: string; token: string };
+    try {
+      // Import différé : le SDK Supabase ne doit jamais alourdir le bundle
+      // initial d'une page qui n'uploade pas systématiquement une brochure.
+      const { createClient } = await import('@/lib/supabase/client');
+      const { error } = await createClient().storage.from(bucket).uploadToSignedUrl(path, token, file);
+      if (error) {
+        return { error: jobError('upload_failed', "Échec de l'envoi du PDF vers le stockage.") };
+      }
+    } catch {
+      return { error: jobError('upload_failed', "Échec de l'envoi du PDF vers le stockage.") };
+    }
+
+    return { path };
+  };
+}
+
 export function useBrochureVideoJob() {
   const [status, setStatus] = useState<VideoJobStatus>({ state: 'idle' });
   const controllerRef = useRef<BrochureVideoJobController | null>(null);
@@ -222,6 +285,7 @@ export function useBrochureVideoJob() {
     controllerRef.current = new BrochureVideoJobController({
       fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
       timer: createBrowserTimer(),
+      uploadPdf: createBrowserPdfUploader(),
     });
   }
 

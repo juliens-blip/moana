@@ -37,8 +37,12 @@ import {
   BROCHURE_VIDEO_POLL_INTERVAL_MS,
   validatePdfFile,
   type BrochureVideoJobTimer,
+  type UploadPdfResult,
 } from '@/lib/hooks/useBrochureVideoJob';
 import type { VideoJobStatus } from '@/lib/video-job-types';
+
+/** Upload direct vers Storage déjà réussi — la plupart des tests n'exercent que la phase job (post-upload). */
+const defaultUploadPdf = async (): Promise<UploadPdfResult> => ({ path: 'fake-upload-path.pdf' });
 
 interface TestResult {
   test: string;
@@ -129,6 +133,7 @@ await run('submit rejects an invalid PDF before any fetch call, surfacing an idl
   const controller = new BrochureVideoJobController({
     fetchImpl: async () => { fetchCalls += 1; return jsonResponse({}); },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   await controller.submit(pdfFile({ type: 'image/png' }));
   assert.equal(fetchCalls, 0);
@@ -140,11 +145,45 @@ await run('submit rejects an invalid PDF before any fetch call, surfacing an idl
   }
 });
 
+await run('a failed uploadPdf surfaces its error and never calls fetchImpl (no job start attempted)', async () => {
+  let fetchCalls = 0;
+  const timer = createFakeTimer();
+  const controller = new BrochureVideoJobController({
+    fetchImpl: async () => { fetchCalls += 1; return jsonResponse({}); },
+    timer,
+    uploadPdf: async () => ({ error: { code: 'upload_failed', message: "Échec de l'envoi du PDF vers le stockage." } }),
+  });
+  await controller.submit(pdfFile());
+  assert.equal(fetchCalls, 0, 'a failed direct upload must never reach /api/brochure-video');
+  const status = controller.getStatus();
+  assert.equal(status.state, 'failed');
+  if (status.state === 'failed') {
+    assert.equal(status.jobId, null);
+    assert.equal(status.error.code, 'upload_failed');
+  }
+});
+
+await run('submit posts the uploadPdf path as JSON to /api/brochure-video', async () => {
+  const timer = createFakeTimer();
+  let capturedBody: string | undefined;
+  const controller = new BrochureVideoJobController({
+    fetchImpl: async (_input, init) => {
+      capturedBody = init?.body as string;
+      return jsonResponse({ jobId: 'jobPath', statusUrl: '/status/jobPath' });
+    },
+    timer,
+    uploadPdf: async () => ({ path: 'brochure-video-uploads/abc123.pdf' }),
+  });
+  await controller.submit(pdfFile());
+  assert.deepEqual(JSON.parse(capturedBody ?? '{}'), { path: 'brochure-video-uploads/abc123.pdf' });
+});
+
 await run('activate() restores updates after the Strict Mode setup -> cleanup -> setup sequence', async () => {
   const timer = createFakeTimer();
   const controller = new BrochureVideoJobController({
     fetchImpl: async () => jsonResponse({ jobId: 'jobStrict', statusUrl: '/status/jobStrict' }),
     timer,
+    uploadPdf: defaultUploadPdf,
   });
 
   // Reproduit le cycle supplémentaire exécuté par React en développement
@@ -178,6 +217,7 @@ await run('a valid PDF walks uploading -> running -> polls every 2000ms -> done 
       return jsonResponse({ status: 'done', videoUrl: 'https://example.supabase.co/storage/v1/object/public/videos/job123.mp4', error: null });
     },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   const seen = collectStatuses(controller);
 
@@ -217,6 +257,7 @@ await run('a running marker keeps polling every 2000ms and never issues a second
       return new Promise<Response>((resolve) => { resolveStatusFetch = resolve; });
     },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
 
   await controller.submit(pdfFile());
@@ -248,6 +289,7 @@ await run('a failed marker stops polling and surfaces the worker\'s reason', asy
       return jsonResponse({ status: 'failed', videoUrl: null, error: 'Le job a échoué côté worker' });
     },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
 
   await controller.submit(pdfFile());
@@ -269,6 +311,7 @@ await run('a non-ok POST response surfaces the server error and never schedules 
   const controller = new BrochureVideoJobController({
     fetchImpl: async () => jsonResponse({ error: 'Fichier PDF trop volumineux' }, false),
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   await controller.submit(pdfFile());
   const status = controller.getStatus();
@@ -285,6 +328,7 @@ await run('a thrown network error on POST surfaces a network_error status', asyn
   const controller = new BrochureVideoJobController({
     fetchImpl: async () => { throw new Error('boom: network down'); },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   await controller.submit(pdfFile());
   const status = controller.getStatus();
@@ -305,6 +349,7 @@ await run('a thrown network error on a status poll surfaces a network_error stat
       throw new Error('boom: network down');
     },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   await controller.submit(pdfFile());
   const scheduled = timer.pending.shift()!;
@@ -332,6 +377,7 @@ await run('dispose() ignores a status resolution that arrives after unmount and 
       return new Promise<Response>((resolve) => { resolveStatusFetch = resolve; });
     },
     timer,
+    uploadPdf: defaultUploadPdf,
   });
   const seen = collectStatuses(controller);
 

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { BROCHURE_UPLOAD_BUCKET, BROCHURE_UPLOAD_PATH_RE } from '@/lib/brochure-video-contract';
 
 // L'exécution SSH démarre dans /home/ubuntu, alors que systemd exécute le
 // worker avec WorkingDirectory=/home/ubuntu/moana. Utiliser le chemin absolu
@@ -13,6 +15,7 @@ const SSH_TIMEOUT_MS = 60_000;
 // toute ambiguïté d'échappement dans l'unité systemd instanciée moana-brochure-video@<jobId>.
 export const JOB_ID_RE = /^[A-Za-z0-9]{16,32}$/;
 const JOB_ID_LENGTH = 24;
+const UPLOAD_PATH_LENGTH = 32;
 const JOB_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const PDF_SIGNATURE = Buffer.from('%PDF-');
 // Mirroir de workers/brochure_video_runner.py:_default_job_paths — state/{jobId}.json
@@ -39,13 +42,22 @@ function resolveRemoteHost(): string {
   return host;
 }
 
-function generateSecureJobId(): string {
-  const bytes = randomBytes(JOB_ID_LENGTH);
+function randomAlphanumeric(length: number): string {
+  const bytes = randomBytes(length);
   let id = '';
-  for (let i = 0; i < JOB_ID_LENGTH; i += 1) {
+  for (let i = 0; i < length; i += 1) {
     id += JOB_ID_ALPHABET[bytes[i] % JOB_ID_ALPHABET.length];
   }
   return id;
+}
+
+function generateSecureJobId(): string {
+  return randomAlphanumeric(JOB_ID_LENGTH);
+}
+
+/** Conforme à BROCHURE_UPLOAD_PATH_RE : seule fonction autorisée à produire ce chemin. */
+function generateUploadPath(): string {
+  return `${randomAlphanumeric(UPLOAD_PATH_LENGTH)}.pdf`;
 }
 
 interface SshResult {
@@ -57,6 +69,19 @@ interface SshResult {
 export interface BrochureVideoDeps {
   runSsh: (command: string, opts?: { input?: Buffer | string; timeoutMs?: number }) => Promise<SshResult>;
   generateJobId: () => string;
+  downloadUploadedPdf: (path: string) => Promise<Buffer>;
+  deleteUploadedPdf: (path: string) => Promise<void>;
+}
+
+export interface UploadTicket {
+  bucket: string;
+  path: string;
+  token: string;
+}
+
+export interface UploadTicketDeps {
+  generateUploadPath: () => string;
+  createSignedUploadUrl: (path: string) => Promise<{ path: string; token: string }>;
 }
 
 export type BrochureVideoStatusValue = 'running' | 'done' | 'failed';
@@ -145,98 +170,174 @@ function createSshRunner(keyPath: string, host: string): BrochureVideoDeps['runS
  * Câblage de production : clé SSH temporaire déjà écrite sur `keyPath`, hôte exigé
  * depuis `MOANA_SSH_HOST` (lève une erreur de configuration si absent — jamais de
  * repli sur une valeur codée en dur), jobId alphanumérique cryptographique.
+ *
+ * `downloadUploadedPdf`/`deleteUploadedPdf` passent par `createAdminClient()`
+ * (service_role, bypass RLS) : ce bucket est backend-only, jamais exposé en
+ * lecture/écriture directe côté client (cf. brochure-video-contract.ts).
  */
 export function createProductionDeps(keyPath: string): BrochureVideoDeps {
   return {
     runSsh: createSshRunner(keyPath, resolveRemoteHost()),
     generateJobId: generateSecureJobId,
+    downloadUploadedPdf: async (path) => {
+      const { data, error } = await createAdminClient().storage.from(BROCHURE_UPLOAD_BUCKET).download(path);
+      if (error || !data) {
+        throw new Error(error?.message ?? 'download returned no data');
+      }
+      return Buffer.from(await data.arrayBuffer());
+    },
+    deleteUploadedPdf: async (path) => {
+      const { error } = await createAdminClient().storage.from(BROCHURE_UPLOAD_BUCKET).remove([path]);
+      if (error) {
+        throw new Error(error.message);
+      }
+    },
   };
 }
 
 /**
- * Cœur testable de la route : ne touche jamais MOANA_SSH_KEY ni le réseau,
- * tout accès distant passe par `deps.runSsh` injecté par l'appelant.
+ * Câblage de production du ticket d'upload : signe une URL de dépôt à usage
+ * unique (expiration fixe 2h côté Supabase, non configurable) pour un chemin
+ * fraîchement généré — jamais réutilisé, jamais fourni par le client.
+ */
+export function createProductionUploadTicketDeps(): UploadTicketDeps {
+  return {
+    generateUploadPath,
+    createSignedUploadUrl: async (path) => {
+      const { data, error } = await createAdminClient().storage.from(BROCHURE_UPLOAD_BUCKET).createSignedUploadUrl(path);
+      if (error || !data) {
+        throw new Error(error?.message ?? 'createSignedUploadUrl returned no data');
+      }
+      return { path: data.path, token: data.token };
+    },
+  };
+}
+
+/**
+ * Cœur testable de la route POST /api/brochure-video/upload-url : ne touche
+ * jamais le SDK Supabase directement, tout accès Storage passe par `deps`.
+ */
+export async function handleCreateUploadTicket(deps: UploadTicketDeps): Promise<NextResponse> {
+  const path = deps.generateUploadPath();
+  try {
+    const ticket = await deps.createSignedUploadUrl(path);
+    const body: UploadTicket = { bucket: BROCHURE_UPLOAD_BUCKET, path: ticket.path, token: ticket.token };
+    return NextResponse.json(body, { status: 200 });
+  } catch (error) {
+    console.error(
+      "brochure-video: création de l'URL de dépôt signée échouée:",
+      error instanceof Error ? error.message : 'unknown error'
+    );
+    return jsonError("Configuration du service d'upload indisponible", 500);
+  }
+}
+
+/**
+ * Cœur testable de la route POST /api/brochure-video : ne touche jamais
+ * MOANA_SSH_KEY ni le réseau, tout accès distant passe par `deps` injecté par
+ * l'appelant. Ne reçoit plus le PDF dans le corps de la requête (limite
+ * plateforme Vercel de 4,5 Mo par corps de Vercel Function, non contournable
+ * côté code) — seulement la référence `path` vers l'objet déjà déposé côté
+ * navigateur via une URL de dépôt signée (POST /api/brochure-video/upload-url).
  */
 export async function handleBrochureVideoUpload(
   request: NextRequest,
   deps: BrochureVideoDeps
 ): Promise<NextResponse> {
-  let formData: FormData;
+  let body: unknown;
   try {
-    formData = await request.formData();
+    body = await request.json();
   } catch {
-    return jsonError('Corps multipart invalide', 400);
+    return jsonError('Corps JSON invalide', 400);
   }
 
-  const file = formData.get('file');
-  if (!(file instanceof File) || file.size === 0) {
-    return jsonError('Fichier PDF manquant', 400);
-  }
-  if (file.size > MAX_PDF_BYTES) {
-    return jsonError('Fichier PDF trop volumineux', 400);
-  }
-  if (file.type !== 'application/pdf') {
-    return jsonError('Type MIME invalide, PDF attendu', 400);
-  }
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    return jsonError('Extension de fichier invalide, .pdf attendu', 400);
+  const path = (body as { path?: unknown } | null)?.path;
+  if (typeof path !== 'string' || !BROCHURE_UPLOAD_PATH_RE.test(path)) {
+    return jsonError('Référence de fichier invalide', 400);
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  if (!buffer.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)) {
-    return jsonError('Contenu PDF invalide', 400);
-  }
-
-  const jobId = deps.generateJobId();
-  if (!JOB_ID_RE.test(jobId)) {
-    console.error('generateJobId a produit un identifiant hors du contrat backend');
-    return jsonError('Erreur serveur', 500);
-  }
-
-  const documentDigest = createHash('sha256').update(buffer).digest('hex');
-  const manifest = JSON.stringify({ document_digest: documentDigest });
-  const jobDir = `${REMOTE_JOBS_ROOT}/${jobId}`;
-  const pdfTmpPath = `${jobDir}/input.pdf.tmp`;
-  const pdfFinalPath = `${jobDir}/input.pdf`;
-  const manifestTmpPath = `${jobDir}/manifest.json.tmp`;
-  const manifestFinalPath = `${jobDir}/manifest.json`;
-
+  let buffer: Buffer;
   try {
-    const mkdirResult = await deps.runSsh(`mkdir -p ${jobDir}`);
-    if (mkdirResult.code !== 0) {
-      throw new Error('remote mkdir failed');
-    }
-
-    // Écriture sur un chemin temporaire puis renommage atomique : un transfert
-    // interrompu ne laisse jamais input.pdf/manifest.json dans un état partiel.
-    const pdfResult = await deps.runSsh(`cat > ${pdfTmpPath} && mv -f ${pdfTmpPath} ${pdfFinalPath}`, { input: buffer });
-    if (pdfResult.code !== 0) {
-      throw new Error('remote pdf transfer failed');
-    }
-
-    const manifestResult = await deps.runSsh(`cat > ${manifestTmpPath} && mv -f ${manifestTmpPath} ${manifestFinalPath}`, { input: manifest });
-    if (manifestResult.code !== 0) {
-      throw new Error('remote manifest transfer failed');
-    }
-
-    // Ne pas attendre la fin du service oneshot : l'API doit rendre le jobId
-    // immédiatement, puis le client suit state/{jobId}.json par polling.
-    const startResult = await deps.runSsh(`sudo systemctl --no-block start moana-brochure-video@${jobId}`);
-    if (startResult.code !== 0) {
-      throw new Error('remote systemctl start failed');
-    }
+    buffer = await deps.downloadUploadedPdf(path);
   } catch (error) {
     console.error(
-      'brochure-video remote job launch failed:',
+      'brochure-video: téléchargement du PDF uploadé échoué:',
       error instanceof Error ? error.message : 'unknown error'
     );
-    return jsonError('Échec du lancement du job distant', 502);
+    return jsonError('Fichier introuvable ou déjà traité', 404);
   }
 
-  return NextResponse.json(
-    { jobId, statusUrl: `/api/brochure-video/${jobId}/status` },
-    { status: 200 }
-  );
+  try {
+    if (buffer.length === 0) {
+      return jsonError('Fichier PDF manquant', 400);
+    }
+    if (buffer.length > MAX_PDF_BYTES) {
+      return jsonError('Fichier PDF trop volumineux', 400);
+    }
+    if (!buffer.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)) {
+      return jsonError('Contenu PDF invalide', 400);
+    }
+
+    const jobId = deps.generateJobId();
+    if (!JOB_ID_RE.test(jobId)) {
+      console.error('generateJobId a produit un identifiant hors du contrat backend');
+      return jsonError('Erreur serveur', 500);
+    }
+
+    const documentDigest = createHash('sha256').update(buffer).digest('hex');
+    const manifest = JSON.stringify({ document_digest: documentDigest });
+    const jobDir = `${REMOTE_JOBS_ROOT}/${jobId}`;
+    const pdfTmpPath = `${jobDir}/input.pdf.tmp`;
+    const pdfFinalPath = `${jobDir}/input.pdf`;
+    const manifestTmpPath = `${jobDir}/manifest.json.tmp`;
+    const manifestFinalPath = `${jobDir}/manifest.json`;
+
+    try {
+      const mkdirResult = await deps.runSsh(`mkdir -p ${jobDir}`);
+      if (mkdirResult.code !== 0) {
+        throw new Error('remote mkdir failed');
+      }
+
+      // Écriture sur un chemin temporaire puis renommage atomique : un transfert
+      // interrompu ne laisse jamais input.pdf/manifest.json dans un état partiel.
+      const pdfResult = await deps.runSsh(`cat > ${pdfTmpPath} && mv -f ${pdfTmpPath} ${pdfFinalPath}`, { input: buffer });
+      if (pdfResult.code !== 0) {
+        throw new Error('remote pdf transfer failed');
+      }
+
+      const manifestResult = await deps.runSsh(`cat > ${manifestTmpPath} && mv -f ${manifestTmpPath} ${manifestFinalPath}`, { input: manifest });
+      if (manifestResult.code !== 0) {
+        throw new Error('remote manifest transfer failed');
+      }
+
+      // Ne pas attendre la fin du service oneshot : l'API doit rendre le jobId
+      // immédiatement, puis le client suit state/{jobId}.json par polling.
+      const startResult = await deps.runSsh(`sudo systemctl --no-block start moana-brochure-video@${jobId}`);
+      if (startResult.code !== 0) {
+        throw new Error('remote systemctl start failed');
+      }
+    } catch (error) {
+      console.error(
+        'brochure-video remote job launch failed:',
+        error instanceof Error ? error.message : 'unknown error'
+      );
+      return jsonError('Échec du lancement du job distant', 502);
+    }
+
+    return NextResponse.json(
+      { jobId, statusUrl: `/api/brochure-video/${jobId}/status` },
+      { status: 200 }
+    );
+  } finally {
+    // Best-effort : le PDF est soit déjà copié sur EC2, soit rejeté — il ne
+    // doit dans aucun cas s'accumuler indéfiniment dans le bucket d'upload.
+    deps.deleteUploadedPdf(path).catch((error) => {
+      console.error(
+        'brochure-video: suppression du PDF uploadé échouée:',
+        error instanceof Error ? error.message : 'unknown error'
+      );
+    });
+  }
 }
 
 function statusResult(
