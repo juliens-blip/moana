@@ -199,9 +199,10 @@ d’opacité pendant toute la vidéo. Le titre et les trois informations maximum
 répartis sans chevauchement. Si ce plan Gemini est indisponible ou invalide, le worker
 échoue avant Veo afin de ne pas dépenser de crédits pour une vidéo non conforme.
 
-La vidéo existante d’un PDF identique reste volontairement réutilisée ; une évolution
-future devra versionner le plan créatif dans la clé de cache si l’on souhaite régénérer
-le même document après un changement éditorial.
+La clé du montage final inclut désormais la version créative
+`editorial-branding-v1`. Une brochure déjà traitée peut donc produire le nouveau
+montage sans perdre les clips Veo checkpointés, tandis qu’un nouveau clic sur cette
+même version réutilise immédiatement le résultat final.
 
 ## 5. Preuves de validation
 
@@ -252,8 +253,8 @@ s’appliquent au projet Google, pas séparément à chaque clé du même projet
    peuvent nécessiter un fallback vers une bibliothèque PDF éprouvée.
 4. L’identification du logo et la sélection éditoriale dépendent d’un plan Gemini
    valide ; en cas d’indisponibilité, le pipeline s’arrête volontairement avant Veo.
-5. Le cache final est indexé par digest du PDF ; il ne tient pas encore compte d’une
-   version du prompt.
+5. Toute future modification incompatible du plan, du branding ou du prompt devra
+   incrémenter explicitement `CREATIVE_PIPELINE_VERSION`.
 6. La progression est indéterminée ; le worker ne publie pas encore un pourcentage
    exact par section.
 
@@ -276,8 +277,8 @@ s’appliquent au projet Google, pas séparément à chaque clé du même projet
    redaction et une limite de taille, plutôt que le seul nom de classe.
 8. Ajouter une garde coût/quota avant génération, afficher le nombre de clips prévu
    et demander une confirmation explicite pour un document non caché.
-9. Versionner prompt, modèle et paramètres dans les clés de checkpoint afin de
-   distinguer reprise identique et régénération créative volontaire.
+9. Étendre la version créative aux paramètres de modèle si plusieurs profils de rendu
+   doivent coexister simultanément.
 10. Ajouter une progression structurée (`extraction`, `direction éditoriale`,
     `clip n/N`, `assembly`, `publish`).
 

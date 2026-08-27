@@ -18,6 +18,7 @@ from workers.brochure_video_runner import (
     AtomicJobStateStore,
     InvalidJobInputError,
     JobAlreadyRunningError,
+    build_creative_idempotency_key,
     run_brochure_video_job,
 )
 from workers.job_contract import JobStatus
@@ -252,10 +253,11 @@ def test_fresh_job_reuses_existing_final_video_before_any_veo_call(tmp_path) -> 
     state_dir = tmp_path / "state"
     document_digest = hashlib.sha256(pdf_bytes).hexdigest()
     publish_checkpoint = InMemoryPublishCheckpoint()
-    expected_key = f"videos/{document_digest[:16]}/{document_digest}.mp4"
+    creative_key = build_creative_idempotency_key(document_digest)
+    expected_key = f"videos/{document_digest[:16]}/{creative_key}.mp4"
     publish_checkpoint.acquire_and_publish(
         document_digest,
-        document_digest,
+        creative_key,
         lambda: (
             PublishedArtifact(
                 object_key=expected_key,

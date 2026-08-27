@@ -103,6 +103,7 @@ from workers.video_assembler import (
 LOGGER = logging.getLogger("moana.brochure_video_runner")
 
 JOB_TIMEOUT_S = 600.0
+CREATIVE_PIPELINE_VERSION = "editorial-branding-v1"
 _MAX_REASON_LENGTH = 500
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -126,6 +127,11 @@ class BrochureVideoTimeoutError(BrochureVideoRunnerError):
 
 class BrochureEditorialDirectionError(BrochureVideoRunnerError):
     """Raised before Veo when the required brochure-wide direction is unavailable."""
+
+
+def build_creative_idempotency_key(document_digest: str) -> str:
+    """Version the final montage cache while keeping Veo clip checkpoints reusable."""
+    return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}".encode("utf-8")).hexdigest()
 
 
 def _validate_job_id(job_id: str) -> str:
@@ -328,7 +334,7 @@ def run_brochure_video_job(
             document_digest = hashlib.sha256(pdf_bytes).hexdigest()
             _load_and_validate_marker(manifest_marker_path, document_digest)
 
-            key = idempotency_key or document_digest
+            key = idempotency_key or build_creative_idempotency_key(document_digest)
             existing_artifact = publish_checkpoint.load_confirmed(document_digest, key)
             if existing_artifact is not None:
                 # Un nouveau job pour le même PDF doit réutiliser la vidéo
