@@ -6,6 +6,68 @@ les patterns récurrents dans « Leçons » et supprimer les lignes brutes ancie
 
 Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
 
+- **[2026-08-27, résolu]** brochure-video / Supabase Storage | après un premier
+  montage réussi, un nouvel essai du même PDF réutilisait les 9 clips mais finissait
+  sur `definitive:RuntimeError` pendant la publication | la vraie réponse Supabase
+  `object/info` contient `name`, `etag`, `size`, etc., mais aucun champ SHA-256
+  `checksum`. Le checkpoint, testé jusque-là avec un mock irréaliste contenant ce
+  champ, concluait que la vidéo finale de 6,49 Mo n'existait pas ; il relançait
+  ffmpeg puis tentait de créer le même objet, refusé comme doublon. La dead-letter
+  supprimait en plus `str(exc)` pour toute exception autre que ffmpeg | si l'info
+  identifie la clé attendue sans checksum applicatif, téléchargement authentifié de
+  l'objet et calcul SHA-256 sur ses octets ; réutilisation de l'artefact confirmé
+  avant classification Gemini/Veo ; détail d'exception borné à 500 caractères
+  conservé. Déployé sur EC2 et validé avec des sentinelles qui auraient échoué au
+  moindre appel Gemini (`NO_GEMINI_REUSE_OK`) | **leçon : les mocks d'API doivent
+  reproduire la forme observée en production. Pour une opération distante coûteuse,
+  vérifier l'artefact final avant toutes les étapes amont et ne jamais réduire une
+  erreur générique à son seul nom de classe.**
+
+- **[2026-08-27, résolu]** brochure-video / React Strict Mode | après sélection du
+  PDF et clic sur « Générer la vidéo », aucune barre de chargement, aucun statut et
+  aucun résultat n'apparaissaient ; le POST pouvait pourtant démarrer le job distant,
+  avec un risque de consommation de crédits invisible dans l'interface. La console ne
+  montrait que des avertissements `.woff2`, non bloquants et trompeurs | le hook
+  conservait `BrochureVideoJobController` dans un `useRef`, tandis que le cleanup de
+  `useEffect` appelait `dispose()`. En développement, React Strict Mode exécute
+  `setup → cleanup → setup` au montage : le second setup réutilisait donc un contrôleur
+  avec `disposed=true`. `setStatus()` n'avertissait plus React et le garde placé après
+  le POST interrompait le polling | ajout de `activate()` au contrôleur, appelé au
+  setup de l'effet ; `submit()` refuse aussi explicitement de démarrer après un vrai
+  démontage. Test de régression reproduisant exactement `activate → subscribe →
+  unsubscribe → dispose → activate → submit` ajouté dans
+  `tests/frontend/brochure-video-page.test.ts` ; 11/11 tests passent et TypeScript est
+  propre | **leçon : tout contrôleur externe conservé dans un `useRef` et détruit dans
+  un cleanup doit être recréé ou réactivable. Tester explicitement le double cycle des
+  effets de React Strict Mode, surtout quand une action peut déclencher un traitement
+  distant coûteux ; ne pas diagnostiquer à partir d'avertissements de préchargement de
+  polices sans vérifier le POST et les transitions d'état.**
+
+- **[2026-08-26, local config missing]** brochure-video test en local | dashboard clique
+  « Générer vidéo » → 500 silencieuse | POST `/api/brochure-video` tente SSH sans
+  MOANA_SSH_HOST défini (seul MOANA_SSH_KEY en .env) | Bug d’env non de code : routes
+  génèrés correctement avec getSession() auth, mais SSH config manquante | Fix :
+  `.env.local` ajouter `MOANA_SSH_HOST=ubuntu@51.44.220.145` + redéployer service
+  systemd sur EC2 | leçon : factory génère code valide, tests locaux révèlent config
+  manquante non erreur implémentation.
+
+- **[2026-08-26, non résolu]** brochure-video pipeline (déploiement) | tester rejeta T1
+  car DEPLOY_ARTIFACTS envoie le template systemd à ~/moana mais REMOTE_COMMANDS
+  n’a pas de cp vers /etc/systemd/system | `deploy.py` OU plan ne synchronisent
+  pas les artefacts avec les commandes distance — le template est créé localement
+  mais jamais installé en systemd | à corriger : augmenter le plan déploiement
+  avec la copie du template, ou utiliser ansible/salt si disponible | leçon :
+  quand DEPLOY_ARTIFACTS envoie des fichiers unitaires, s’assurer que REMOTE_COMMANDS
+  contient l’action de finalisation (installation systemd, rechargement daemon, etc.)
+  au lieu de compter sur une étape implicite côté distant.
+
+- **[2026-08-26, software_factory, hors moana]** après le rejet tester du brochure-video
+  T1, builder escalade (tier hard, 3 tentatives × 2 réparations = 6 appels) mais échoue
+  systématiquement avec « build.json illisible » | semble une corruption du fichier
+  d’état de session lors des tentatives de récupération `--resume` | hors moana,
+  à debugger côté `dev/software_factory` (Tester rejects + builder escalade = race
+  condition ou corruption fichier JSON ?).
+
 - **[2026-08-22, résolu]** serveur local/YATCO Global | actualisation affichait une
   déconnexion ou une erreur 500 | `ENOSPC` lors de l’écriture du cache webpack/Next
   (disque presque plein) | purge ciblée de `.next`, redémarrage de `npm run dev`,

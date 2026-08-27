@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Anchor, LogOut, User, Ship, Inbox, Menu, X, Globe2, TrendingUp, Calculator } from 'lucide-react';
+import { Anchor, LogOut, User, Ship, Inbox, Menu, X, Globe2, TrendingUp, Calculator, Video } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useNewLeadsCount } from '@/lib/hooks';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +24,7 @@ export function Header() {
   const isMarketPulsePage = pathname?.includes('/market-pulse');
   const isMarketTrendsPage = pathname?.includes('/market-trends');
   const isCommissionPage = pathname?.includes('/outils/commission');
+  const isBrochureVideoPage = pathname?.includes('/brochure-video');
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -82,7 +83,7 @@ export function Header() {
               <Link
                 href="/dashboard"
                 className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
-                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage && !isCommissionPage
+                  ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage && !isCommissionPage && !isBrochureVideoPage
                     ? 'border-secondary-500 text-white'
                     : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
               >
@@ -138,6 +139,16 @@ export function Header() {
               >
                 <Calculator className="h-4 w-4" />
                 <span className="uppercase tracking-wide">Commission</span>
+              </Link>
+              <Link
+                href="/dashboard/brochure-video"
+                className={`flex items-center gap-2 py-2 text-sm font-medium transition-all border-b-2
+                  ${isBrochureVideoPage
+                    ? 'border-secondary-500 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-700'}`}
+              >
+                <Video className="h-4 w-4" />
+                <span className="uppercase tracking-wide">Vidéo brochure</span>
               </Link>
               <Link
                 href="/dashboard/bateau-a-suivre"
@@ -247,7 +258,7 @@ export function Header() {
                     href="/dashboard"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
-                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage && !isCommissionPage
+                      ${!isLeadsPage && !isBateauASuivrePage && !isBateauChantierPage && !isYatcoGlobalPage && !isListingsYatcoPage && !isMarketPulsePage && !isMarketTrendsPage && !isCommissionPage && !isBrochureVideoPage
                         ? 'bg-secondary-600 text-white'
                         : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
                   >
@@ -313,6 +324,18 @@ export function Header() {
                   >
                     <Calculator className="h-5 w-5" />
                     <span>Commission</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/brochure-video"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
+                      ${isBrochureVideoPage
+                        ? 'bg-secondary-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-primary-900'}`}
+                  >
+                    <Video className="h-5 w-5" />
+                    <span>Vidéo brochure</span>
                   </Link>
 
                   <Link

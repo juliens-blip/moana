@@ -172,3 +172,24 @@ Format d'entrée : `[AAAA-MM-JJ HH:MM] <tool/phase> | fait | tests | prochaine �
   `app/dashboard/outils/commission/`, `tests/frontend/commission.test.ts`,
   diff `Header.tsx`/`package.json`.
 
+### [2026-08-25 21:59→2026-08-26 00:31] Cycle 22 — `brochure-video` backend pipeline : implémentation et déploiement incomplet
+- **Fait** : session Software Factory `20260825T215927-438096` sur PDF→Veo→ffmpeg→Storage
+  pipeline : T1 builder (attempt 2) généra `workers/brochure_video_runner.py`
+  (idempotent, atomique, tests déterministes, systemd template `moana-brochure-video@.service`),
+  tests du module passent (test_brochure_video_runner.py, test_brochure_video_systemd.py),
+  suite backend complète verte, ruff lint OK. T1 tester (codex/gpt-5.6-luna)
+  **rejeta le déploiement** : « deterministic tests & non-optional commands pass,
+  but DEPLOY_ARTIFACTS sends template unit to ~/moana while REMOTE_COMMANDS
+  has no cp command to /etc/systemd/system » → plan déploiement incomplet
+  (template crée mais jamais installé systemd). Après rejection du tester, builder
+  escalade (tier hard) mais échoue 6 fois avec « build.json illisible »
+  (corruption d'état factory), T2-T4 skipped par dépendance.
+- **État** : **T1 failed** après 6 tentatives cumulées ; artefacts backends
+  (`workers/brochure_video_runner.py`, `tests/test_brochure_video_*.py`,
+  `workers/moana-brochure-video@.service`) **non trackés** ; aucun commit.
+- **Blocage** : déploiement systemd incomplet (DEPLOY_ARTIFACTS + REMOTE_COMMANDS
+  mal alignés) ; corruption build.json lors de l'escalade tier hard.
+- **Prochaine étape** : corriger plan déploiement (ajouter cp vers /etc/systemd/system
+  ou utiliser ansible/salt si disponible) ; debugger build.json corruption en factory
+  (hors moana).
+

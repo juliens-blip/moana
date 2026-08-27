@@ -1,0 +1,11 @@
+[Unit]
+Description=Moana brochure video pipeline runner (instance %i = job id)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/moana
+ExecStart=/usr/bin/flock -n /run/lock/moana-brochure-video-%i.lock -c '/home/ubuntu/moana/.venv/bin/python3 -m workers.brochure_video_runner %i'
+TimeoutStartSec=600
