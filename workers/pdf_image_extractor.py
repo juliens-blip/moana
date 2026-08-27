@@ -256,7 +256,13 @@ def _parse_objects(data: bytes) -> dict[int, _PdfObject]:
         gen = int(match.group("gen"))
         pos = _skip_ws(data, match.end())
         if not data.startswith(b"<<", pos):
-            raise PdfExtractionError(f"object {num} is not a dictionary")
+            # A perfectly valid PDF may hold plenty of indirect objects that
+            # are not dictionaries — most commonly a bare integer used as the
+            # target of another object's indirect /Length (see the fallback
+            # above). This parser never resolves indirect references by
+            # number, so such objects are never looked up; skip them instead
+            # of treating a document-wide-normal pattern as corruption.
+            continue
         value, pos = _parse_dict(data, pos)
         pos = _skip_ws(data, pos)
         stream_bytes: bytes | None = None

@@ -310,6 +310,39 @@ def test_indirect_stream_length_falls_back_to_endstream_marker() -> None:
     assert images[0].data == IMAGE_A0
 
 
+def test_non_dictionary_indirect_object_is_skipped_not_fatal() -> None:
+    """A perfectly valid PDF may hold indirect objects that are not
+    dictionaries — most commonly a bare integer used as the target of
+    another object's indirect /Length (production bug: `object N is not a
+    dictionary`, one object number after the indirect-/Length fallback
+    above). This parser never resolves indirect references by number, so
+    such an object is simply irrelevant noise and must be skipped, not
+    treated as document corruption.
+    """
+    image_body = (
+        "<< /Type /XObject /Subtype /Image /Width 4 /Height 4 "
+        "/ColorSpace /DeviceGray /BitsPerComponent 8 /Length 7 0 R >>"
+    )
+    image_obj = (
+        b"4 0 obj\n" + image_body.encode("ascii") + b"\nstream\n" + IMAGE_A0 + b"\nendstream\nendobj\n"
+    )
+    pdf_bytes = b"".join(
+        [
+            b"%PDF-1.4\n",
+            _dict_object(1, "<< /Type /Catalog /Pages 2 0 R >>"),
+            _dict_object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            _page_object(3, 2, {"Im0": 4}, 5),
+            image_obj,
+            _content_object(5, ["Im0"]),
+            b"7 0 obj\n16\nendobj\n",  # bare integer, not a dictionary
+            b"%%EOF\n",
+        ]
+    )
+    images = extract_pdf_images(pdf_bytes)
+    assert len(images) == 1
+    assert images[0].data == IMAGE_A0
+
+
 def test_invalid_pdf_error_rejects_non_bytes_input() -> None:
     with pytest.raises(PdfExtractionError):
         extract_pdf_images("not-bytes")  # type: ignore[arg-type]
