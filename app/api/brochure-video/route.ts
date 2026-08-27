@@ -23,7 +23,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const tempDir = await mkdtemp(join(tmpdir(), 'moana-brochure-video-'));
   const keyPath = join(tempDir, 'ssh-key');
   try {
-    await writeFile(keyPath, `${sshKey.trim()}\n`, { mode: 0o600 });
+    // Certaines UI de variables d'environnement (dont Vercel, selon comment la
+    // valeur est collée) stockent un PEM multi-lignes avec des séquences `\n`
+    // littérales au lieu de vrais retours à la ligne. Le CLI `ssh` tolérait ce
+    // cas ; le parseur strict de `ssh2` échoue avec "Unsupported key format".
+    // `\` n'apparaît jamais dans l'alphabet base64 d'un PEM valide : ce
+    // remplacement est donc sans risque sur une clé déjà correctement formatée.
+    const normalizedKey = sshKey.replace(/\\n/g, '\n').replace(/\r\n?/g, '\n').trim();
+    await writeFile(keyPath, `${normalizedKey}\n`, { mode: 0o600 });
     return await handleBrochureVideoUpload(request, createProductionDeps(keyPath));
   } catch (error) {
     console.error('Erreur de configuration ou de lancement brochure-video:', error);
