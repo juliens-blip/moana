@@ -17,7 +17,21 @@ interface YatcoGlobalCardProps {
 export function YatcoGlobalCard({ listing, index = 0, isFavorite = false, onFavoriteChange, onShowHistory, onOpenDetails }: YatcoGlobalCardProps) {
   const title = listing.boat_name || [listing.builder, listing.model].filter(Boolean).join(' ') || 'Annonce sans nom';
   const location = [listing.city, listing.country].filter(Boolean).join(', ');
-  const sourceDate = listing.source_created_at || listing.source_updated_at;
+  const bossObservedAt = typeof listing.raw_payload?.boss_observed_at === 'string'
+    ? listing.raw_payload.boss_observed_at
+    : undefined;
+  const bossFeedType = typeof listing.raw_payload?.boss_feed_type === 'string'
+    ? listing.raw_payload.boss_feed_type
+    : undefined;
+  const bossFeedLabel = bossFeedType === 'new'
+    ? 'Nouvelle annonce'
+    : bossFeedType === 'modified'
+      ? 'Annonce modifiée'
+      : bossFeedType === 'sold'
+        ? 'Vendue'
+        : undefined;
+  const sourceDate = bossObservedAt || listing.source_created_at || listing.source_updated_at;
+  const sourceDateLabel = bossObservedAt ? 'Repérée dans YATCO BOSS' : 'Date source YATCO';
   const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : null;
 
   return (
@@ -54,6 +68,7 @@ export function YatcoGlobalCard({ listing, index = 0, isFavorite = false, onFavo
 
       <div className="p-5 space-y-4">
         <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+          {bossFeedLabel && <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-semibold text-secondary-700">{bossFeedLabel}</span>}
           {listing.model_year && (
             <span className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5 text-primary-500" />
@@ -73,7 +88,7 @@ export function YatcoGlobalCard({ listing, index = 0, isFavorite = false, onFavo
               {location}
             </span>
           )}
-          {sourceDate && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary-500" />Annonce : {formatDate(sourceDate)}</span>}
+          {sourceDate && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary-500" />{sourceDateLabel} : {formatDate(sourceDate)}</span>}
         </div>
 
         {typeof (listing.price_usd ?? listing.price_amount) === 'number' && (
@@ -85,7 +100,7 @@ export function YatcoGlobalCard({ listing, index = 0, isFavorite = false, onFavo
         )}
 
         {sourceDate
-          ? <p className="text-xs text-gray-400">Date source YATCO : {formatDate(sourceDate)}</p>
+          ? <p className="text-xs text-gray-400">{sourceDateLabel} : {formatDate(sourceDate)}</p>
           : <p className="text-xs text-gray-400">Date de publication : non communiquée par YATCO BOSS</p>}
 
         {(listing.broker_name || listing.broker_company || listing.listing_status) && (

@@ -34,9 +34,9 @@ const DEFAULT_YATCO_GLOBAL_FILTERS: YatcoGlobalFilters = {
   country: '',
   price_usd_min: '',
   price_usd_max: '',
-  // BOSS apporte des annonces récentes dont la date de publication publique
-  // n'est pas toujours exposée ; la dernière détection est donc le tri sûr.
-  sortBy: 'updated_at',
+  // La date fiable est celle de détection dans les rapports BOSS
+  // new/modified/sold, pas le timestamp technique de réingestion Supabase.
+  sortBy: 'source_updated_at',
   sortDir: 'desc'
 };
 
@@ -48,8 +48,7 @@ const YATCO_GLOBAL_SORT_OPTIONS: Array<{
   sortBy: YatcoGlobalSortBy;
   sortDir: YatcoGlobalSortDir;
 }> = [
-  { value: 'updated_at_desc', label: 'Plus récent', sortBy: 'updated_at', sortDir: 'desc' },
-  { value: 'source_updated_at_desc', label: 'Parution YATCO récente', sortBy: 'source_updated_at', sortDir: 'desc' },
+  { value: 'source_updated_at_desc', label: 'Plus récent dans YATCO BOSS', sortBy: 'source_updated_at', sortDir: 'desc' },
   { value: 'price_usd_asc', label: 'Prix croissant', sortBy: 'price_usd', sortDir: 'asc' },
   { value: 'price_usd_desc', label: 'Prix décroissant', sortBy: 'price_usd', sortDir: 'desc' },
   { value: 'model_year_desc', label: 'Année récente', sortBy: 'model_year', sortDir: 'desc' },
@@ -116,7 +115,11 @@ function YatcoGlobalPageInner() {
     country: searchParams.get('country') ?? '',
     price_usd_min: searchParams.get('price_usd_min') ?? '',
     price_usd_max: searchParams.get('price_usd_max') ?? '',
-    sortBy: (searchParams.get('sortBy') as YatcoGlobalSortBy | null) ?? DEFAULT_YATCO_GLOBAL_FILTERS.sortBy,
+    // `updated_at` was the old technical sort. Migrate bookmarked URLs to the
+    // BOSS event date so a database replay cannot look like a new listing.
+    sortBy: searchParams.get('sortBy') === 'updated_at'
+      ? 'source_updated_at'
+      : (searchParams.get('sortBy') as YatcoGlobalSortBy | null) ?? DEFAULT_YATCO_GLOBAL_FILTERS.sortBy,
     sortDir: (searchParams.get('sortDir') as YatcoGlobalSortDir | null) ?? DEFAULT_YATCO_GLOBAL_FILTERS.sortDir
   }));
   const [listings, setListings] = useState<YatcoGlobalListingsResponse['listings']>([]);

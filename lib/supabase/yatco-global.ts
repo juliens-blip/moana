@@ -84,10 +84,11 @@ async function getLatestPriceFluctuations(
 }
 
 /**
- * List deduplicated YATCO global listings selected on freshness
- * (first_seen_at/updated_at — our ingestion timestamps, not YATCO's own
- * source_created_at/source_updated_at which barely ever fall within a 72h
- * window) within freshnessHours, minLengthMeters, and minYear, optionally
+ * List deduplicated YATCO global listings selected from the authenticated
+ * BOSS new/modified/sold feed. `source_updated_at` is refreshed only when an
+ * event is observed in that feed, unlike the technical `updated_at` changed
+ * by replaying an old public-sitemap snapshot. The remaining filters are
+ * applied before pagination.
  * refined by model_year, length_m, country, and price_usd_min/max, ordered
  * by the requested sortBy/sortDir (whitelisted columns only, default
  * updated_at DESC) then id for a stable order across pages, enriched with
@@ -105,7 +106,12 @@ export async function getYatcoGlobalListings(
   const freshnessHours = filters.freshnessHours ?? 72;
   const minLengthMeters = filters.minLengthMeters ?? 26;
   const minYear = filters.minYear ?? 2010;
-  const sortColumn = SORT_COLUMNS[filters.sortBy ?? 'updated_at'];
+  // Backward-compatible alias for bookmarked URLs created before the BOSS
+  // event feed became authoritative. Technical updated_at is never a market
+  // recency signal because a replay of an old snapshot also changes it.
+  const sortColumn = SORT_COLUMNS[filters.sortBy ?? 'updated_at'] === SORT_COLUMNS.updated_at
+    ? SORT_COLUMNS.source_updated_at
+    : SORT_COLUMNS[filters.sortBy ?? 'updated_at'];
   const sortAscending = filters.sortDir === 'asc';
 
   // Query the base table directly so every filter is evaluated by Postgres
@@ -122,9 +128,7 @@ export async function getYatcoGlobalListings(
     .order('id', { ascending: true });
 
   const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).toISOString();
-  query = query.or(
-    `first_seen_at.gte.${freshnessThreshold},updated_at.gte.${freshnessThreshold}`
-  );
+  query = query.gte('source_updated_at', freshnessThreshold);
   query = query.gt('length_m', minLengthMeters);
   query = query.gte('model_year', minYear);
 
