@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zlib
 
 import pytest
 
@@ -341,6 +342,39 @@ def test_non_dictionary_indirect_object_is_skipped_not_fatal() -> None:
     images = extract_pdf_images(pdf_bytes)
     assert len(images) == 1
     assert images[0].data == IMAGE_A0
+
+
+def test_chained_flate_then_dct_filter_is_decoded() -> None:
+    """A JPEG XObject is sometimes additionally Flate-wrapped by the PDF
+    writer: /Filter [/FlateDecode /DCTDecode]. Filters apply in listed
+    order — undo Flate first, then the DCT (JPEG) bytes are the final,
+    self-contained payload with nothing left to decode. The production bug
+    (`unsupported stream filter ['FlateDecode', 'DCTDecode']`) came from
+    treating any array /Filter as a single unsupported value.
+    """
+    fake_jpeg = bytes(range(0x80, 0x90)) * 4  # stand-in DCT payload
+    compressed = zlib.compress(fake_jpeg)
+    image_body = (
+        "<< /Type /XObject /Subtype /Image /Width 4 /Height 4 "
+        f"/Filter [/FlateDecode /DCTDecode] /Length {len(compressed)} >>"
+    )
+    image_obj = (
+        b"4 0 obj\n" + image_body.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream\nendobj\n"
+    )
+    pdf_bytes = b"".join(
+        [
+            b"%PDF-1.4\n",
+            _dict_object(1, "<< /Type /Catalog /Pages 2 0 R >>"),
+            _dict_object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            _page_object(3, 2, {"Im0": 4}, 5),
+            image_obj,
+            _content_object(5, ["Im0"]),
+            b"%%EOF\n",
+        ]
+    )
+    images = extract_pdf_images(pdf_bytes)
+    assert len(images) == 1
+    assert images[0].data == fake_jpeg
 
 
 def test_invalid_pdf_error_rejects_non_bytes_input() -> None:

@@ -394,10 +394,7 @@ def _collect_page_order(
     return ordered
 
 
-def _decode_stream(obj_value: dict[str, Any], raw: bytes) -> bytes:
-    filt = obj_value.get("Filter")
-    if filt is None:
-        return raw
+def _decode_one_filter(filt: Any, raw: bytes) -> bytes:
     if filt == "FlateDecode":
         try:
             return zlib.decompress(raw)
@@ -406,6 +403,19 @@ def _decode_stream(obj_value: dict[str, Any], raw: bytes) -> bytes:
     if filt in ("DCTDecode", "JPXDecode"):
         return raw  # already a self-contained image codec payload
     raise PdfExtractionError(f"unsupported stream filter {filt!r}")
+
+
+def _decode_stream(obj_value: dict[str, Any], raw: bytes) -> bytes:
+    filt = obj_value.get("Filter")
+    if filt is None:
+        return raw
+    # /Filter may be a single name or an array applied in listed order (e.g.
+    # a JPEG additionally Flate-wrapped: [/FlateDecode /DCTDecode] — undo
+    # Flate first, then hand the resulting DCT bytes through unchanged).
+    filters = filt if isinstance(filt, list) else [filt]
+    for one in filters:
+        raw = _decode_one_filter(one, raw)
+    return raw
 
 
 def _resolve_dict(objects: Mapping[int, _PdfObject], value: Any) -> dict[str, Any] | None:
