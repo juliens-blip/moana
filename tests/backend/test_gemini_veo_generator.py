@@ -166,9 +166,10 @@ def test_prompt_is_exactly_the_imposed_string() -> None:
     for _section, prompt, _image_ids, _duration, _model, _timeout in transport.calls:
         assert prompt == SECTION_PROMPT_CORE
         assert "premium luxury-yacht brokerage footage" in prompt
-        assert "semi-transparent watermark" in prompt
-        assert "immersive room-tour feeling" in prompt
-        assert "room-to-room transitions" in prompt
+        assert "persistent, static, very light semi-transparent watermark" in prompt
+        assert "active premium room tour in three beats" in prompt
+        assert "exact yacht name" in prompt
+        assert "restrained lower-thirds or section cards" in prompt
         assert prompt == build_section_prompt()
 
 

@@ -117,12 +117,26 @@ def test_prompt_requests_subtle_logo_watermark_premium_quality_and_interior_room
     prompt = build_section_prompt(_entry("img-interior", "Vie à bord–Intérieurs"))
 
     assert "premium luxury-yacht brokerage footage" in prompt
-    assert "semi-transparent watermark" in prompt
+    assert "persistent, static, very light semi-transparent watermark" in prompt
+    assert "entire clip" in prompt
+    assert "8-12 percent opacity" in prompt
     assert "full-screen image" in prompt
-    assert "immersive room-tour feeling" in prompt
-    assert "natural parallax" in prompt
+    assert "active, premium room tour with three clear beats" in prompt
+    assert "strong natural parallax" in prompt
+    assert "directional motion" in prompt
     assert "simple zoom-in, zoom-out" in prompt
     assert "never invent an unseen room" in prompt
+
+
+def test_prompt_uses_exact_brochure_text_for_opening_title_and_section_facts() -> None:
+    prompt = build_section_prompt(_entry("img-hero", "Hero/Identité"))
+
+    assert "exact yacht name" in prompt
+    assert "first moments" in prompt
+    assert "builder, model, year, length" in prompt
+    assert "lower-thirds or section cards" in prompt
+    assert "Never invent a yacht name" in prompt
+    assert "when exact wording is not confidently readable, show no text" in prompt
 
 
 def test_prompt_is_pure_and_deterministic_per_entry() -> None:

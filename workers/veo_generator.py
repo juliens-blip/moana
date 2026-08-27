@@ -46,25 +46,48 @@ _PREMIUM_VISUAL_DIRECTION = (
     " Create premium luxury-yacht brokerage footage with photorealistic detail, "
     "refined natural color grading, balanced exposure, clean highlights, realistic "
     "materials, stable gimbal-like camera motion, and strong temporal consistency. "
-    "Avoid flicker, warping, morphing, artificial sharpening, text distortion, and "
-    "cheap slideshow or Ken Burns aesthetics."
+    "Give every shot a purposeful editorial progression and visible cinematic energy "
+    "rather than passive drift: establish the space, execute one confident camera "
+    "move, then finish on a strong reveal or detail that motivates the next cut. "
+    "Use controlled acceleration and easing while keeping the result elegant, never "
+    "frantic. Avoid flicker, warping, morphing, artificial sharpening, and cheap "
+    "slideshow or Ken Burns aesthetics."
 )
 
 _BROKERAGE_LOGO_DIRECTION = (
-    " If a yacht brokerage agency logo or brand mark is visible, preserve it only "
-    "as a small, static, subtle, semi-transparent watermark in a safe corner of the "
-    "frame. Never crop into it, zoom toward it, animate it, enlarge it, or turn it "
-    "into a full-screen image or the main subject of the clip."
+    " If the brochure supplies or visibly contains the yacht brokerage agency logo, "
+    "preserve its exact design and spelling as a persistent, static, very light "
+    "semi-transparent watermark for the entire clip, around 8-12 percent opacity, "
+    "placed in a background-safe corner or quiet negative-space area. It must never "
+    "obscure the yacht or interior. Never redesign, crop into, zoom toward, animate, "
+    "enlarge, or turn the logo into a full-screen image or the main subject. If no "
+    "brokerage logo is actually available in the source material, do not invent one."
 )
 
 _INTERIOR_ROOM_TOUR_DIRECTION = (
-    " If the source depicts a yacht interior, create an immersive room-tour feeling: "
-    "use a slow forward dolly, gentle lateral tracking, and natural parallax to reveal "
-    "the room's real depth, circulation, and spatial layout. Favor movement that can "
-    "flow naturally toward a doorway or adjacent space only when that connection is "
-    "actually visible in the source, supporting a smooth transition between rooms. "
-    "Do not reduce the interior shot to a simple zoom-in, zoom-out, or static pan, and "
-    "never invent an unseen room or an impossible camera path."
+    " If the source depicts a yacht interior, make the six-second shot feel like an "
+    "active, premium room tour with three clear beats: begin with a wide spatial "
+    "establishing view, move decisively through the room with a forward dolly or "
+    "curved lateral track and strong natural parallax, then reveal a meaningful "
+    "feature, sightline, doorway, or adjacent space. Let the camera arc around real "
+    "furniture and use visible doorways to create momentum toward the next room, but "
+    "only when that route is genuinely visible. End with directional motion that can "
+    "cut naturally into the next interior section. Do not use passive hovering, a "
+    "simple zoom-in, zoom-out, or static pan, and never invent an unseen room or an "
+    "impossible camera path."
+)
+
+_EDITORIAL_TEXT_DIRECTION = (
+    " Use brochure text selectively as polished editorial graphics, never as generic "
+    "decoration. On opening or identity imagery, when the yacht name is clearly "
+    "legible in the source, introduce that exact yacht name during the first moments "
+    "as a refined cinematic title, then fade it cleanly. Across later sections, when "
+    "useful facts such as builder, model, year, length, performance, accommodation, "
+    "or location are clearly visible in the source, present only those exact facts one "
+    "at a time as restrained, well-spaced lower-thirds or section cards. Keep overlays "
+    "brief, crisp, correctly spelled, and integrated with the composition. Never "
+    "invent a yacht name, specification, claim, price, or unreadable decorative text; "
+    "when exact wording is not confidently readable, show no text."
 )
 
 
@@ -145,6 +168,7 @@ def build_section_prompt(entry: ManifestEntry) -> str:
         + _PREMIUM_VISUAL_DIRECTION
         + _BROKERAGE_LOGO_DIRECTION
         + _INTERIOR_ROOM_TOUR_DIRECTION
+        + _EDITORIAL_TEXT_DIRECTION
         + _FIDELITY_PROMPT_SUFFIX
     )
 
