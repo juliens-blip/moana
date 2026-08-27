@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/supabase/auth';
-import { getLiveYatcoBossListings } from '@/lib/yatco-boss/live';
+import { getYatcoGlobalListings } from '@/lib/supabase/yatco-global';
 import { yatcoGlobalQuerySchema } from '@/lib/validations';
 import type { ApiResponse } from '@/lib/types';
 
@@ -11,9 +11,9 @@ export const maxDuration = 300;
 
 /**
  * GET /api/yatco-global
- * List deduplicated YATCO global listings for the authenticated broker,
- * selected by freshness window, minimum length, and minimum year, enriched
- * with price fluctuation.
+ * List deduplicated YATCO global listings already collected by the EC2 worker
+ * and stored in Supabase. Vercel must never open an SSH session or run the
+ * browser scraper synchronously from this request.
  *
  * Query params:
  * - freshnessHours=number: Only listings created or updated within this many hours (default 72)
@@ -67,47 +67,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const filters = validation.data;
-    const allListings = await getLiveYatcoBossListings(searchParams.get('refresh') === '1');
-    const needle = filters.country?.toLocaleLowerCase();
-    const filtered = allListings.filter((listing) => {
-      const location = `${listing.city ?? ''} ${listing.country ?? ''}`.toLocaleLowerCase();
-      if (needle && !location.includes(needle)) return false;
-      if (filters.model_year !== undefined && listing.model_year !== filters.model_year) return false;
-      if (filters.length_m !== undefined && (listing.length_m ?? -Infinity) < filters.length_m) return false;
-      if (filters.cabins !== undefined && (listing.cabins ?? -Infinity) < filters.cabins) return false;
-      const comparablePrice = listing.price_usd ?? listing.price_amount;
-      if (filters.price_usd_min !== undefined && (comparablePrice ?? -Infinity) < filters.price_usd_min) return false;
-      if (filters.price_usd_max !== undefined && (comparablePrice ?? Infinity) > filters.price_usd_max) return false;
-      // Le flux live historique ne doit pas appliquer les anciens seuils par
-      // défaut (26 m / 2010) : ils ne s'appliquent que si le client les a
-      // explicitement demandés.
-      if (searchParams.has('minLengthMeters') && (listing.length_m ?? -Infinity) <= filters.minLengthMeters) return false;
-      if (searchParams.has('minYear') && (listing.model_year ?? -Infinity) < filters.minYear) return false;
-      return true;
-    });
-    const sortKey = filters.sortBy ?? 'updated_at';
-    filtered.sort((left, right) => {
-      const a = (sortKey === 'price_usd' ? left.price_usd ?? left.price_amount : left[sortKey]) as number | string | undefined;
-      const b = (sortKey === 'price_usd' ? right.price_usd ?? right.price_amount : right[sortKey]) as number | string | undefined;
-      if (a === b) return left.id.localeCompare(right.id);
-      if (a === undefined) return 1;
-      if (b === undefined) return -1;
-      const result = a < b ? -1 : 1;
-      return filters.sortDir === 'asc' ? result : -result;
-    });
-    const page = filters.page ?? 1;
-    const limit = 25;
-    const total = filtered.length;
-    const result = {
-      listings: filtered.slice((page - 1) * limit, page * limit),
-      pagination: { page, limit, total, totalPages: total === 0 ? 0 : Math.ceil(total / limit) },
-    };
+    // The legacy `refresh=1` parameter is intentionally harmless: a refresh
+    // now means re-reading the latest worker snapshot from Supabase. Scraping
+    // remains an asynchronous EC2 responsibility.
+    const result = await getYatcoGlobalListings(validation.data);
 
     return NextResponse.json<ApiResponse>({
       success: true,
       data: result
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;

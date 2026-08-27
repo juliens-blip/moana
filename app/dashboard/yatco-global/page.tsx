@@ -129,6 +129,8 @@ function YatcoGlobalPageInner() {
   const [history, setHistory] = useState<YatcoFavoriteHistoryEntry[]>([]);
   const [historyListing, setHistoryListing] = useState<YatcoGlobalListing | null>(null);
   const [detailsListing, setDetailsListing] = useState<YatcoGlobalListing | null>(null);
+  const initialFiltersRef = useRef(filters);
+  const initialPageRef = useRef(page);
 
   useEffect(() => {
     fetch('/api/yatco-global/favorites')
@@ -137,13 +139,12 @@ function YatcoGlobalPageInner() {
       .catch(() => undefined);
   }, []);
 
-  const fetchListings = useCallback(async (targetFilters: YatcoGlobalFilters, targetPage: number, forceRefresh = false) => {
+  const fetchListings = useCallback(async (targetFilters: YatcoGlobalFilters, targetPage: number) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const params = buildYatcoGlobalParams(targetFilters, targetPage);
-      if (forceRefresh) params.set('refresh', '1');
       const response = await fetch(`/api/yatco-global?${params.toString()}`);
       const data: ApiResponse<YatcoGlobalListingsResponse> = await response.json();
       if (requestId !== requestIdRef.current) return;
@@ -164,6 +165,13 @@ function YatcoGlobalPageInner() {
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
+
+  // Load the latest EC2-ingested Supabase snapshot as soon as the page opens.
+  // The refs preserve bookmarked URL filters without re-fetching twice when a
+  // filter handler updates state and performs its own request.
+  useEffect(() => {
+    void fetchListings(initialFiltersRef.current, initialPageRef.current);
+  }, [fetchListings]);
 
   useEffect(() => {
     const canonical = buildYatcoGlobalParams(filters, page);
@@ -246,11 +254,11 @@ function YatcoGlobalPageInner() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => fetchListings(filters, page, true)}
+            onClick={() => fetchListings(filters, page)}
             disabled={loading}
           >
             <RefreshCw className="h-4 w-4" />
-            Actualiser le flux live
+            Actualiser les données
           </Button>
         </div>
       </div>
@@ -319,7 +327,7 @@ function YatcoGlobalPageInner() {
             variant="secondary"
             size="sm"
             className="mt-4"
-            onClick={() => fetchListings(filters, page, true)}
+            onClick={() => fetchListings(filters, page)}
           >
             Réessayer
           </Button>
@@ -331,7 +339,7 @@ function YatcoGlobalPageInner() {
           </div>
           <p className="text-gray-500 text-lg">Aucune annonce trouvée</p>
           <p className="text-gray-400 text-sm mt-2">
-            Cliquez sur « Actualiser le flux live » pour interroger YATCO BOSS.
+            Modifiez les filtres ou actualisez les données après le prochain passage du collecteur YATCO.
           </p>
         </div>
       ) : (

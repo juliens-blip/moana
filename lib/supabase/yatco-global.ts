@@ -166,9 +166,11 @@ export async function getYatcoGlobalListings(
   const total = count ?? 0;
 
   return {
-    listings: rows.map(({ dedup_key, ...listing }) => ({
+    // `dedup_key` is part of the browser contract: favorites and their
+    // history use it as the stable identity across scraper updates.
+    listings: rows.map((listing) => ({
       ...listing,
-      price_fluctuation: fluctuations.get(dedup_key) ?? null
+      price_fluctuation: fluctuations.get(listing.dedup_key) ?? null
     })) as YatcoGlobalListing[],
     pagination: {
       page,
