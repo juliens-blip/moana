@@ -80,6 +80,35 @@ class ClassificationSettings:
 
 MAX_EDITORIAL_FACTS = 3
 
+_MAX_HTTP_ERROR_DETAIL_BYTES = 500
+
+
+def _http_error_detail(exc: urllib.error.HTTPError) -> str:
+    """Best-effort, bounded extract of a Gemini HTTPError's JSON body.
+
+    The status code alone (e.g. "status 400") is not actionable — Gemini's
+    error body names the actual problem (payload too large, invalid field,
+    unsupported MIME type…). Never raises: falls back to just the status if
+    the body is absent, unreadable, or not JSON. Google's error responses
+    never echo request headers/secrets, so this is always safe to surface.
+    """
+    try:
+        raw = exc.read()
+    except (OSError, ValueError):
+        return f"status {exc.code}"
+    if not raw:
+        return f"status {exc.code}"
+    try:
+        message = json.loads(raw).get("error", {}).get("message")
+    except (json.JSONDecodeError, AttributeError):
+        message = raw.decode("utf-8", errors="replace")
+    if not message:
+        return f"status {exc.code}"
+    message = str(message)
+    if len(message) > _MAX_HTTP_ERROR_DETAIL_BYTES:
+        message = message[:_MAX_HTTP_ERROR_DETAIL_BYTES] + "…"
+    return f"status {exc.code}: {message}"
+
 
 @dataclass(frozen=True)
 class EditorialFact:
@@ -338,7 +367,7 @@ class GeminiFlashClassifierTransport:
         except urllib.error.HTTPError as exc:
             if exc.code == 429 or 500 <= exc.code < 600:
                 raise ClassificationTransientError(f"gemini flash classify http_{exc.code}") from exc
-            raise RuntimeError(f"gemini flash classify request failed with status {exc.code}") from exc
+            raise RuntimeError(f"gemini flash classify request failed with {_http_error_detail(exc)}") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise ClassificationTransientError(f"gemini flash classify network_error:{exc.__class__.__name__}") from exc
 
@@ -437,7 +466,7 @@ class GeminiFlashBrochureDirectorTransport:
         except urllib.error.HTTPError as exc:
             if exc.code == 429 or 500 <= exc.code < 600:
                 raise ClassificationTransientError(f"gemini brochure director http_{exc.code}") from exc
-            raise RuntimeError(f"gemini brochure director request failed with status {exc.code}") from exc
+            raise RuntimeError(f"gemini brochure director request failed with {_http_error_detail(exc)}") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise ClassificationTransientError(
                 f"gemini brochure director network_error:{exc.__class__.__name__}"
