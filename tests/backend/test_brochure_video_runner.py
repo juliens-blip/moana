@@ -24,6 +24,7 @@ from workers.brochure_video_runner import (
 from workers.job_contract import JobStatus
 from workers.veo_generator import (
     ClipCheckpoint,
+    VEO_PROMPT_VERSION,
 )
 from workers.video_assembler import (
     CONTAINER_FORMAT,
@@ -203,7 +204,9 @@ def test_job_pipeline_order_and_states(tmp_path) -> None:
     assert envelope.result["object_key"].endswith(f".{CONTAINER_FORMAT}")
     # Veo ran before ffmpeg/publish: the clip it produced is the one downloaded.
     assert len(veo_transport.calls) == 1
-    assert clip_source.calls == [f"veo-clips/{clip_source.calls[0].split('/')[1]}/{veo_transport.calls[0]}.mp4"]
+    assert clip_source.calls == [
+        f"veo-clips/{clip_source.calls[0].split('/')[1]}/{VEO_PROMPT_VERSION}/{veo_transport.calls[0]}.mp4"
+    ]
     assert publish_checkpoint.produce_calls  # publish ran exactly once
 
     state = store.load("job-1")

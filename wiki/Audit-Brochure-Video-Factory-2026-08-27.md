@@ -201,8 +201,10 @@ répartis sans chevauchement. Si ce plan Gemini est indisponible ou invalide, le
 
 La clé du montage final inclut désormais la version créative
 `editorial-branding-v1`. Une brochure déjà traitée peut donc produire le nouveau
-montage sans perdre les clips Veo checkpointés, tandis qu’un nouveau clic sur cette
-même version réutilise immédiatement le résultat final.
+montage, tandis qu’un nouveau clic sur cette même version réutilise immédiatement le
+résultat final. Les clips portent séparément la version de prompt
+`dynamic-editorial-v2` : les clips génériques antérieurs restent conservés mais ne
+sont pas réutilisés comme s’ils avaient été produits avec le nouveau room tour.
 
 ## 5. Preuves de validation
 
@@ -211,7 +213,7 @@ même version réutilise immédiatement le résultat final.
 | TypeScript `tsc --noEmit` | succès |
 | Contrôleur frontend brochure-vidéo | 11/11 tests passés |
 | Routes et contrôleur frontend | 39/39 tests passés |
-| Suite backend ciblée brochure-vidéo | 186/186 tests passés |
+| Suite backend ciblée brochure-vidéo | 187/187 tests passés |
 | Compilation Python des workers corrigés | succès local et EC2 |
 | Parsing de la brochure réelle | 12 images extraites |
 | Lancement API asynchrone | HTTP 200 avec `jobId` et URL de statut |

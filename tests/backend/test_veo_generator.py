@@ -20,6 +20,8 @@ from workers.veo_generator import (
     VeoGenerationResult,
     VeoSettings,
     VeoTransientError,
+    VEO_PROMPT_VERSION,
+    build_clip_content_digest,
     build_section_prompt,
     generate_section_clips,
 )
@@ -173,6 +175,7 @@ def test_clip_is_persisted_immediately_with_deterministic_object_key() -> None:
     key_second = result_second.clips[0].object_key
 
     assert key_first == key_second
+    assert f"/{VEO_PROMPT_VERSION}/" in key_first
     assert key_first.endswith("img-1.mp4")
 
 
@@ -328,7 +331,27 @@ def test_changed_content_digest_regenerates_that_section_only() -> None:
     result = generate_section_clips(manifest, transport, checkpoint, sleep=_no_sleep, rand=_fixed_rand)
 
     assert [call[0] for call in transport.calls] == ["img-1"]
-    assert result.clips[0].content_digest == "fresh-digest"
+    assert result.clips[0].content_digest == build_clip_content_digest(manifest.entries[0])
+
+
+def test_legacy_checkpoint_is_regenerated_when_prompt_version_changes() -> None:
+    entry = _entry("img-1", "interior", digest="source-digest")
+    legacy_checkpoint = ClipCheckpoint(
+        image_id=entry.image_id,
+        object_key="veo-clips/aaaaaaaaaaaaaaaa/img-1.mp4",
+        duration_s=CLIP_DURATION_S,
+        content_digest=entry.content_digest,
+    )
+    checkpoint = FakeStorageCheckpoint(existing=(legacy_checkpoint,))
+    transport = FakeVeoTransport()
+
+    result = generate_section_clips(
+        _manifest(entry), transport, checkpoint, sleep=_no_sleep, rand=_fixed_rand
+    )
+
+    assert [call[0] for call in transport.calls] == [entry.image_id]
+    assert result.clips[0].content_digest != legacy_checkpoint.content_digest
+    assert f"/{VEO_PROMPT_VERSION}/" in result.clips[0].object_key
 
 
 def test_result_is_value_equal_across_replays() -> None:

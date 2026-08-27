@@ -21,6 +21,7 @@ never logging a header, a signed URL or any transport secret.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 import time
@@ -35,6 +36,7 @@ LOGGER = logging.getLogger("moana.veo_generator")
 # Veo 3.1 accepts discrete integer durations; six seconds is supported by the
 # lite preview model and leaves enough room for a visible image animation.
 CLIP_DURATION_S = 6.0
+VEO_PROMPT_VERSION = "dynamic-editorial-v2"
 
 _FIDELITY_PROMPT_SUFFIX = (
     " Depict strictly and only what is present in the source image: never invent, "
@@ -174,7 +176,14 @@ def build_section_prompt(entry: ManifestEntry) -> str:
 
 
 def _object_key(document_digest: str, image_id: str) -> str:
-    return f"veo-clips/{document_digest[:16]}/{image_id}.mp4"
+    return f"veo-clips/{document_digest[:16]}/{VEO_PROMPT_VERSION}/{image_id}.mp4"
+
+
+def build_clip_content_digest(entry: ManifestEntry) -> str:
+    """Bind a checkpoint to both source pixels and the creative prompt version."""
+    return hashlib.sha256(
+        f"{VEO_PROMPT_VERSION}\0{entry.content_digest}".encode("utf-8")
+    ).hexdigest()
 
 
 def _generate_with_retry(
@@ -235,8 +244,9 @@ def generate_section_clips(
 
     clips: list[ClipCheckpoint] = []
     for entry in manifest.entries:
+        expected_content_digest = build_clip_content_digest(entry)
         cached = existing.get(entry.image_id)
-        if cached is not None and cached.content_digest == entry.content_digest:
+        if cached is not None and cached.content_digest == expected_content_digest:
             clips.append(cached)
             continue
 
@@ -251,7 +261,7 @@ def generate_section_clips(
             image_id=entry.image_id,
             object_key=_object_key(manifest.document_digest, entry.image_id),
             duration_s=CLIP_DURATION_S,
-            content_digest=entry.content_digest,
+            content_digest=expected_content_digest,
         )
         checkpoint.persist_clip(manifest.document_digest, new_checkpoint, clip_bytes)
         clips.append(new_checkpoint)
