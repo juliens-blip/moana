@@ -356,7 +356,7 @@ def run_brochure_video_job(
                     editorial_plan = editorial_director(pdf_bytes, images)
                 except (ClassificationTransientError, GeminiClassificationError, RuntimeError) as exc:
                     raise BrochureEditorialDirectionError(
-                        f"gemini brochure direction unavailable: {exc.__class__.__name__}"
+                        f"gemini brochure direction unavailable: {exc.__class__.__name__}: {exc}"
                     ) from exc
 
             def classify_for_manifest(image) -> str:
