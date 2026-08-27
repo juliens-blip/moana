@@ -6,6 +6,18 @@ les patterns récurrents dans « Leçons » et supprimer les lignes brutes ancie
 
 Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
 
+- **[2026-08-27, non résolu]** yatco-stats / test frontend | `tests/frontend/yatco-stats.test.ts`
+  échoue sur « missing fetch call to /api/yatco-stats » (19/20 checks) alors que le
+  composant appelle bien l'endpoint | l'assertion (ligne 210) exige la regex exacte
+  `fetch('/api/yatco-stats')` sans second argument, mais
+  `components/dashboard/YatcoStatsCard.tsx` appelle correctement
+  `fetch('/api/yatco-stats', { cache: 'no-store' })` | corriger la regex du test pour
+  tolérer un second argument optionnel ; aucun bug côté app (backend `test_yatco_
+  aggregation.py` 10/10, `tsc --noEmit` propre) | leçon : une assertion basée sur une
+  regex trop stricte casse dès qu'un appel `fetch` ajoute des options légitimes
+  (`cache`, `headers`...) — préférer une regex tolérante ou parser l'appel plutôt que
+  matcher la chaîne exacte.
+
 - **[2026-08-27, résolu]** brochure-video / Supabase Storage | après un premier
   montage réussi, un nouvel essai du même PDF réutilisait les 9 clips mais finissait
   sur `definitive:RuntimeError` pendant la publication | la vraie réponse Supabase
@@ -50,6 +62,64 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   `.env.local` ajouter `MOANA_SSH_HOST=ubuntu@51.44.220.145` + redéployer service
   systemd sur EC2 | leçon : factory génère code valide, tests locaux révèlent config
   manquante non erreur implémentation.
+
+- **[2026-08-27, résolu, PRODUCTION]** brochure-video sur `moana-hazel.vercel.app`, suite du
+  bug ci-dessous | après ajout de `MOANA_SSH_KEY`/`MOANA_SSH_HOST` en Vercel Production, la
+  route 500 devient un 502 « Échec du lancement du job distant » | logs runtime Vercel :
+  `spawn ssh ENOENT` — le runtime serverless Node.js/AWS Lambda de Vercel n'a pas le binaire
+  système `ssh`, or `lib/brochure-video-upload.ts:createSshRunner` faisait `spawn('ssh', ...)` ;
+  aucun env var ni déploiement systemd ne pouvait réparer ça (architecture incompatible) |
+  `createSshRunner` réécrit avec `ssh2` (client SSH pur Node, pas de dépendance binaire
+  système) ; `ssh2` ajouté en `experimental.serverComponentsExternalPackages` de
+  `next.config.js` (son binding natif crypto sshcrypto.node casse le bundling webpack sinon,
+  `Module parse failed`) ; lecture du fichier clé restée paresseuse (au premier appel SSH réel,
+  pas à la construction des deps) pour ne pas casser le test qui construit
+  `createProductionDeps('/nonexistent/fake-key-path')` sans jamais appeler `runSsh` ; 36/36
+  tests verts, `tsc --noEmit` propre, `npm run build` réussi | **leçon : `spawn()` d'un binaire
+  CLI système (ssh, git, etc.) depuis une route Next.js est un piège classique — ça marche en
+  local/dev (OS complet) mais casse silencieusement sur toute plateforme serverless (Vercel,
+  Lambda) qui n'embarque pas cet outil ; préférer une lib pure Node/JS pour toute opération
+  réseau invoquée depuis une route API.**
+
+- **[2026-08-27, non résolu, PRODUCTION]** brochure-video sur `moana-hazel.vercel.app` |
+  utilisateur signale « Configuration serveur indisponible » en prod, exactement le
+  message de `route.ts:20` | même cause racine que le 2026-08-26 mais côté Vercel :
+  `MOANA_SSH_KEY`/`MOANA_SSH_HOST` ne sont configurées que localement (`.env.local`),
+  jamais ajoutées aux variables d'environnement du projet Vercel (Production) — pas de
+  CLI `vercel` disponible sur ce poste pour vérifier/corriger directement | fix :
+  ajouter les deux variables dans Vercel Dashboard → Settings → Environment Variables
+  (Production), puis redéployer | avertissements console `.woff2` (préchargement non
+  utilisé) et cookie `__cf_bm` rejeté (Cloudflare tiers sur les images YATCO) signalés
+  en même temps mais sans rapport : bruit non bloquant, pas la cause du 500 | leçon :
+  toute variable d'env ajoutée en local (`.env.local`) doit être répliquée manuellement
+  dans Vercel — aucune synchronisation automatique entre les deux.
+
+- **[2026-08-27, résolu, PRODUCTION]** suite du fix ssh2 ci-dessus | après le fix, `/api/brochure-video`
+  échouait encore avec `Cannot parse privateKey: Unsupported key format`, puis (une fois corrigé)
+  `connect ETIMEDOUT 51.44.220.145:22` | (1) la valeur `MOANA_SSH_KEY` collée dans Vercel incluait
+  encore le préfixe shell `MOANA_SSH_KEY="..."` de la source `.env` au lieu du seul bloc PEM —
+  reproduit et confirmé en local avec `ssh2.utils.parseKey()`. (2) Security Group AWS restreignait
+  le port 22 à une IP fixe, incompatible avec les IPs dynamiques des fonctions Vercel | (1) valeur
+  Vercel nettoyée (PEM seul, sans guillemets/préfixe). (2) règle inbound TCP 22 élargie à `0.0.0.0/0`
+  (clé uniquement, jamais de mot de passe) | **leçon : toujours tester le format exact d'un secret
+  multi-lignes collé dans une UI web avec le parseur réel (`ssh2.utils.parseKey`) avant de blâmer le
+  réseau ; un `ETIMEDOUT` (paquet silencieusement droppé) après un succès d'auth locale est la
+  signature classique d'un Security Group/pare-feu restreint par IP, pas d'un service down.**
+
+- **[2026-08-27→2026-08-28, résolu]** brochure-video, job lancé avec succès (SSH+systemd OK) mais
+  échec ensuite sur un PDF réel utilisateur : `PdfExtractionError: object 28 has a non-literal
+  /Length` | `workers/pdf_image_extractor.py` est un parseur PDF maison sans dépendance tierce
+  (choix volontaire, cf. son propre docstring) qui exigeait un `/Length` entier littéral dans le
+  dictionnaire du flux ; ce PDF a un objet dont `/Length` est une référence indirecte (`N G R`),
+  valide selon la norme PDF mais jamais résolue par ce parseur à passe unique (l'objet référencé
+  peut ne pas encore être parsé) | repli sur la recherche du marqueur littéral `endstream` au lieu
+  de faire confiance à un compteur d'octets — même stratégie que les lecteurs PDF tolérants,
+  cohérente avec la philosophie de récupération déjà documentée en tête du fichier ; test de
+  régression `test_indirect_stream_length_falls_back_to_endstream_marker` ajouté ; 299/299 tests
+  backend verts, `ruff check` propre | **leçon : un parseur de format binaire "tolérant" doit
+  appliquer la même tolérance à CHAQUE champ qui peut légalement varier (ici `/Length` littéral vs
+  indirect), pas seulement au point d'entrée (absence de xref) — sinon il échoue de façon
+  imprévisible sur des documents réels valides mais non canoniques.**
 
 - **[2026-08-26, non résolu]** brochure-video pipeline (déploiement) | tester rejeta T1
   car DEPLOY_ARTIFACTS envoie le template systemd à ~/moana mais REMOTE_COMMANDS

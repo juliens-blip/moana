@@ -277,6 +277,39 @@ def test_invalid_pdf_error(invalid_bytes: bytes) -> None:
         extract_pdf_images(invalid_bytes)
 
 
+def test_indirect_stream_length_falls_back_to_endstream_marker() -> None:
+    """A stream's /Length may legally be an indirect reference (`N G R`)
+    instead of a literal integer — real-world exports (Word/LibreOffice,
+    some scanners) do this. This single-pass parser cannot resolve indirect
+    references (the target object may not be parsed yet), so it must fall
+    back to locating the literal `endstream` marker instead of raising
+    `PdfExtractionError`, matching the "non-literal /Length" production bug.
+    """
+    image_body = (
+        "<< /Type /XObject /Subtype /Image /Width 4 /Height 4 "
+        "/ColorSpace /DeviceGray /BitsPerComponent 8 /Length 7 0 R >>"
+    )
+    image_obj = (
+        b"4 0 obj\n" + image_body.encode("ascii") + b"\nstream\n" + IMAGE_A0 + b"\nendstream\nendobj\n"
+    )
+    pdf_bytes = b"".join(
+        [
+            b"%PDF-1.4\n",
+            _dict_object(1, "<< /Type /Catalog /Pages 2 0 R >>"),
+            _dict_object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            _page_object(3, 2, {"Im0": 4}, 5),
+            image_obj,
+            _content_object(5, ["Im0"]),
+            # Deliberately no object 7: this parser never resolves indirect
+            # /Length references, so it must never even try to look one up.
+            b"%%EOF\n",
+        ]
+    )
+    images = extract_pdf_images(pdf_bytes)
+    assert len(images) == 1
+    assert images[0].data == IMAGE_A0
+
+
 def test_invalid_pdf_error_rejects_non_bytes_input() -> None:
     with pytest.raises(PdfExtractionError):
         extract_pdf_images("not-bytes")  # type: ignore[arg-type]

@@ -269,12 +269,27 @@ def _parse_objects(data: bytes) -> dict[int, _PdfObject]:
             else:
                 raise PdfExtractionError(f"object {num} stream keyword not followed by EOL")
             length = value.get("Length")
-            if not isinstance(length, int):
-                raise PdfExtractionError(f"object {num} has a non-literal /Length")
-            stream_bytes = data[pos : pos + length]
-            pos = _skip_ws(data, pos + length)
-            if not data.startswith(_ENDSTREAM_KW, pos):
-                raise PdfExtractionError(f"object {num} stream length does not match its endstream marker")
+            if isinstance(length, int):
+                stream_bytes = data[pos : pos + length]
+                pos = _skip_ws(data, pos + length)
+                if not data.startswith(_ENDSTREAM_KW, pos):
+                    raise PdfExtractionError(f"object {num} stream length does not match its endstream marker")
+            else:
+                # /Length is an indirect reference (e.g. "45 0 R") or missing.
+                # This single-pass parser never resolves indirect references
+                # (the referenced object may not be parsed yet) — same
+                # recovery strategy tolerant PDF readers fall back to: locate
+                # the literal "endstream" marker instead of trusting a count.
+                marker_pos = data.find(_ENDSTREAM_KW, pos)
+                if marker_pos == -1:
+                    raise PdfExtractionError(f"object {num} stream has no endstream marker")
+                stream_bytes = data[pos:marker_pos]
+                # The spec requires a single EOL before "endstream" that is
+                # not part of the stream payload; strip it if present.
+                if stream_bytes.endswith(b"\r\n"):
+                    stream_bytes = stream_bytes[:-2]
+                elif stream_bytes.endswith((b"\n", b"\r")):
+                    stream_bytes = stream_bytes[:-1]
         objects[num] = _PdfObject(num, gen, value, stream_bytes)
     if not objects:
         raise PdfExtractionError("no PDF objects found")
