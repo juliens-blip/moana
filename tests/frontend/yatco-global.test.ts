@@ -9,16 +9,20 @@
  * - Schema keeps existing defaults (freshnessHours/minLengthMeters/minYear/page)
  *   stable when no filters are supplied
  * - app/api/yatco-global/route.ts relays the new filters from searchParams
- *   into the schema (static source check — deterministic, no dev server)
+ *   into the schema, then hands validation.data straight to
+ *   getYatcoGlobalListings after the validation guard (static source check —
+ *   deterministic, no dev server)
  * - yatcoGlobalQuerySchema whitelists sortBy to updated_at/price_usd/model_year/
  *   length_m and sortDir to asc/desc, defaulting to updated_at/desc
  * - lib/supabase/yatco-global.ts orders by the whitelisted sortBy/sortDir then
- *   id for a stable order, and applies the new filters conditionally (static
- *   source check)
+ *   id for a stable order, applies freshnessHours/minLengthMeters/minYear as
+ *   base filters before range() pagination, and applies the new filters
+ *   conditionally (static source check)
  * - app/dashboard/yatco-global/page.tsx builds the T1 filter params (each key,
- *   min/max bounds, zone), the T2 sort contract, drops empty values, resets
- *   pagination to 1 on every control change, and renders the server-sorted
- *   order directly (no client-side reorder) (static source checks)
+ *   min/max bounds, zone), always sends freshnessHours/page as base params,
+ *   the T2 sort contract, drops empty values, resets pagination to 1 on every
+ *   control change, and renders the server-sorted order directly (no
+ *   client-side reorder) (static source checks)
  *
  * Run: npx tsx tests/frontend/yatco-global.test.ts
  */
@@ -179,6 +183,14 @@ run('GET route relays every yatcoGlobalQuerySchema key from searchParams', () =>
   }
 });
 
+run('GET route passes the validated data straight to getYatcoGlobalListings after the validation guard', () => {
+  const guardIndex = routeSource.indexOf('if (!validation.success)');
+  const handoffIndex = routeSource.indexOf('const result = await getYatcoGlobalListings(validation.data);');
+  assert.notEqual(guardIndex, -1, 'missing the validation.success guard');
+  assert.notEqual(handoffIndex, -1, 'route.ts must call getYatcoGlobalListings(validation.data), not raw searchParams or a re-derived object');
+  assert.ok(handoffIndex > guardIndex, 'the validated-data handoff must happen after the guard rejects invalid params');
+});
+
 run('schema enforces bounds on freshnessHours/minLengthMeters/minYear instead of only defaulting them', () => {
   assert.equal(yatcoGlobalQuerySchema.safeParse({ freshnessHours: '0' }).success, false, 'freshnessHours must be positive');
   assert.equal(yatcoGlobalQuerySchema.safeParse({ freshnessHours: '8761' }).success, false, 'freshnessHours must respect its max bound');
@@ -220,6 +232,20 @@ run('getYatcoGlobalListings applies model_year/length_m/price_usd_min/price_usd_
   assert.ok(supabaseSource.includes("source_updated_at: 'source_updated_at'"), 'publication date must be sortable');
 });
 
+run('getYatcoGlobalListings applies freshnessHours/minLengthMeters/minYear as base filters before range()', () => {
+  const freshnessIndex = supabaseSource.indexOf("query = query.gte('source_updated_at', freshnessThreshold);");
+  const minLengthIndex = supabaseSource.indexOf("query = query.gt('length_m', minLengthMeters);");
+  const minYearIndex = supabaseSource.indexOf("query = query.gte('model_year', minYear);");
+  const rangeIndex = supabaseSource.indexOf('await query.range(from, to);');
+  assert.notEqual(freshnessIndex, -1, 'missing freshnessHours base filter on source_updated_at');
+  assert.notEqual(minLengthIndex, -1, 'missing minLengthMeters base filter on length_m');
+  assert.notEqual(minYearIndex, -1, 'missing minYear base filter on model_year');
+  assert.notEqual(rangeIndex, -1, 'missing query.range(from, to) pagination call');
+  assert.ok(freshnessIndex < rangeIndex, 'freshnessHours filter must be applied before range() pagination');
+  assert.ok(minLengthIndex < rangeIndex, 'minLengthMeters filter must be applied before range() pagination');
+  assert.ok(minYearIndex < rangeIndex, 'minYear filter must be applied before range() pagination');
+});
+
 run('page.tsx builds each T1 filter param when provided and omits it when empty', () => {
   for (const key of ['model_year', 'length_m', 'cabins', 'country', 'price_usd_min', 'price_usd_max']) {
     const pattern = key === 'length_m' || key === 'cabins'
@@ -227,6 +253,13 @@ run('page.tsx builds each T1 filter param when provided and omits it when empty'
       : new RegExp(`filters\\.${key}\\.trim\\(\\) !== ''\\) params\\.set\\('${key}', filters\\.${key}\\.trim\\(\\)\\)`);
     assert.ok(pattern.test(pageSource), `missing conditional, empty-omitting param build for ${key}`);
   }
+});
+
+run('page.tsx always sends freshnessHours and the current page as base params', () => {
+  assert.ok(
+    /new URLSearchParams\(\{\s*freshnessHours:\s*String\(FRESHNESS_HOURS\),\s*page:\s*String\(page\)\s*\}\)/.test(pageSource),
+    'buildYatcoGlobalParams must seed freshnessHours and page unconditionally, matching the server default contract'
+  );
 });
 
 run('page.tsx always sends the selected sort as sortBy/sortDir params', () => {
