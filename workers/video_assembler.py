@@ -109,7 +109,12 @@ def ensure_supabase_configured(env: Mapping[str, str] | None = None) -> None:
 
 @dataclass(frozen=True)
 class AssemblySettings:
-    timeout_s: float = 120.0
+    # 300s: the branding pass (logo overlay + per-frame drawtext, libx264)
+    # measured over 120s in production on real multi-clip Veo output once
+    # generation stopped failing before reaching assembly (previously
+    # untested against real clips). Also bounds clip download and the base
+    # concat pass, both comfortably under this on the same host.
+    timeout_s: float = 300.0
     max_retries: int = 3
     backoff_base_s: float = 1.0
     backoff_cap_s: float = 20.0
@@ -242,6 +247,15 @@ def default_storage_request(url: str, headers: dict[str, str], body: bytes | Non
 def _is_transient_storage_status(status_code: int) -> bool:
     """429/5xx are retried, same policy as ``yatco_aggregation.is_transient_status``."""
     return status_code == 429 or 500 <= status_code < 600
+
+
+def _is_transient_ffmpeg_error(exc: BaseException) -> bool:
+    """A subprocess timeout is CPU-contention, not a bad command — safe to
+    retry with the same inputs (same base video / overlay files on disk).
+    A non-zero exit (``AssemblyFfmpegError``) is a real filter-graph or
+    input problem and must stay definitive, never retried here.
+    """
+    return isinstance(exc, (AssemblyTransientError, subprocess.TimeoutExpired))
 
 
 class SupabaseStoragePublishCheckpoint:
@@ -591,7 +605,7 @@ def assemble_and_publish(
 
             run_with_retry(
                 _invoke,
-                is_transient=lambda exc: isinstance(exc, AssemblyTransientError),
+                is_transient=_is_transient_ffmpeg_error,
                 max_retries=settings.max_retries,
                 backoff_base_s=settings.backoff_base_s,
                 backoff_cap_s=settings.backoff_cap_s,
@@ -625,14 +639,31 @@ def assemble_and_publish(
                     logo_path,
                     text_files,
                 )
-                branded_result = run(
-                    branding_command,
-                    capture_output=True,
-                    timeout=settings.timeout_s,
-                    check=False,
+
+                def _invoke_branding() -> subprocess.CompletedProcess:
+                    branded_result = run(
+                        branding_command,
+                        capture_output=True,
+                        timeout=settings.timeout_s,
+                        check=False,
+                    )
+                    if branded_result.returncode != 0:
+                        raise AssemblyFfmpegError(branded_result.returncode, branded_result.stderr or b"")
+                    return branded_result
+
+                run_with_retry(
+                    _invoke_branding,
+                    is_transient=_is_transient_ffmpeg_error,
+                    max_retries=settings.max_retries,
+                    backoff_base_s=settings.backoff_base_s,
+                    backoff_cap_s=settings.backoff_cap_s,
+                    sleep=sleep,
+                    rand=rand,
+                    jitter_ratio=settings.jitter_ratio,
+                    on_retry=lambda attempt, delay: LOGGER.warning(
+                        "ffmpeg branding retry %s/%s in %.3fs", attempt, settings.max_retries, delay
+                    ),
                 )
-                if branded_result.returncode != 0:
-                    raise AssemblyFfmpegError(branded_result.returncode, branded_result.stderr or b"")
                 output_path = branded_output_path
 
             output_bytes = output_path.read_bytes()
