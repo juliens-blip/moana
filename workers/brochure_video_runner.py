@@ -68,7 +68,8 @@ from workers.pdf_image_extractor import (
     group_entries_by_section,
 )
 from workers.startup_checks import (
-    GEMINI_API_KEY_VAR,
+    GEMINI_API_KEY_PAYFUL_VAR,
+    GEMINI_FREE_TIER_API_KEY_VAR,
     ROOT,
     load_worker_environment,
     validate_worker_startup,
@@ -103,7 +104,8 @@ from workers.video_assembler import (
 LOGGER = logging.getLogger("moana.brochure_video_runner")
 
 JOB_TIMEOUT_S = 600.0
-CREATIVE_PIPELINE_VERSION = "editorial-branding-v1"
+CREATIVE_PIPELINE_VERSION = "editorial-branding-v3-five-sections"
+MAX_VIDEO_CLIPS = 5
 _MAX_REASON_LENGTH = 500
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -132,6 +134,30 @@ class BrochureEditorialDirectionError(BrochureVideoRunnerError):
 def build_creative_idempotency_key(document_digest: str) -> str:
     """Version the final montage cache while keeping Veo clip checkpoints reusable."""
     return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}".encode("utf-8")).hexdigest()
+
+
+def select_video_entries(entries: Sequence[ManifestEntry], limit: int = MAX_VIDEO_CLIPS) -> tuple[ManifestEntry, ...]:
+    """Keep one representative image per editorial section, up to ``limit``.
+
+    ``group_entries_by_section`` groups the manifest, but Veo consumes flat
+    entries and therefore used to generate one clip for every image. Selecting
+    the first non-logo image of each section restores the product contract:
+    five editorial sections mean at most five generated clips.
+    """
+    ordered = tuple(entries)
+    if limit < 1:
+        raise ValueError("video entry limit must be positive")
+    selected: list[ManifestEntry] = []
+    seen_sections: set[str] = set()
+    for entry in ordered:
+        section_key = entry.section.casefold().strip()
+        if section_key in seen_sections:
+            continue
+        seen_sections.add(section_key)
+        selected.append(entry)
+        if len(selected) == limit:
+            break
+    return tuple(selected)
 
 
 def _validate_job_id(job_id: str) -> str:
@@ -373,9 +399,10 @@ def run_brochure_video_job(
                 (entry for entry in manifest.entries if entry.image_id == editorial_plan.logo_image_id),
                 None,
             )
-            video_entries = tuple(
+            eligible_video_entries = tuple(
                 entry for entry in manifest.entries if entry.image_id != editorial_plan.logo_image_id
             )
+            video_entries = select_video_entries(eligible_video_entries)
             video_manifest = PdfImageManifest(
                 document_digest=manifest.document_digest,
                 entries=video_entries,
@@ -616,13 +643,34 @@ class GeminiVeoTransport:
                 return json.loads(response.read())
         except urllib.error.HTTPError as exc:
             detail = ""
+            quota_summary = ""
             try:
                 payload = json.loads(exc.read())
-                detail = str(payload.get("error", {}).get("message", ""))
+                error_payload = payload.get("error", {})
+                detail = str(error_payload.get("message", ""))
+                quota_parts: list[str] = []
+                for item in error_payload.get("details", []):
+                    if not isinstance(item, dict):
+                        continue
+                    for violation in item.get("violations", []):
+                        if not isinstance(violation, dict):
+                            continue
+                        metric = violation.get("quotaMetric") or violation.get("quotaId")
+                        dimensions = violation.get("quotaDimensions")
+                        if metric:
+                            quota_parts.append(f"quota={metric}")
+                        if isinstance(dimensions, dict) and dimensions:
+                            rendered = ",".join(f"{key}={value}" for key, value in sorted(dimensions.items()))
+                            quota_parts.append(f"dimensions={rendered}")
+                    retry_delay = item.get("retryDelay")
+                    if retry_delay:
+                        quota_parts.append(f"retry_after={retry_delay}")
+                quota_summary = "; ".join(quota_parts)
             except (json.JSONDecodeError, AttributeError, TypeError):
                 pass
+            summary = f" ({quota_summary[:400]})" if quota_summary else ""
             suffix = f": {detail[:300]}" if detail else ""
-            message = f"gemini veo request failed with status {exc.code}{suffix}"
+            message = f"gemini veo request failed with status {exc.code}{summary}{suffix}"
             if exc.code == 429 or 500 <= exc.code < 600:
                 raise VeoTransientError(message) from exc
             raise RuntimeError(message) from exc
@@ -636,7 +684,7 @@ class GeminiVeoTransport:
                     "prompt": prompt,
                     "image": {
                         "bytesBase64Encoded": base64.b64encode(entry.image_data).decode("ascii"),
-                        "mimeType": "image/jpeg",
+                        "mimeType": entry.mime_type,
                     },
                 }],
                 "parameters": {"durationSeconds": int(CLIP_DURATION_S)},
@@ -713,10 +761,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     supabase_url = os.environ[SUPABASE_URL_VAR]
     supabase_key = os.environ[SUPABASE_SERVICE_ROLE_KEY_VAR]
-    gemini_api_key = os.environ[GEMINI_API_KEY_VAR]
+    flash_api_key = os.environ[GEMINI_FREE_TIER_API_KEY_VAR]
+    veo_api_key = os.environ[GEMINI_API_KEY_PAYFUL_VAR]
     editorial_director = make_gemini_brochure_director(
-        GeminiFlashBrochureDirectorTransport(gemini_api_key),
-        settings=ClassificationSettings(max_retries=0),
+        GeminiFlashBrochureDirectorTransport(flash_api_key),
+        # Un seul appel qui embarque le PDF entier + toutes les images extraites
+        # en multimodal : le défaut de 30s (calibré pour la classification
+        # image-par-image) expire systématiquement avant que Gemini ait fini de
+        # générer le plan éditorial complet.
+        settings=ClassificationSettings(max_retries=0, timeout_s=180.0),
     )
 
     pdf_path, manifest_marker_path, state_dir = _default_job_paths(job_id)
@@ -726,7 +779,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest_marker_path=manifest_marker_path,
         upload_ref=f"uploads/{job_id}/input.pdf",
         state_store=AtomicJobStateStore(state_dir),
-        veo_transport=GeminiVeoTransport(gemini_api_key),
+        veo_transport=GeminiVeoTransport(veo_api_key),
         veo_checkpoint=SupabaseVeoStorageCheckpoint(supabase_url, supabase_key),
         clip_source=SupabaseClipSource(supabase_url, supabase_key),
         publish_checkpoint=SupabaseStoragePublishCheckpoint(supabase_url, supabase_key),
