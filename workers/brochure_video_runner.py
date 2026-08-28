@@ -107,7 +107,15 @@ from workers.video_assembler import (
 
 LOGGER = logging.getLogger("moana.brochure_video_runner")
 
-JOB_TIMEOUT_S = 600.0
+# 3600s: up to MAX_VIDEO_CLIPS (5) sequential Vertex Veo generations, each
+# budgeted up to VeoSettings.timeout_s (240s) with one retry, plus ffmpeg
+# assembly/branding (each retried up to AssemblySettings.timeout_s x 3).
+# 600s dated from before Veo ever actually reached this phase in production
+# (quota/config failures always struck first) and was never validated
+# against real generation latency. The systemd unit's own TimeoutStartSec
+# must stay above this value (see moana-brochure-video@.service) so this
+# check fires cleanly before the OS kills the process outright.
+JOB_TIMEOUT_S = 3600.0
 CREATIVE_PIPELINE_VERSION = "editorial-branding-v3-five-sections"
 MAX_VIDEO_CLIPS = 5
 _MAX_REASON_LENGTH = 500

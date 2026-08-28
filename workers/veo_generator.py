@@ -155,7 +155,13 @@ class StorageCheckpoint(Protocol):
 
 @dataclass(frozen=True)
 class VeoSettings:
-    timeout_s: float = 60.0
+    # 240s: a Vertex AI Veo generate_videos operation is a long-running poll
+    # (Google recommends checking every 10-15s) that has taken several
+    # minutes for a real clip in manual testing — 60s dated from before this
+    # transport ever reached a real generation in production and was never
+    # measured against actual latency. A larger budget is harmless for
+    # GeminiVeoTransport too (it only ever waits less).
+    timeout_s: float = 240.0
     max_retries: int = 1
     backoff_base_s: float = 10.0
     backoff_cap_s: float = 60.0

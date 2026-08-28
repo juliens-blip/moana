@@ -8,4 +8,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/moana
 ExecStart=/usr/bin/flock -n /run/lock/moana-brochure-video-%i.lock -c '/home/ubuntu/moana/.venv/bin/python3 -m workers.brochure_video_runner %i'
-TimeoutStartSec=600
+# Must stay above workers/brochure_video_runner.py's JOB_TIMEOUT_S (3600s)
+# so that internal check can dead-letter cleanly before systemd SIGTERMs
+# the process outright.
+TimeoutStartSec=3900

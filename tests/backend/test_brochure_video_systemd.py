@@ -39,7 +39,8 @@ def test_systemd_template_passes_instance_id() -> None:
     assert "%i" in exec_start[0], "ExecStart must forward the systemd instance (%i) as the job id"
 
     assert "Type=oneshot" in service_lines
-    assert "TimeoutStartSec=600" in service_lines
+    # Must stay above workers/brochure_video_runner.py's JOB_TIMEOUT_S (3600s).
+    assert "TimeoutStartSec=3900" in service_lines
 
 
 def test_systemd_unit_has_no_hardcoded_secret() -> None:
