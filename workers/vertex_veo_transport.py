@@ -170,14 +170,32 @@ class VertexVeoTransport:
         if operation.error:
             raise RuntimeError(f"vertex veo generation failed: {operation.error}")
 
-        try:
-            generated = operation.result.generated_videos[0]
-            video_bytes = generated.video.video_bytes
-        except (AttributeError, IndexError, TypeError) as exc:
-            raise RuntimeError("vertex veo operation response missing generated video bytes") from exc
+        result = operation.result
+        generated_videos = getattr(result, "generated_videos", None) if result is not None else None
+        if not generated_videos:
+            # An empty result with no ``operation.error`` is Vertex's shape for
+            # Responsible AI content filtering: the request succeeded but no
+            # video was produced. Surfacing the filter count/reasons (when the
+            # SDK response carries them) is the only way to diagnose this from
+            # the job log instead of a bare "missing video bytes".
+            filtered_count = getattr(result, "rai_media_filtered_count", None)
+            filtered_reasons = getattr(result, "rai_media_filtered_reasons", None)
+            raise RuntimeError(
+                "vertex veo operation returned no generated videos "
+                f"(rai_media_filtered_count={filtered_count}, rai_media_filtered_reasons={filtered_reasons})"
+            )
 
+        video = getattr(generated_videos[0], "video", None)
+        video_bytes = getattr(video, "video_bytes", None) if video is not None else None
         if not video_bytes:
-            raise RuntimeError("vertex veo operation returned empty video bytes")
+            # Some Veo configurations (an explicit output GCS URI) return the
+            # clip as a Cloud Storage reference instead of inline bytes. This
+            # transport only ever requests inline bytes (no output_gcs_uri is
+            # set above), so a bare ``uri`` here means Vertex changed shape
+            # underneath us, not that the request failed — worth surfacing,
+            # not worth guessing a download implementation for.
+            uri = getattr(video, "uri", None) if video is not None else None
+            raise RuntimeError(f"vertex veo operation returned no inline video bytes (uri={uri!r})")
         return video_bytes
 
 
