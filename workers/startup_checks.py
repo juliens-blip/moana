@@ -29,9 +29,24 @@ GEMINI_API_KEY_PAYFUL_VAR = "GEMINI_API_KEY_PAYFUL"
 SUPABASE_URL_VAR = "SUPABASE_URL"
 SUPABASE_KEY_VAR = "SUPABASE_KEY"
 
+# Veo provider selection — never a secret, read directly from the process
+# environment (not the moana/.env.local-then-.env secret boundary below).
+VEO_PROVIDER_VAR = "VEO_PROVIDER"
+VEO_PROVIDER_VERTEX = "vertex"
+VEO_PROVIDER_GEMINI_AI_STUDIO = "gemini_ai_studio"
+_DEFAULT_VEO_PROVIDER = VEO_PROVIDER_VERTEX
+
+GCP_PROJECT_ID_VAR = "GCP_PROJECT_ID"
+GOOGLE_APPLICATION_CREDENTIALS_VAR = "GOOGLE_APPLICATION_CREDENTIALS"
+
+# Always required regardless of VEO_PROVIDER: PDF/text classification
+# (GEMINI_FREE_TIER_API_KEY) and Supabase Storage are on every job's path.
+# GEMINI_API_KEY_PAYFUL is deliberately absent here — it is now conditional
+# on VEO_PROVIDER=gemini_ai_studio (see _check_veo_provider_config), so a
+# worker configured for Vertex is never blocked at startup by a paid AI
+# Studio key it no longer uses.
 _TARGET_SECRET_VARS = (
     GEMINI_FREE_TIER_API_KEY_VAR,
-    GEMINI_API_KEY_PAYFUL_VAR,
     SUPABASE_URL_VAR,
     SUPABASE_KEY_VAR,
 )
@@ -109,6 +124,54 @@ def _check_target_secrets(resolver: TargetSecretResolver) -> None:
             raise WorkerConfigurationError(f"Invalid configuration format: {var} (source: {source})")
 
 
+def _resolve_veo_provider(env: Mapping[str, str]) -> str:
+    raw = env.get(VEO_PROVIDER_VAR, "").strip().lower()
+    return raw or _DEFAULT_VEO_PROVIDER
+
+
+def _check_vertex_veo_config(env: Mapping[str, str]) -> None:
+    project_id = env.get(GCP_PROJECT_ID_VAR, "").strip()
+    if not project_id:
+        raise WorkerConfigurationError(f"Missing configuration: {GCP_PROJECT_ID_VAR}")
+    credentials_path = env.get(GOOGLE_APPLICATION_CREDENTIALS_VAR, "").strip()
+    if not credentials_path:
+        raise WorkerConfigurationError(f"Missing configuration: {GOOGLE_APPLICATION_CREDENTIALS_VAR}")
+    if not Path(credentials_path).is_file():
+        raise WorkerConfigurationError(
+            f"Invalid configuration: {GOOGLE_APPLICATION_CREDENTIALS_VAR} does not point to an existing file"
+        )
+
+
+def _check_gemini_ai_studio_veo_config(resolver: TargetSecretResolver) -> None:
+    value, source = resolver(GEMINI_API_KEY_PAYFUL_VAR)
+    if source == "absent" or value is None:
+        raise WorkerConfigurationError(
+            f"Missing configuration: {GEMINI_API_KEY_PAYFUL_VAR} "
+            f"(required when {VEO_PROVIDER_VAR}={VEO_PROVIDER_GEMINI_AI_STUDIO})"
+        )
+    if not _SECRET_FORMAT_VALIDATORS[GEMINI_API_KEY_PAYFUL_VAR](value.strip()):
+        raise WorkerConfigurationError(f"Invalid configuration format: {GEMINI_API_KEY_PAYFUL_VAR} (source: {source})")
+
+
+def _check_veo_provider_config(env: Mapping[str, str], resolver: TargetSecretResolver) -> None:
+    """Branch startup validation on VEO_PROVIDER: exactly one Veo credential
+    set is required, never both.
+
+    ``vertex`` (default) requires GCP_PROJECT_ID and a
+    GOOGLE_APPLICATION_CREDENTIALS file that actually exists on disk.
+    ``gemini_ai_studio`` (rollback only) requires GEMINI_API_KEY_PAYFUL,
+    format-checked the same way as every other target secret. This is a
+    local, format/existence-only check — no network call — to keep startup
+    validation fast; a live probe of a rollback AI Studio key belongs in a
+    manual verification script, not on every job's startup path.
+    """
+    provider = _resolve_veo_provider(env)
+    if provider == VEO_PROVIDER_GEMINI_AI_STUDIO:
+        _check_gemini_ai_studio_veo_config(resolver)
+    else:
+        _check_vertex_veo_config(env)
+
+
 def _check_ffmpeg(run: RunFn) -> None:
     try:
         result = run(["ffmpeg", "-version"], capture_output=True, text=True, check=False, timeout=10)
@@ -130,13 +193,16 @@ def validate_worker_startup(
     GEMINI_API_KEY is checked first so a missing key fails fast without ever
     invoking ``run`` (mirrors ``workers/deploy/deploy.py``'s check order: no
     external probe is attempted once local configuration is known invalid).
-    GEMINI_FREE_TIER_API_KEY, GEMINI_API_KEY_PAYFUL, SUPABASE_URL and
-    SUPABASE_KEY are then each resolved via ``target_secret_resolver``
-    (default: ``_load_target_secret``, which only ever reads
-    moana/.env.local and moana/.env — never software_factory/.env, never
-    ``os.environ`` directly, so a value inherited from the Factory's own
-    shell can never pass as Moana-provided configuration) and validated for
-    presence and format. Never logs or returns the value of any secret.
+    GEMINI_FREE_TIER_API_KEY, SUPABASE_URL and SUPABASE_KEY are then each
+    resolved via ``target_secret_resolver`` (default: ``_load_target_secret``,
+    which only ever reads moana/.env.local and moana/.env — never
+    software_factory/.env, never ``os.environ`` directly, so a value
+    inherited from the Factory's own shell can never pass as Moana-provided
+    configuration) and validated for presence and format. The Veo credential
+    set is then checked based on VEO_PROVIDER (default ``vertex``): either
+    GCP_PROJECT_ID/GOOGLE_APPLICATION_CREDENTIALS, or — only when explicitly
+    rolled back to ``gemini_ai_studio`` — GEMINI_API_KEY_PAYFUL. Never logs
+    or returns the value of any secret.
     """
     if env is None:
         load_worker_environment()
@@ -146,6 +212,7 @@ def validate_worker_startup(
     _check_gemini_api_key(active_env)
     resolver = target_secret_resolver if target_secret_resolver is not None else _load_target_secret
     _check_target_secrets(resolver)
+    _check_veo_provider_config(active_env, resolver)
     _check_ffmpeg(run)
 
 

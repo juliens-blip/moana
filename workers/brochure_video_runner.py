@@ -71,6 +71,9 @@ from workers.startup_checks import (
     GEMINI_API_KEY_PAYFUL_VAR,
     GEMINI_FREE_TIER_API_KEY_VAR,
     ROOT,
+    VEO_PROVIDER_GEMINI_AI_STUDIO,
+    VEO_PROVIDER_VAR,
+    VEO_PROVIDER_VERTEX,
     load_worker_environment,
     validate_worker_startup,
 )
@@ -86,6 +89,7 @@ from workers.veo_generator import (
 from workers.veo_generator import (
     StorageCheckpoint as VeoStorageCheckpoint,
 )
+from workers.vertex_veo_transport import build_vertex_veo_transport
 from workers.video_assembler import (
     SUPABASE_SERVICE_ROLE_KEY_VAR,
     SUPABASE_URL_VAR,
@@ -721,6 +725,25 @@ class GeminiVeoTransport:
             raise RuntimeError(f"gemini veo video download failed with status {exc.code}") from exc
 
 
+def select_veo_transport(env: Mapping[str, str]) -> VeoTransport:
+    """Pick the production ``VeoTransport`` from ``VEO_PROVIDER`` (default ``vertex``).
+
+    ``vertex`` builds ``VertexVeoTransport`` (Vertex AI Veo, Application
+    Default Credentials / ``GOOGLE_APPLICATION_CREDENTIALS`` — never
+    ``GEMINI_API_KEY_PAYFUL``). ``gemini_ai_studio`` is a rollback-only path
+    that builds the original ``GeminiVeoTransport`` (Gemini AI Studio's paid
+    ``generativelanguage.googleapis.com`` API), reading
+    ``GEMINI_API_KEY_PAYFUL`` — the only place this module still reads that
+    variable. ``workers/startup_checks.py``'s ``validate_worker_startup``
+    already confirmed the credential set matching this same provider choice
+    exists before ``main`` ever calls this function.
+    """
+    provider = env.get(VEO_PROVIDER_VAR, "").strip().lower() or VEO_PROVIDER_VERTEX
+    if provider == VEO_PROVIDER_GEMINI_AI_STUDIO:
+        return GeminiVeoTransport(env[GEMINI_API_KEY_PAYFUL_VAR])
+    return build_vertex_veo_transport(env)
+
+
 def _default_job_paths(job_id: str) -> tuple[Path, Path, Path]:
     """Convention-based job layout: ``{JOBS_ROOT}/{job_id}/{input.pdf,manifest.json}``.
 
@@ -762,7 +785,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     supabase_url = os.environ[SUPABASE_URL_VAR]
     supabase_key = os.environ[SUPABASE_SERVICE_ROLE_KEY_VAR]
     flash_api_key = os.environ[GEMINI_FREE_TIER_API_KEY_VAR]
-    veo_api_key = os.environ[GEMINI_API_KEY_PAYFUL_VAR]
     editorial_director = make_gemini_brochure_director(
         GeminiFlashBrochureDirectorTransport(flash_api_key),
         # Un seul appel qui embarque le PDF entier + toutes les images extraites
@@ -779,7 +801,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest_marker_path=manifest_marker_path,
         upload_ref=f"uploads/{job_id}/input.pdf",
         state_store=AtomicJobStateStore(state_dir),
-        veo_transport=GeminiVeoTransport(veo_api_key),
+        veo_transport=select_veo_transport(os.environ),
         veo_checkpoint=SupabaseVeoStorageCheckpoint(supabase_url, supabase_key),
         clip_source=SupabaseClipSource(supabase_url, supabase_key),
         publish_checkpoint=SupabaseStoragePublishCheckpoint(supabase_url, supabase_key),

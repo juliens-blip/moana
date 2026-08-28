@@ -25,11 +25,16 @@ from workers.job_contract import (
     UploadStatusResultJob,
 )
 from workers.startup_checks import (
+    GCP_PROJECT_ID_VAR,
     GEMINI_API_KEY_PAYFUL_VAR,
     GEMINI_API_KEY_VAR,
     GEMINI_FREE_TIER_API_KEY_VAR,
+    GOOGLE_APPLICATION_CREDENTIALS_VAR,
     SUPABASE_KEY_VAR,
     SUPABASE_URL_VAR,
+    VEO_PROVIDER_GEMINI_AI_STUDIO,
+    VEO_PROVIDER_VAR,
+    VEO_PROVIDER_VERTEX,
     WorkerConfigurationError,
     secret_probe_report,
     target_secret_probe_report,
@@ -51,7 +56,17 @@ _VALID_TARGET_SECRETS: dict[str, tuple[str, str]] = {
     SUPABASE_KEY_VAR: (FAKE_SUPABASE_KEY, "moana/.env"),
 }
 
-_TARGET_SECRET_VARS = tuple(_VALID_TARGET_SECRETS)
+# Always required regardless of VEO_PROVIDER — mirrors
+# workers/startup_checks.py's own _TARGET_SECRET_VARS. GEMINI_API_KEY_PAYFUL
+# is deliberately excluded: it is now conditional on
+# VEO_PROVIDER=gemini_ai_studio, covered separately below.
+_TARGET_SECRET_VARS = (GEMINI_FREE_TIER_API_KEY_VAR, SUPABASE_URL_VAR, SUPABASE_KEY_VAR)
+
+# Shorthand for the tests below that only care about GEMINI_API_KEY_PAYFUL's
+# resolver-based validation (rollback provider) and don't want to also stand
+# up a real GOOGLE_APPLICATION_CREDENTIALS file just to reach the ffmpeg/base
+# secret checks they actually exercise.
+_GEMINI_AI_STUDIO_ENV = {VEO_PROVIDER_VAR: VEO_PROVIDER_GEMINI_AI_STUDIO}
 
 
 def _valid_target_secret_resolver(var: str) -> tuple[str, str]:
@@ -247,7 +262,7 @@ def test_blank_gemini_api_key_raises_explicit_error() -> None:
 
 def test_valid_startup_passes_with_key_present_and_ffmpeg_ok() -> None:
     validate_worker_startup(
-        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY},
+        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
         run=_ok_run,
         target_secret_resolver=_valid_target_secret_resolver,
     )
@@ -264,6 +279,7 @@ def test_validate_worker_startup_loads_environment_when_env_is_none(
         monkeypatch.setenv(GEMINI_API_KEY_VAR, FAKE_GEMINI_KEY)
 
     monkeypatch.setattr(startup_checks, "load_worker_environment", fake_load_worker_environment)
+    monkeypatch.setenv(VEO_PROVIDER_VAR, VEO_PROVIDER_GEMINI_AI_STUDIO)
 
     validate_worker_startup(run=_ok_run, target_secret_resolver=_valid_target_secret_resolver)
 
@@ -295,7 +311,7 @@ def test_ffmpeg_command_is_invoked_with_version_flag() -> None:
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     validate_worker_startup(
-        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY},
+        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
         run=recording_run,
         target_secret_resolver=_valid_target_secret_resolver,
     )
@@ -305,7 +321,7 @@ def test_ffmpeg_command_is_invoked_with_version_flag() -> None:
 def test_ffmpeg_non_zero_exit_raises_explicit_error() -> None:
     with pytest.raises(WorkerConfigurationError) as excinfo:
         validate_worker_startup(
-            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY},
+            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
             run=_failing_run,
             target_secret_resolver=_valid_target_secret_resolver,
         )
@@ -318,7 +334,7 @@ def test_ffmpeg_not_installed_raises_explicit_error() -> None:
 
     with pytest.raises(WorkerConfigurationError) as excinfo:
         validate_worker_startup(
-            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY},
+            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
             run=missing_binary_run,
             target_secret_resolver=_valid_target_secret_resolver,
         )
@@ -331,7 +347,6 @@ def test_ffmpeg_not_installed_raises_explicit_error() -> None:
 
 _INVALID_FORMAT_TARGET_SECRETS: dict[str, str] = {
     GEMINI_FREE_TIER_API_KEY_VAR: "short",
-    GEMINI_API_KEY_PAYFUL_VAR: "has a space in it and is long enough",
     SUPABASE_URL_VAR: "http://not-supabase.example.test",
     SUPABASE_KEY_VAR: "not-a-jwt-shaped-value",
 }
@@ -365,7 +380,9 @@ def test_target_secret_valid_format_from_expected_moana_source_passes(var: str) 
     assert source.startswith("moana/")
     resolver = _make_resolver({var: (valid_value, source)})
     validate_worker_startup(
-        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY}, run=_ok_run, target_secret_resolver=resolver
+        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
+        run=_ok_run,
+        target_secret_resolver=resolver,
     )
 
 
@@ -375,6 +392,143 @@ def test_target_secrets_are_checked_before_ffmpeg_probe() -> None:
         validate_worker_startup(
             env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY}, run=_unexpected_run, target_secret_resolver=resolver
         )
+
+
+# ---------------------------------------------------------------------------
+# validate_worker_startup — VEO_PROVIDER conditional Veo credentials
+# ---------------------------------------------------------------------------
+#
+# vertex (default): requires GCP_PROJECT_ID + an existing
+# GOOGLE_APPLICATION_CREDENTIALS file, never GEMINI_API_KEY_PAYFUL.
+# gemini_ai_studio (rollback only): requires GEMINI_API_KEY_PAYFUL via the
+# same resolver-based format check as every other target secret, and never
+# requires the GCP vars.
+
+
+def test_vertex_provider_is_the_default_when_veo_provider_is_unset() -> None:
+    """No VEO_PROVIDER at all behaves exactly like VEO_PROVIDER=vertex."""
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY},
+            run=_unexpected_run,
+            target_secret_resolver=_valid_target_secret_resolver,
+        )
+    assert GCP_PROJECT_ID_VAR in str(excinfo.value)
+
+
+def test_vertex_provider_missing_gcp_project_id_raises_explicit_error(tmp_path) -> None:
+    credentials_path = tmp_path / "vertex-veo.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={
+                GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY,
+                VEO_PROVIDER_VAR: VEO_PROVIDER_VERTEX,
+                GOOGLE_APPLICATION_CREDENTIALS_VAR: str(credentials_path),
+            },
+            run=_unexpected_run,
+            target_secret_resolver=_valid_target_secret_resolver,
+        )
+    assert GCP_PROJECT_ID_VAR in str(excinfo.value)
+
+
+def test_vertex_provider_missing_google_application_credentials_raises_explicit_error() -> None:
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={
+                GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY,
+                VEO_PROVIDER_VAR: VEO_PROVIDER_VERTEX,
+                GCP_PROJECT_ID_VAR: "project-69fdf43f-b2d1-40e0-a93",
+            },
+            run=_unexpected_run,
+            target_secret_resolver=_valid_target_secret_resolver,
+        )
+    assert GOOGLE_APPLICATION_CREDENTIALS_VAR in str(excinfo.value)
+
+
+def test_vertex_provider_credentials_path_must_point_to_an_existing_file(tmp_path) -> None:
+    missing_path = tmp_path / "does-not-exist.json"
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={
+                GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY,
+                VEO_PROVIDER_VAR: VEO_PROVIDER_VERTEX,
+                GCP_PROJECT_ID_VAR: "project-69fdf43f-b2d1-40e0-a93",
+                GOOGLE_APPLICATION_CREDENTIALS_VAR: str(missing_path),
+            },
+            run=_unexpected_run,
+            target_secret_resolver=_valid_target_secret_resolver,
+        )
+    assert GOOGLE_APPLICATION_CREDENTIALS_VAR in str(excinfo.value)
+
+
+def test_vertex_provider_never_requires_gemini_api_key_payful(tmp_path) -> None:
+    """A vertex-configured worker must not fail startup for a paid AI Studio
+    key it no longer uses, even when the resolver would raise on it."""
+    credentials_path = tmp_path / "vertex-veo.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+
+    def resolver(var: str) -> tuple[str | None, str]:
+        if var == GEMINI_API_KEY_PAYFUL_VAR:
+            raise AssertionError("GEMINI_API_KEY_PAYFUL must never be resolved under VEO_PROVIDER=vertex")
+        return _VALID_TARGET_SECRETS[var]
+
+    validate_worker_startup(
+        env={
+            GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY,
+            VEO_PROVIDER_VAR: VEO_PROVIDER_VERTEX,
+            GCP_PROJECT_ID_VAR: "project-69fdf43f-b2d1-40e0-a93",
+            GOOGLE_APPLICATION_CREDENTIALS_VAR: str(credentials_path),
+        },
+        run=_ok_run,
+        target_secret_resolver=resolver,
+    )
+
+
+def test_vertex_provider_valid_config_passes(tmp_path) -> None:
+    credentials_path = tmp_path / "vertex-veo.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    validate_worker_startup(
+        env={
+            GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY,
+            VEO_PROVIDER_VAR: VEO_PROVIDER_VERTEX,
+            GCP_PROJECT_ID_VAR: "project-69fdf43f-b2d1-40e0-a93",
+            GOOGLE_APPLICATION_CREDENTIALS_VAR: str(credentials_path),
+        },
+        run=_ok_run,
+        target_secret_resolver=_valid_target_secret_resolver,
+    )
+
+
+def test_gemini_ai_studio_provider_missing_payful_key_raises_explicit_error() -> None:
+    resolver = _make_resolver({GEMINI_API_KEY_PAYFUL_VAR: (None, "absent")})
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
+            run=_unexpected_run,
+            target_secret_resolver=resolver,
+        )
+    assert GEMINI_API_KEY_PAYFUL_VAR in str(excinfo.value)
+
+
+def test_gemini_ai_studio_provider_invalid_format_payful_key_raises_explicit_error() -> None:
+    resolver = _make_resolver({GEMINI_API_KEY_PAYFUL_VAR: ("has a space in it and is long enough", "moana/.env.local")})
+    with pytest.raises(WorkerConfigurationError) as excinfo:
+        validate_worker_startup(
+            env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
+            run=_unexpected_run,
+            target_secret_resolver=resolver,
+        )
+    assert GEMINI_API_KEY_PAYFUL_VAR in str(excinfo.value)
+
+
+def test_gemini_ai_studio_provider_valid_payful_key_passes() -> None:
+    """Also confirms a gemini_ai_studio rollback worker never needs GCP config."""
+    validate_worker_startup(
+        env={GEMINI_API_KEY_VAR: FAKE_GEMINI_KEY, **_GEMINI_AI_STUDIO_ENV},
+        run=_ok_run,
+        target_secret_resolver=_valid_target_secret_resolver,
+    )
 
 
 def test_target_secret_resolution_never_reads_software_factory_env(

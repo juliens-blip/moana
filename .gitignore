@@ -39,6 +39,11 @@ yarn-error.log*
 .env.kyc
 /secrets/
 
+# GCP service-account credentials (Vertex AI Veo) — never commit these
+secrets/*.json
+*vertex-veo*.json
+*.credentials.json
+
 # vercel
 .vercel
 
