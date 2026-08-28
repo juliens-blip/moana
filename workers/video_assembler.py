@@ -43,7 +43,13 @@ from workers.job_contract import JobError, JobPhase, JobStatus, UploadStatusResu
 
 LOGGER = logging.getLogger("moana.video_assembler")
 
+# libx264's default preset ("medium") observed taking 300s+ per pass on the
+# production EC2 host, which has only 2 vCPUs and 1.9GB RAM (swapping under
+# encode load). "veryfast" trades a modest bitrate increase at the same CRF
+# for a large CPU/wall-time cut — standard for constrained hosts, and this
+# output is a short web/social preview clip, not an archival master.
 VIDEO_CODEC = "libx264"
+VIDEO_ENCODE_PRESET = "veryfast"
 CONTAINER_FORMAT = "mp4"
 TRANSITION_TYPE = "fade"
 TRANSITION_DURATION_S = 1.0
@@ -462,7 +468,7 @@ def _build_ffmpeg_command(input_paths: Sequence[Path], output_path: Path, clip_d
             offset += clip_duration_s - TRANSITION_DURATION_S
         command += ["-filter_complex", ";".join(filters), "-map", f"[{prev_label}]"]
 
-    command += ["-c:v", VIDEO_CODEC, "-f", CONTAINER_FORMAT, str(output_path)]
+    command += ["-c:v", VIDEO_CODEC, "-preset", VIDEO_ENCODE_PRESET, "-f", CONTAINER_FORMAT, str(output_path)]
     return command
 
 
@@ -520,6 +526,7 @@ def _build_branding_ffmpeg_command(
         "-map", f"[{current}]",
         "-an",
         "-c:v", VIDEO_CODEC,
+        "-preset", VIDEO_ENCODE_PRESET,
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
     ]
