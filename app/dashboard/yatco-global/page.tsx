@@ -8,6 +8,7 @@ import { Button, Input, Select, SkeletonGrid, Modal } from '@/components/ui';
 import { YatcoGlobalCard } from '@/components/yatco-global';
 import type { ApiResponse, YatcoGlobalListingsResponse } from '@/lib/types';
 import type { YatcoFavoriteHistoryEntry, YatcoGlobalListing } from '@/lib/types';
+import { createRequestCoordinator } from '@/lib/yatco-global-request';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +128,11 @@ function YatcoGlobalPageInner() {
   const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requestIdRef = useRef(0);
+  // Owns the requestId that discards a response once a newer filter/sort
+  // change has superseded it. The coordinator is transport-agnostic — the
+  // fetch, ApiResponse decoding, and success/error handling stay below in
+  // fetchListings — see lib/yatco-global-request.ts.
+  const requestCoordinatorRef = useRef(createRequestCoordinator<ApiResponse<YatcoGlobalListingsResponse>>());
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<YatcoFavoriteHistoryEntry[]>([]);
   const [historyListing, setHistoryListing] = useState<YatcoGlobalListing | null>(null);
@@ -143,30 +148,29 @@ function YatcoGlobalPageInner() {
   }, []);
 
   const fetchListings = useCallback(async (targetFilters: YatcoGlobalFilters, targetPage: number) => {
-    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
-    try {
-      const params = buildYatcoGlobalParams(targetFilters, targetPage);
-      const response = await fetch(`/api/yatco-global?${params.toString()}`);
-      const data: ApiResponse<YatcoGlobalListingsResponse> = await response.json();
-      if (requestId !== requestIdRef.current) return;
-
-      if (data.success && data.data) {
-        setListings(data.data.listings);
-        setPagination(data.data.pagination);
-      } else {
-        setError(data.error || 'Erreur lors du chargement des annonces');
-        toast.error('Erreur lors du chargement des annonces');
+    const params = buildYatcoGlobalParams(targetFilters, targetPage);
+    const outcome = await requestCoordinatorRef.current(async () => {
+      try {
+        const response = await fetch(`/api/yatco-global?${params.toString()}`);
+        return (await response.json()) as ApiResponse<YatcoGlobalListingsResponse>;
+      } catch (err) {
+        console.error('Error fetching yatco-global listings:', err);
+        return { success: false, error: 'Erreur de connexion' };
       }
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      console.error('Error fetching yatco-global listings:', err);
-      setError('Erreur de connexion');
-      toast.error('Erreur de connexion');
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+    });
+    if (outcome.stale) return; // a later filter/sort change already superseded this call
+
+    const data = outcome.value;
+    if (data.success && data.data) {
+      setListings(data.data.listings);
+      setPagination(data.data.pagination);
+    } else {
+      setError(data.error || 'Erreur lors du chargement des annonces');
+      toast.error(data.error || 'Erreur lors du chargement des annonces');
     }
+    setLoading(false);
   }, []);
 
   // Load the latest EC2-ingested Supabase snapshot as soon as the page opens.
@@ -186,11 +190,18 @@ function YatcoGlobalPageInner() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [filters, page, pathname, router]);
 
+  // Always re-fetch on every filter/sort change — never gate on isLoading or
+  // on the current result count. Gating on `listings.length > 0` used to
+  // silently swallow the request when a change landed during the initial
+  // load or right after an empty `[]` result, leaving a stale filter
+  // rendered. requestCoordinatorRef already discards any response that a
+  // later call has superseded, so firing unconditionally here is safe even
+  // when the previous request is still in flight.
   const updateFilter = <K extends keyof YatcoGlobalFilters>(key: K, value: YatcoGlobalFilters[K]) => {
     const nextFilters = { ...filters, [key]: value };
     setFilters(nextFilters);
     setPage(1);
-    if (listings.length > 0) fetchListings(nextFilters, 1);
+    fetchListings(nextFilters, 1);
   };
 
   const handleSortChange = (value: string) => {
@@ -198,7 +209,7 @@ function YatcoGlobalPageInner() {
     const nextFilters = { ...filters, sortBy: option.sortBy, sortDir: option.sortDir };
     setFilters(nextFilters);
     setPage(1);
-    if (listings.length > 0) fetchListings(nextFilters, 1);
+    fetchListings(nextFilters, 1);
   };
 
   const handleFavoriteChange = async (listingId: string, favorite: boolean) => {
