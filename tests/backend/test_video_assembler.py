@@ -16,7 +16,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import subprocess
+import tempfile
+import time
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +31,7 @@ from workers.video_assembler import (
     SUPABASE_DB_URL_VAR,
     SUPABASE_SERVICE_ROLE_KEY_VAR,
     SUPABASE_URL_VAR,
+    TEMP_DIR_PREFIX,
     VIDEO_CODEC,
     AssemblyConfigurationError,
     AssemblyFfmpegError,
@@ -35,6 +40,7 @@ from workers.video_assembler import (
     InMemoryPublishCheckpoint,
     PublishedArtifact,
     SupabaseStoragePublishCheckpoint,
+    _cleanup_stale_temp_dirs,
     assemble_and_publish,
     ensure_supabase_configured,
 )
@@ -900,3 +906,43 @@ def test_existing_contract_alignment() -> None:
         env=FAKE_SUPABASE_ENV,
     )
     assert job.status == JobStatus.DONE.value
+
+
+# --- _cleanup_stale_temp_dirs: orphaned job temp dirs on a RAM-backed /tmp ---
+
+
+def _set_mtime(path: Path, age_s: float) -> None:
+    stamp = time.time() - age_s
+    os.utime(path, (stamp, stamp))
+
+
+def test_cleanup_stale_temp_dirs_removes_old_matching_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    stale = tmp_path / f"{TEMP_DIR_PREFIX}orphaned123"
+    stale.mkdir()
+    _set_mtime(stale, age_s=10000.0)
+
+    _cleanup_stale_temp_dirs(max_age_s=7200.0)
+
+    assert not stale.exists()
+
+
+def test_cleanup_stale_temp_dirs_leaves_recent_dirs_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    recent = tmp_path / f"{TEMP_DIR_PREFIX}inflight456"
+    recent.mkdir()
+
+    _cleanup_stale_temp_dirs(max_age_s=7200.0)
+
+    assert recent.exists()
+
+
+def test_cleanup_stale_temp_dirs_ignores_non_matching_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    unrelated = tmp_path / "some-other-app-tmp"
+    unrelated.mkdir()
+    _set_mtime(unrelated, age_s=10000.0)
+
+    _cleanup_stale_temp_dirs(max_age_s=7200.0)
+
+    assert unrelated.exists()

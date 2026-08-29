@@ -51,6 +51,17 @@ LOGGER = logging.getLogger("moana.video_assembler")
 VIDEO_CODEC = "libx264"
 VIDEO_ENCODE_PRESET = "veryfast"
 CONTAINER_FORMAT = "mp4"
+TEMP_DIR_PREFIX = "video-assembler-"
+
+# A job killed mid-assembly (systemd timeout, manual systemctl stop, OOM)
+# never runs tempfile.TemporaryDirectory's cleanup — SIGTERM/SIGKILL skip
+# context-manager __exit__ entirely. On this production host /tmp is a
+# small RAM-backed tmpfs (~950MB): a handful of orphaned clip/output files
+# left behind this way is enough to exhaust it, which then makes every
+# subsequent ffmpeg encode pathologically slow (memory pressure, swapping)
+# well before it makes anything fail outright. Swept once per assembly
+# attempt, not on a timer, so it never depends on a separate cron/process.
+STALE_TEMP_DIR_MAX_AGE_S = 7200.0
 TRANSITION_TYPE = "fade"
 TRANSITION_DURATION_S = 1.0
 
@@ -253,6 +264,37 @@ def default_storage_request(url: str, headers: dict[str, str], body: bytes | Non
 def _is_transient_storage_status(status_code: int) -> bool:
     """429/5xx are retried, same policy as ``yatco_aggregation.is_transient_status``."""
     return status_code == 429 or 500 <= status_code < 600
+
+
+def _cleanup_stale_temp_dirs(
+    now: Callable[[], float] = time.time,
+    max_age_s: float = STALE_TEMP_DIR_MAX_AGE_S,
+) -> None:
+    """Best-effort sweep of orphaned ``TEMP_DIR_PREFIX`` directories.
+
+    Only ever touches entries this module itself created (matched by exact
+    prefix, directly under ``tempfile.gettempdir()``) and only once they are
+    old enough that no legitimate job could still be using them — well
+    beyond ``JOB_TIMEOUT_S``. Never raises: a failed removal (permissions,
+    already gone) must not block the actual assembly this call precedes.
+    """
+    import shutil
+
+    root = Path(tempfile.gettempdir())
+    try:
+        entries = list(root.glob(f"{TEMP_DIR_PREFIX}*"))
+    except OSError:
+        return
+    for entry in entries:
+        try:
+            if not entry.is_dir():
+                continue
+            if now() - entry.stat().st_mtime < max_age_s:
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
+            LOGGER.warning("removed stale temp directory %s", entry)
+        except OSError:
+            continue
 
 
 def _is_transient_ffmpeg_error(exc: BaseException) -> bool:
@@ -574,9 +616,10 @@ def assemble_and_publish(
         raise ValueError("clips must have unique image_id entries")
 
     settings = settings or AssemblySettings()
+    _cleanup_stale_temp_dirs()
 
     def produce() -> tuple[PublishedArtifact, bytes]:
-        with tempfile.TemporaryDirectory(prefix="video-assembler-") as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix=TEMP_DIR_PREFIX) as tmp_dir:
             tmp_path = Path(tmp_dir)
             input_paths: list[Path] = []
             for clip in clips:
