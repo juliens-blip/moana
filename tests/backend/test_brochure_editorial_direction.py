@@ -103,7 +103,7 @@ def test_director_prompt_demands_real_broker_logo_and_sparse_verified_facts() ->
     assert "invented claims" in prompt
 
 
-def test_runner_skips_logo_clip_and_adds_persistent_logo_title_and_three_facts(tmp_path) -> None:
+def test_runner_skips_logo_clip_and_adds_persistent_logo_watermark_only(tmp_path) -> None:
     pdf_bytes = _two_image_pdf()
     pdf_path, marker_path = _write_job_inputs(tmp_path, pdf_bytes)
     digest = hashlib.sha256(pdf_bytes).hexdigest()
@@ -156,8 +156,12 @@ def test_runner_skips_logo_clip_and_adds_persistent_logo_title_and_three_facts(t
     filter_graph = branding_command[branding_command.index("-filter_complex") + 1]
     assert "colorchannelmixer=aa=0.10" in filter_graph
     assert "overlay=W-w-W*0.025:H-h-H*0.035" in filter_graph
-    assert filter_graph.count("drawtext=") == 4, "one yacht title plus three facts maximum"
+    assert "drawtext=" not in filter_graph, "editorial text overlays were dropped: too slow on production hardware"
     assert "-shortest" in branding_command
+    assert branding_command[branding_command.index("-t") + 1] == "5.00", (
+        "-t must bound the output to the base video's real duration: -shortest alone does not "
+        "reliably terminate a -loop 1 (infinite) logo input routed through filter_complex"
+    )
 
 
 def test_runner_fails_before_veo_when_required_editorial_direction_is_unavailable(tmp_path) -> None:

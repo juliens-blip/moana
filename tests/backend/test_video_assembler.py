@@ -40,6 +40,7 @@ from workers.video_assembler import (
     InMemoryPublishCheckpoint,
     PublishedArtifact,
     SupabaseStoragePublishCheckpoint,
+    _build_branding_ffmpeg_command,
     _cleanup_stale_temp_dirs,
     assemble_and_publish,
     ensure_supabase_configured,
@@ -946,3 +947,30 @@ def test_cleanup_stale_temp_dirs_ignores_non_matching_entries(tmp_path: Path, mo
     _cleanup_stale_temp_dirs(max_age_s=7200.0)
 
     assert unrelated.exists()
+
+
+# --- _build_branding_ffmpeg_command: -t must bound a -loop 1 (infinite) logo input ---
+
+
+def test_build_branding_ffmpeg_command_with_logo_sets_explicit_duration(tmp_path: Path) -> None:
+    command = _build_branding_ffmpeg_command(
+        tmp_path / "base.mp4",
+        tmp_path / "branded.mp4",
+        tmp_path / "logo.png",
+        duration_s=17.5,
+    )
+    assert command[command.index("-t") + 1] == "17.50"
+    assert "-loop" in command
+    assert "-shortest" in command
+
+
+def test_build_branding_ffmpeg_command_without_logo_still_bounds_duration(tmp_path: Path) -> None:
+    command = _build_branding_ffmpeg_command(
+        tmp_path / "base.mp4",
+        tmp_path / "branded.mp4",
+        None,
+        duration_s=12.0,
+    )
+    assert command[command.index("-t") + 1] == "12.00"
+    assert "-loop" not in command
+    assert "-shortest" not in command

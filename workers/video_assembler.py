@@ -148,15 +148,22 @@ class PublishedArtifact:
 
 @dataclass(frozen=True)
 class VideoBranding:
-    """Deterministic editorial overlays selected from the brochure by Gemini."""
+    """The brokerage logo selected from the brochure by Gemini, watermarked small.
+
+    Previously also carried a yacht-name title and up to three facts,
+    rendered as four chained ``drawtext`` filters. Measured on the
+    production host (2 vCPU, t3.small): that chain alone pushed the
+    branding ffmpeg pass past 300s per attempt even with a clean /tmp and
+    ``-preset veryfast`` — drawtext's per-frame text rendering, not the
+    logo watermark, was the actual bottleneck. Dropped in favor of a
+    static, cheap, always-small bottom-right logo only.
+    """
 
     logo_bytes: bytes | None = None
-    yacht_name: str | None = None
-    facts: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
-        return not self.logo_bytes and not self.yacht_name and not self.facts
+        return not self.logo_bytes
 
 
 class ClipSource(Protocol):
@@ -514,54 +521,34 @@ def _build_ffmpeg_command(input_paths: Sequence[Path], output_path: Path, clip_d
     return command
 
 
-def _editorial_schedule(total_duration_s: float, branding: VideoBranding) -> list[tuple[str, float, float, bool]]:
-    """At most one title and three facts, spread out without visual overload."""
-    overlays: list[tuple[str, float, float, bool]] = []
-    if branding.yacht_name:
-        overlays.append((branding.yacht_name, 0.25, min(3.0, total_duration_s), True))
-    facts = branding.facts[:3]
-    if facts and total_duration_s > 4.0:
-        start = 3.5 if branding.yacht_name else 1.0
-        available = max(0.0, total_duration_s - start - 0.5)
-        slot = available / len(facts)
-        for index, text in enumerate(facts):
-            show_at = start + index * slot
-            hide_at = min(total_duration_s - 0.25, show_at + min(3.2, max(1.8, slot * 0.65)))
-            overlays.append((text, show_at, hide_at, False))
-    return overlays
-
-
 def _build_branding_ffmpeg_command(
     input_path: Path,
     output_path: Path,
     logo_path: Path | None,
-    text_files: Sequence[tuple[Path, float, float, bool]],
+    duration_s: float,
 ) -> list[str]:
-    """Build a second deterministic pass for logo and sparse editorial text."""
+    """Build a second deterministic pass for a small, static logo watermark.
+
+    No ``drawtext``: chained per-frame text rendering (previously up to four
+    stages for a title plus three facts) was the measured bottleneck on the
+    production host, not this single alpha-blended image overlay.
+
+    ``-t duration_s`` is load-bearing, not a nice-to-have: with ``-loop 1``
+    on the logo (an infinite input), ``-shortest`` alone does not reliably
+    terminate the output once it's routed through a filter_complex label —
+    measured in production spinning to 90+ seconds of encoded output for a
+    22-second input before the assembly timeout finally killed it. An
+    explicit ``-t`` bounds the output unconditionally regardless of that
+    filtergraph/EOF-propagation quirk.
+    """
     command = ["ffmpeg", "-y", "-i", str(input_path)]
     filters: list[str] = []
     current = "0:v"
-    stage_index = 0
     if logo_path is not None:
         command += ["-loop", "1", "-i", str(logo_path)]
         filters.append("[1:v]scale=180:-1,format=rgba,colorchannelmixer=aa=0.10[brokerlogo]")
-        filters.append(
-            f"[{current}][brokerlogo]overlay=W-w-W*0.025:H-h-H*0.035:format=auto[stage{stage_index}]"
-        )
-        current = f"stage{stage_index}"
-        stage_index += 1
-
-    for text_path, start_s, end_s, is_title in text_files:
-        output_label = f"stage{stage_index}"
-        fontsize = "h/15" if is_title else "h/27"
-        y_position = "h*0.72" if is_title else "h*0.82"
-        filters.append(
-            f"[{current}]drawtext=textfile='{text_path}':fontcolor=white:fontsize={fontsize}:"
-            f"box=1:boxcolor=black@0.42:boxborderw=14:x=(w-text_w)/2:y={y_position}:"
-            f"enable='between(t,{start_s:.2f},{end_s:.2f})'[{output_label}]"
-        )
-        current = output_label
-        stage_index += 1
+        filters.append(f"[{current}][brokerlogo]overlay=W-w-W*0.025:H-h-H*0.035:format=auto[stage0]")
+        current = "stage0"
 
     command += [
         "-filter_complex", ";".join(filters),
@@ -571,6 +558,7 @@ def _build_branding_ffmpeg_command(
         "-preset", VIDEO_ENCODE_PRESET,
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
+        "-t", f"{duration_s:.2f}",
     ]
     if logo_path is not None:
         command.append("-shortest")
@@ -675,19 +663,12 @@ def assemble_and_publish(
                     logo_path = tmp_path / "brokerage-logo.img"
                     logo_path.write_bytes(active_branding.logo_bytes)
                 total_duration_s = len(clips) * CLIP_DURATION_S - max(0, len(clips) - 1) * TRANSITION_DURATION_S
-                text_files: list[tuple[Path, float, float, bool]] = []
-                for index, (text, start_s, end_s, is_title) in enumerate(
-                    _editorial_schedule(total_duration_s, active_branding)
-                ):
-                    text_path = tmp_path / f"overlay-{index}.txt"
-                    text_path.write_text(text, encoding="utf-8")
-                    text_files.append((text_path, start_s, end_s, is_title))
                 branded_output_path = tmp_path / f"{idempotency_key}-branded.{CONTAINER_FORMAT}"
                 branding_command = _build_branding_ffmpeg_command(
                     base_output_path,
                     branded_output_path,
                     logo_path,
-                    text_files,
+                    total_duration_s,
                 )
 
                 def _invoke_branding() -> subprocess.CompletedProcess:
