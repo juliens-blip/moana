@@ -39,6 +39,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -48,20 +49,19 @@ from pathlib import Path
 
 from workers.gemini_pdf_classifier import (
     BrochureEditorialPlan,
-    ClassificationTransientError,
     ClassificationSettings,
+    ClassificationTransientError,
     GeminiClassificationError,
     GeminiFlashBrochureDirectorTransport,
     make_gemini_brochure_director,
 )
-from workers.gemini_veo_generator import run_with_retry
 from workers.job_contract import JobError, JobPhase, JobStatus, UploadStatusResultJob
 from workers.pdf_image_extractor import (
     ClassifierStrategy,
     ExtractedImage,
     ManifestEntry,
-    PdfImageManifest,
     PdfExtractionError,
+    PdfImageManifest,
     build_manifest,
     classify_image,
     extract_pdf_images,
@@ -85,6 +85,7 @@ from workers.veo_generator import (
     VeoTransientError,
     VeoTransport,
     generate_section_clips,
+    run_with_retry,
 )
 from workers.veo_generator import (
     StorageCheckpoint as VeoStorageCheckpoint,
@@ -145,31 +146,92 @@ class BrochureEditorialDirectionError(BrochureVideoRunnerError):
 
 def build_creative_idempotency_key(document_digest: str) -> str:
     """Version the final montage cache while keeping Veo clip checkpoints reusable."""
-    return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}".encode()).hexdigest()
 
 
-def select_video_entries(entries: Sequence[ManifestEntry], limit: int = MAX_VIDEO_CLIPS) -> tuple[ManifestEntry, ...]:
+_INTERIOR_MARKERS = ("interieur", "interior")
+_EXTERIOR_MARKERS = ("exterieur", "exterior")
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def _classify_view(section: str) -> str:
+    """Bucket a free-form section label as ``interior``, ``exterior`` or ``other``."""
+    normalized = _strip_accents(section).casefold()
+    if any(marker in normalized for marker in _INTERIOR_MARKERS):
+        return "interior"
+    if any(marker in normalized for marker in _EXTERIOR_MARKERS):
+        return "exterior"
+    return "other"
+
+
+def select_video_entries(
+    entries: Sequence[ManifestEntry],
+    limit: int = MAX_VIDEO_CLIPS,
+    logo_image_id: str | None = None,
+) -> tuple[ManifestEntry, ...]:
     """Keep one representative image per editorial section, up to ``limit``.
 
     ``group_entries_by_section`` groups the manifest, but Veo consumes flat
     entries and therefore used to generate one clip for every image. Selecting
     the first non-logo image of each section restores the product contract:
-    five editorial sections mean at most five generated clips.
+    five editorial sections mean at most five generated clips. The logo is
+    always excluded here too (belt-and-suspenders with the caller's own
+    filter).
+
+    Interior and exterior representatives are *reserved* first — each up to
+    ``ceil(limit/2)`` — before any remaining slot is handed to other
+    sections, so a brochure order that happens to interleave many "other"
+    sections ahead of the interior/exterior ones can never crowd the 2-3/2-3
+    balance target out of the final five. Only once both reservations are
+    made (interior first, then exterior, both deterministic and
+    order-preserving) does the leftover budget flow to other sections, and
+    then back to interior/exterior beyond their cap if the brochure has too
+    few other sections to fill it. Brochures poor in one view fall back
+    deterministically to whatever unique sections are actually available.
+    ``limit`` is clamped to ``MAX_VIDEO_CLIPS``: the five-clip product cap is
+    invariant regardless of what a caller passes in.
     """
-    ordered = tuple(entries)
     if limit < 1:
         raise ValueError("video entry limit must be positive")
-    selected: list[ManifestEntry] = []
+    limit = min(limit, MAX_VIDEO_CLIPS)  # the 5-clip product cap is invariant, whatever the caller passes
+    deduped: list[ManifestEntry] = []
     seen_sections: set[str] = set()
-    for entry in ordered:
+    for entry in entries:
+        if entry.image_id == logo_image_id:
+            continue
         section_key = entry.section.casefold().strip()
         if section_key in seen_sections:
             continue
         seen_sections.add(section_key)
-        selected.append(entry)
-        if len(selected) == limit:
-            break
-    return tuple(selected)
+        deduped.append(entry)
+
+    max_per_view = -(-limit // 2)  # ceil(limit / 2): the 2-3/2-3 balance target
+    interior_pool = [entry for entry in deduped if _classify_view(entry.section) == "interior"]
+    exterior_pool = [entry for entry in deduped if _classify_view(entry.section) == "exterior"]
+    other_pool = [entry for entry in deduped if _classify_view(entry.section) == "other"]
+
+    int_take = min(max_per_view, len(interior_pool))
+    remaining = limit - int_take
+    ext_take = min(max_per_view, len(exterior_pool), remaining)
+    remaining -= ext_take
+    other_take = min(remaining, len(other_pool))
+    remaining -= other_take
+    if remaining > 0:
+        extra_int = min(remaining, len(interior_pool) - int_take)
+        int_take += extra_int
+        remaining -= extra_int
+    if remaining > 0:
+        extra_ext = min(remaining, len(exterior_pool) - ext_take)
+        ext_take += extra_ext
+        remaining -= extra_ext
+
+    chosen_ids = {entry.image_id for entry in interior_pool[:int_take]}
+    chosen_ids |= {entry.image_id for entry in exterior_pool[:ext_take]}
+    chosen_ids |= {entry.image_id for entry in other_pool[:other_take]}
+    return tuple(entry for entry in deduped if entry.image_id in chosen_ids)
 
 
 def _validate_job_id(job_id: str) -> str:
@@ -411,10 +473,9 @@ def run_brochure_video_job(
                 (entry for entry in manifest.entries if entry.image_id == editorial_plan.logo_image_id),
                 None,
             )
-            eligible_video_entries = tuple(
-                entry for entry in manifest.entries if entry.image_id != editorial_plan.logo_image_id
+            video_entries = select_video_entries(
+                manifest.entries, logo_image_id=editorial_plan.logo_image_id
             )
-            video_entries = select_video_entries(eligible_video_entries)
             video_manifest = PdfImageManifest(
                 document_digest=manifest.document_digest,
                 entries=video_entries,
@@ -457,8 +518,6 @@ def run_brochure_video_job(
                 env=env,
                 branding=VideoBranding(
                     logo_bytes=logo_entry.image_data if logo_entry is not None else None,
-                    yacht_name=editorial_plan.yacht_name,
-                    facts=tuple(fact.display_text for fact in editorial_plan.facts),
                 ),
             )
             _check_timeout(start, now, timeout_s)

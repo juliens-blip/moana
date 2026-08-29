@@ -9,23 +9,30 @@ from __future__ import annotations
 
 import json
 import hashlib
+import io
 import subprocess
+import urllib.error
 
 import pytest
 
 from workers.brochure_video_runner import (
     JOB_TIMEOUT_S,
+    MAX_VIDEO_CLIPS,
     AtomicJobStateStore,
     InvalidJobInputError,
     JobAlreadyRunningError,
+    GeminiVeoTransport,
     build_creative_idempotency_key,
     run_brochure_video_job,
+    select_video_entries,
 )
 from workers.job_contract import JobStatus
 from workers.veo_generator import (
     ClipCheckpoint,
     VEO_PROMPT_VERSION,
+    VeoTransientError,
 )
+from workers.pdf_image_extractor import ManifestEntry
 from workers.video_assembler import (
     CONTAINER_FORMAT,
     SUPABASE_DB_URL_VAR,
@@ -42,6 +49,180 @@ FAKE_SUPABASE_ENV = {
 }
 
 UPLOAD_REF = "uploads/brochure.pdf"
+
+
+def _selection_entry(index: int, section: str | None = None) -> ManifestEntry:
+    return ManifestEntry(
+        image_id=f"img-{index}",
+        page_index=index,
+        occurrence_index=0,
+        section=section or f"section-{index}",
+        content_digest=f"digest-{index}",
+        byte_length=1,
+        image_data=b"x",
+    )
+
+
+def test_video_selection_keeps_one_image_per_section_and_caps_at_five() -> None:
+    sections = ("hero", "hero", "exterior", "exterior", "interior", "technical", "closing")
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries)
+
+    assert len(selected) == MAX_VIDEO_CLIPS == 5
+    assert [entry.section for entry in selected] == ["hero", "exterior", "interior", "technical", "closing"]
+    assert selected[0] == entries[0]  # first representative wins within a section
+    assert len({entry.image_id for entry in selected}) == MAX_VIDEO_CLIPS
+
+
+def test_video_selection_clamps_a_caller_supplied_limit_above_the_product_cap() -> None:
+    sections = ("hero", "exterior", "interior", "technical", "closing", "extra-sixth")
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries, limit=99)
+
+    assert len(selected) == MAX_VIDEO_CLIPS == 5, "the 5-clip product cap must hold regardless of the argument"
+
+
+def test_video_selection_preserves_short_brochure_unchanged() -> None:
+    entries = tuple(_selection_entry(index) for index in range(4))
+    assert select_video_entries(entries) == entries
+
+
+def test_video_selection_deduplicates_section_labels_case_insensitively() -> None:
+    entries = (
+        _selection_entry(0, "Hero/Identité"),
+        _selection_entry(1, " hero/identité "),
+    )
+    assert select_video_entries(entries) == (entries[0],)
+
+
+def test_video_selection_excludes_the_logo_entry() -> None:
+    sections = ("hero", "Brokerage Logo/Branding", "exterior", "interior", "technical")
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+    logo_entry = entries[1]
+
+    selected = select_video_entries(entries, logo_image_id=logo_entry.image_id)
+
+    assert logo_entry not in selected
+    assert logo_entry.image_id not in {entry.image_id for entry in selected}
+    assert len(selected) == 4
+
+
+def test_video_selection_balances_interior_and_exterior_up_to_the_cap() -> None:
+    sections = (
+        "Vie à bord–Extérieurs",
+        "Vie à bord–Extérieurs Pont",
+        "Vie à bord–Extérieurs Flybridge",
+        "Vie à bord–Extérieurs Cockpit",
+        "Vie à bord–Intérieurs",
+        "Vie à bord–Intérieurs Salon",
+        "Vie à bord–Intérieurs Cabine",
+        "Vie à bord–Intérieurs Cuisine",
+        "Hero/Identité",
+    )
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries)
+
+    interior_selected = [entry for entry in selected if "intérieur" in entry.section.casefold()]
+    exterior_selected = [entry for entry in selected if "extérieur" in entry.section.casefold()]
+    assert len(selected) == MAX_VIDEO_CLIPS == 5
+    assert len(interior_selected) <= 3
+    assert len(exterior_selected) <= 3
+    assert len(interior_selected) >= 2
+    assert len(exterior_selected) >= 2
+
+
+def test_video_selection_falls_back_deterministically_for_interior_poor_brochures() -> None:
+    sections = (
+        "Vie à bord–Extérieurs",
+        "Vie à bord–Extérieurs Pont",
+        "Vie à bord–Extérieurs Flybridge",
+        "Vie à bord–Extérieurs Cockpit",
+        "Vie à bord–Intérieurs",
+        "Hero/Identité",
+        "Commercial/Closing",
+    )
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries)
+
+    assert len(selected) == MAX_VIDEO_CLIPS == 5
+    interior_selected = [entry for entry in selected if "intérieur" in entry.section.casefold()]
+    exterior_selected = [entry for entry in selected if "extérieur" in entry.section.casefold()]
+    assert len(interior_selected) == 1, "only one interior section exists in this brochure"
+    assert len(exterior_selected) == 3, "capped at the 2-3 balance target, not left to crowd out others"
+    assert [entry.section for entry in selected] == [
+        "Vie à bord–Extérieurs",
+        "Vie à bord–Extérieurs Pont",
+        "Vie à bord–Extérieurs Flybridge",
+        "Vie à bord–Intérieurs",
+        "Hero/Identité",
+    ]
+
+
+def test_video_selection_falls_back_deterministically_for_exterior_poor_brochures() -> None:
+    sections = (
+        "Vie à bord–Intérieurs",
+        "Vie à bord–Intérieurs Salon",
+        "Vie à bord–Intérieurs Cabine",
+        "Vie à bord–Intérieurs Cuisine",
+        "Vie à bord–Extérieurs",
+        "Hero/Identité",
+        "Commercial/Closing",
+    )
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries)
+
+    assert len(selected) == MAX_VIDEO_CLIPS == 5
+    interior_selected = [entry for entry in selected if "intérieur" in entry.section.casefold()]
+    exterior_selected = [entry for entry in selected if "extérieur" in entry.section.casefold()]
+    assert len(exterior_selected) == 1, "only one exterior section exists in this brochure"
+    assert len(interior_selected) == 3, "capped at the 2-3 balance target, not left to crowd out others"
+    assert [entry.section for entry in selected] == [
+        "Vie à bord–Intérieurs",
+        "Vie à bord–Intérieurs Salon",
+        "Vie à bord–Intérieurs Cabine",
+        "Vie à bord–Extérieurs",
+        "Hero/Identité",
+    ]
+
+
+def test_veo_429_preserves_quota_metric_dimensions_and_retry_delay(monkeypatch) -> None:
+    body = json.dumps(
+        {
+            "error": {
+                "message": "Quota exceeded",
+                "details": [
+                    {
+                        "violations": [
+                            {
+                                "quotaMetric": "generativelanguage.googleapis.com/veo_requests",
+                                "quotaDimensions": {"model": "veo-3.1-lite-generate-preview"},
+                            }
+                        ]
+                    },
+                    {"retryDelay": "42s"},
+                ],
+            }
+        }
+    ).encode()
+
+    def fail_urlopen(*_args, **_kwargs):
+        raise urllib.error.HTTPError("https://example.test", 429, "quota", {}, io.BytesIO(body))
+
+    monkeypatch.setattr("workers.brochure_video_runner.urllib.request.urlopen", fail_urlopen)
+
+    transport = GeminiVeoTransport("test-key")
+    with pytest.raises(VeoTransientError) as excinfo:
+        transport._request("POST", "https://example.test", b"{}", 1.0)
+
+    message = str(excinfo.value)
+    assert "quota=generativelanguage.googleapis.com/veo_requests" in message
+    assert "model=veo-3.1-lite-generate-preview" in message
+    assert "retry_after=42s" in message
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +274,16 @@ def _single_image_pdf(data: bytes = IMAGE_A0) -> bytes:
 
 # ---------------------------------------------------------------------------
 # In-memory collaborator fakes
+#
+# These implement this codebase's own injected Protocols (ClipCheckpoint
+# storage, VeoTransport, ClipSource from workers/veo_generator.py and
+# workers/brochure_video_runner.py) — they are not stand-ins for a third-party
+# API's wire response (no Supabase/Vertex JSON field is asserted to exist).
+# The synthetic "clip-bytes-{id}"/"fake-mp4-bytes" payloads only need to
+# round-trip through our own code, so no captured-and-sanitized real response
+# is applicable here (contrast: a real Supabase Storage `object/info` mock
+# would need that provenance; a pure Protocol stub for our own interface does
+# not represent an external contract).
 # ---------------------------------------------------------------------------
 
 
