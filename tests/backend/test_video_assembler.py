@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from workers.gemini_veo_generator import CLIP_DURATION_S, ClipCheckpoint
 from workers.job_contract import JobPhase, JobStatus
+from workers.veo_generator import CLIP_DURATION_S, ClipCheckpoint
 from workers.video_assembler import (
     CONTAINER_FORMAT,
     SUPABASE_DB_URL_VAR,
@@ -581,19 +581,34 @@ def test_supabase_storage_checkpoint_creates_object_with_upsert_false() -> None:
 def test_supabase_storage_checkpoint_reuses_object_on_conflict_status() -> None:
     """A 409 from Storage's own conditional create means another caller (or a
     retried attempt) already published this key: once the post-409 metadata
-    read confirms a matching checksum, it must be reused, never treated as a
-    second successful publish nor as a failure."""
+    read confirms the stored object's real bytes hash to the artifact's
+    digest, it must be reused, never treated as a second successful publish
+    nor as a failure.
 
-    digest = "d" * 64
-    get_count = {"n": 0}
+    The object-info response below (``name``/``etag``/``size``, no top-level
+    ``checksum``) is the real Supabase Storage ``object/info`` contract
+    (captured from a live GET, 2026-08-27) — see
+    ``test_supabase_storage_checkpoint_verifies_real_supabase_info_shape_from_object_bytes``
+    for the same shape documented at first use."""
+
+    object_bytes = b"mp4-bytes"
+    digest = hashlib.sha256(object_bytes).hexdigest()
+    expected_object_key = f"videos/{DOCUMENT_DIGEST[:16]}/job-1.mp4"
+    info_get_count = {"n": 0}
 
     def fake_request(url, headers, body, timeout):
-        if body is None:
-            get_count["n"] += 1
-            if get_count["n"] == 1:
+        if body is not None:
+            return 409, b"Duplicate"
+        if "/object/info/" in url:
+            info_get_count["n"] += 1
+            if info_get_count["n"] == 1:
                 return 404, b""  # pre-check: not yet visible to this caller
-            return 200, json.dumps({"checksum": digest}).encode()  # post-409 read
-        return 409, b"Duplicate"
+            return 200, json.dumps({
+                "name": expected_object_key,
+                "etag": "production-etag",
+                "size": len(object_bytes),
+            }).encode()  # post-409 read
+        return 200, object_bytes
 
     checkpoint = SupabaseStoragePublishCheckpoint(
         supabase_url="https://example.supabase.co",
@@ -601,14 +616,13 @@ def test_supabase_storage_checkpoint_reuses_object_on_conflict_status() -> None:
         request=fake_request,
     )
 
-    expected_object_key = f"videos/{DOCUMENT_DIGEST[:16]}/job-1.mp4"
-
     def produce():
-        return PublishedArtifact(object_key=expected_object_key, content_digest=digest), b"mp4-bytes"
+        return PublishedArtifact(object_key=expected_object_key, content_digest=digest), object_bytes
 
     artifact = checkpoint.acquire_and_publish(DOCUMENT_DIGEST, "job-1", produce)
 
     assert artifact.object_key == expected_object_key
+    assert artifact.content_digest == digest
 
 
 def test_replayed_worker_run_publishes_the_artifact_exactly_once() -> None:
@@ -618,18 +632,32 @@ def test_replayed_worker_run_publishes_the_artifact_exactly_once() -> None:
     persisted object behind, and the second replay must never re-download."""
 
     class _FakeStorageServer:
+        """Stateful fake mirroring the real Supabase Storage ``object/info``
+        contract (``name``/``etag``/``size``, no top-level ``checksum`` —
+        captured from a live GET, 2026-08-27): confirmation is by hashing the
+        stored bytes, exactly like ``SupabaseStoragePublishCheckpoint`` does
+        for a production object."""
+
         def __init__(self) -> None:
             self.objects: dict[str, bytes] = {}
             self.successful_uploads = 0
 
         def __call__(self, url, headers, body, timeout):
             if body is None:
-                key = url.split("/object/info/", 1)[1]
-                if key in self.objects:
-                    digest = hashlib.sha256(self.objects[key]).hexdigest()
-                    return 200, json.dumps({"checksum": digest}).encode()
-                return 404, b""
-            key = url.split("/object/", 1)[1]
+                if "/object/info/" in url:
+                    key = url.split("/object/info/videos/", 1)[1]
+                    if key in self.objects:
+                        return 200, json.dumps({
+                            "name": key,
+                            "etag": "production-etag",
+                            "size": len(self.objects[key]),
+                        }).encode()
+                    return 404, b""
+                key = url.split("/object/videos/", 1)[1]
+                if key not in self.objects:
+                    return 404, b""
+                return 200, self.objects[key]
+            key = url.split("/object/videos/", 1)[1]
             if key in self.objects:
                 return 409, b"Duplicate"
             self.objects[key] = body
@@ -669,13 +697,25 @@ def test_replayed_worker_run_publishes_the_artifact_exactly_once() -> None:
 
 
 def test_supabase_storage_checkpoint_load_confirmed_skips_produce_entirely() -> None:
+    """Real Supabase Storage object-info response (``name``/``etag``/``size``,
+    no top-level ``checksum`` — captured from a live GET, 2026-08-27): a
+    confirmed object is reused by hashing its bytes, never by re-running
+    produce()."""
     produce_calls = {"n": 0}
 
-    digest = "e" * 64
+    object_bytes = b"already-published-mp4"
+    digest = hashlib.sha256(object_bytes).hexdigest()
+    expected_object_key = f"videos/{DOCUMENT_DIGEST[:16]}/job-1.mp4"
 
     def fake_request(url, headers, body, timeout):
         assert body is None  # load_confirmed only ever issues a GET
-        return 200, json.dumps({"checksum": digest}).encode()
+        if "/object/info/" in url:
+            return 200, json.dumps({
+                "name": expected_object_key,
+                "etag": "production-etag",
+                "size": len(object_bytes),
+            }).encode()
+        return 200, object_bytes
 
     checkpoint = SupabaseStoragePublishCheckpoint(
         supabase_url="https://example.supabase.co",
@@ -685,7 +725,7 @@ def test_supabase_storage_checkpoint_load_confirmed_skips_produce_entirely() -> 
 
     def produce():
         produce_calls["n"] += 1
-        return PublishedArtifact(object_key="videos/abc/job-1.mp4", content_digest="d" * 64), b"mp4-bytes"
+        return PublishedArtifact(object_key=expected_object_key, content_digest="d" * 64), b"mp4-bytes"
 
     artifact = checkpoint.acquire_and_publish(DOCUMENT_DIGEST, "job-1", produce)
 

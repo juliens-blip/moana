@@ -407,7 +407,7 @@ def test_runner_skips_logo_clip_and_adds_persistent_logo_watermark_only(tmp_path
     assert "overlay=W-w-W*0.025:H-h-H*0.035" in filter_graph
     assert "drawtext=" not in filter_graph, "editorial text overlays were dropped: too slow on production hardware"
     assert "-shortest" in branding_command
-    assert branding_command[branding_command.index("-t") + 1] == "5.00", (
+    assert branding_command[branding_command.index("-t") + 1] == "6.00", (
         "-t must bound the output to the base video's real duration: -shortest alone does not "
         "reliably terminate a -loop 1 (infinite) logo input routed through filter_complex"
     )
