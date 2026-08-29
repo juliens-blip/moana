@@ -33,10 +33,13 @@ from collections.abc import Callable, Mapping
 from workers.pdf_image_extractor import ManifestEntry
 from workers.veo_generator import VeoTransientError
 
-DEFAULT_VEO_MODEL = "veo-3.1-fast-generate-001"
+# Veo 3.1 Lite: Google's lowest-cost Veo 3.1 tier on Vertex AI, chosen for
+# high-volume brochure-video generation over the "fast"/full tiers.
+DEFAULT_VEO_MODEL = "veo-3.1-lite-generate-001"
 DEFAULT_LOCATION = "us-central1"
 DEFAULT_ASPECT_RATIO = "16:9"
 DEFAULT_DURATION_S = 6
+DEFAULT_RESOLUTION = "1080p"
 
 # Only these three durations are accepted by Veo's text/image-to-video
 # endpoint; any other value is a definitive configuration error, not a
@@ -109,6 +112,7 @@ class VertexVeoTransport:
         model: str = DEFAULT_VEO_MODEL,
         duration_s: int = DEFAULT_DURATION_S,
         aspect_ratio: str = DEFAULT_ASPECT_RATIO,
+        resolution: str = DEFAULT_RESOLUTION,
         poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -117,6 +121,7 @@ class VertexVeoTransport:
         self._model = model
         self._duration_s = validate_duration_s(duration_s)
         self._aspect_ratio = aspect_ratio
+        self._resolution = resolution
         self._poll_interval_s = poll_interval_s
         self._sleep = sleep
         self._client = None
@@ -147,6 +152,8 @@ class VertexVeoTransport:
                 config=types.GenerateVideosConfig(
                     aspect_ratio=self._aspect_ratio,
                     duration_seconds=self._duration_s,
+                    resolution=self._resolution,
+                    generate_audio=False,
                     person_generation="allow_adult",
                 ),
             )
@@ -202,7 +209,7 @@ class VertexVeoTransport:
 def build_vertex_veo_transport(env: Mapping[str, str]) -> VertexVeoTransport:
     """Construct the production ``VertexVeoTransport`` from ``GCP_PROJECT_ID``,
     ``GCP_LOCATION`` (default ``us-central1``), ``VEO_MODEL`` (default
-    ``veo-3.1-fast-generate-001``), and ``VEO_DEFAULT_DURATION_SECONDS``
+    ``veo-3.1-lite-generate-001``), and ``VEO_DEFAULT_DURATION_SECONDS``
     (default 6, must be 4/6/8). Does not itself check
     ``GOOGLE_APPLICATION_CREDENTIALS`` — that is
     ``workers/startup_checks.py``'s job, run once before any collaborator is

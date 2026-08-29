@@ -17,6 +17,8 @@ import pytest
 
 from workers.vertex_veo_transport import (
     DEFAULT_DURATION_S,
+    DEFAULT_RESOLUTION,
+    DEFAULT_VEO_MODEL,
     GCP_PROJECT_ID_VAR,
     VEO_DEFAULT_DURATION_SECONDS_VAR,
     VertexVeoConfigurationError,
@@ -49,6 +51,12 @@ def test_build_vertex_veo_transport_defaults_duration_when_unset() -> None:
     assert transport._duration_s == DEFAULT_DURATION_S
 
 
+def test_build_vertex_veo_transport_defaults_to_veo_3_1_lite() -> None:
+    transport = build_vertex_veo_transport({GCP_PROJECT_ID_VAR: "p"})
+    assert transport._model == DEFAULT_VEO_MODEL == "veo-3.1-lite-generate-001"
+    assert transport._resolution == DEFAULT_RESOLUTION == "1080p"
+
+
 def test_build_vertex_veo_transport_rejects_invalid_duration_env_value() -> None:
     with pytest.raises(VertexVeoConfigurationError):
         build_vertex_veo_transport({GCP_PROJECT_ID_VAR: "p", VEO_DEFAULT_DURATION_SECONDS_VAR: "5"})
@@ -77,8 +85,10 @@ class _FakeOperations:
 class _FakeModels:
     def __init__(self, operation) -> None:
         self._operation = operation
+        self.calls: list[dict] = []
 
     def generate_videos(self, **kwargs):
+        self.calls.append(kwargs)
         return self._operation
 
 
@@ -158,3 +168,22 @@ def test_generate_clip_returns_inline_video_bytes_on_success() -> None:
     )
     transport = _transport_with_operation(operation)
     assert transport.generate_clip("prompt", _entry(), timeout=30.0) == b"clip-bytes"
+
+
+def test_generate_clip_requests_1080p_and_no_audio() -> None:
+    import types as pytypes
+
+    operation = pytypes.SimpleNamespace(
+        done=True,
+        error=None,
+        result=pytypes.SimpleNamespace(
+            generated_videos=[pytypes.SimpleNamespace(video=pytypes.SimpleNamespace(video_bytes=b"clip-bytes"))],
+        ),
+    )
+    transport = _transport_with_operation(operation)
+    transport.generate_clip("prompt", _entry(), timeout=30.0)
+
+    (call,) = transport._client.models.calls
+    assert call["model"] == "veo-3.1-lite-generate-001"
+    assert call["config"].resolution == "1080p"
+    assert call["config"].generate_audio is False
