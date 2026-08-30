@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 from xml.etree import ElementTree as ET
@@ -385,9 +386,13 @@ class CheckpointStore:
     une page déjà validée.
     """
 
-    def __init__(self, path: Path, market: str):
+    def __init__(self, path: Path, market: str, run_key: str | None = None):
         self.path = path
         self.market = market
+        # Checkpoints are only valid for one collection run.  Without this
+        # scope, a successful first run permanently marked every page done
+        # and all subsequent daily runs silently replayed stale JSON files.
+        self.run_key = run_key or datetime.now(timezone.utc).date().isoformat()
         self._pages_done: set[int] = set()
         self._load()
 
@@ -398,7 +403,7 @@ class CheckpointStore:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return
-        if data.get("market") != self.market:
+        if data.get("market") != self.market or data.get("run_key") != self.run_key:
             return
         self._pages_done = set(data.get("pages_done", []))
 
@@ -411,7 +416,11 @@ class CheckpointStore:
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"market": self.market, "pages_done": sorted(self._pages_done)}
+        payload = {
+            "market": self.market,
+            "run_key": self.run_key,
+            "pages_done": sorted(self._pages_done),
+        }
         tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         os.replace(tmp_path, self.path)

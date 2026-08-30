@@ -203,6 +203,15 @@ def test_resume_without_recollection(tmp_path):
     assert not (page_0_urls & set(call_log[len(calls_before_resume):]))
 
 
+def test_checkpoint_is_reset_for_a_new_collection_run(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint.json"
+    first = CheckpointStore(checkpoint_path, market="global", run_key="2026-08-30")
+    first.mark_done(0)
+
+    next_run = CheckpointStore(checkpoint_path, market="global", run_key="2026-08-31")
+    assert not next_run.is_done(0)
+
+
 def test_fetch_url_retries_with_bounded_exponential_backoff(monkeypatch):
     settings = Settings()
     object.__setattr__(settings, "max_retries", 3)
