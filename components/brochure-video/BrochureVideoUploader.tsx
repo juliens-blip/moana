@@ -1,12 +1,15 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { Download } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { useBrochureVideoJob } from '@/lib/hooks/useBrochureVideoJob';
 
 export function BrochureVideoUploader() {
   const { status, submit } = useBrochureVideoJob();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isBusy = status.state === 'uploading' || status.state === 'running';
@@ -18,6 +21,32 @@ export function BrochureVideoUploader() {
   function handleSubmit() {
     if (!selectedFile) return;
     submit(selectedFile);
+  }
+
+  async function handleDownload(videoUrl: string) {
+    setDownloadError(null);
+    setIsDownloading(true);
+    try {
+      // Le fichier vit sur un bucket Supabase distinct de l'origine de l'app :
+      // un <a download> direct serait ignoré par le navigateur sur une URL
+      // cross-origin. On passe donc par un blob local pour forcer le
+      // téléchargement plutôt que l'ouverture dans un nouvel onglet.
+      const response = await fetch(videoUrl);
+      if (!response.ok) throw new Error('Téléchargement impossible');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'brochure-video.mp4';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setDownloadError('Le téléchargement a échoué. Réessayez.');
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   return (
@@ -74,12 +103,30 @@ export function BrochureVideoUploader() {
       )}
 
       {status.state === 'done' && (
-        <video
-          controls
-          src={status.result.videoUrl}
-          aria-label="Vidéo promotionnelle générée"
-          className="w-full rounded-lg border border-gray-200 mt-4"
-        />
+        <div className="space-y-2">
+          <video
+            controls
+            src={status.result.videoUrl}
+            aria-label="Vidéo promotionnelle générée"
+            className="w-full rounded-lg border border-gray-200 mt-4"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-label="Télécharger la vidéo générée"
+            onClick={() => handleDownload(status.result.videoUrl)}
+            loading={isDownloading}
+          >
+            <Download className="h-4 w-4" />
+            Télécharger la vidéo
+          </Button>
+          {downloadError && (
+            <p role="alert" className="text-sm text-red-600 font-medium">
+              {downloadError}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
