@@ -53,3 +53,9 @@ next-env.d.ts
 
 # Windows reserved device names
 nul
+
+# graphify (Software Factory) — cache/analyse régénérés à chaque run,
+# jamais du code source ; non ignoré ils polluaient l'audit de dirty-files
+# de la factory (des centaines de fichiers non trackés signalés à chaque
+# tentative de build, cause du gel du run du 2026-08-30).
+/graphify-out/
