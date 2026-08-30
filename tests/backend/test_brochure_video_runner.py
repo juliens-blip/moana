@@ -190,6 +190,57 @@ def test_video_selection_falls_back_deterministically_for_exterior_poor_brochure
     ]
 
 
+def test_focus_interieurs_selection_fronts_at_most_two_exterior_then_interior() -> None:
+    sections = (
+        "Hero/Identité",
+        "Vie à bord–Extérieurs",
+        "Vie à bord–Extérieurs Pont",
+        "Vie à bord–Extérieurs Flybridge",
+        "Vie à bord–Intérieurs Chambre",
+        "Vie à bord–Intérieurs Cuisine",
+        "Vie à bord–Intérieurs Salon",
+        "Commercial/Closing",
+    )
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries, video_style="focus_interieurs")
+
+    assert len(selected) == MAX_VIDEO_CLIPS == 5
+    # Exactly the two exterior representatives, in page order, come first...
+    assert [entry.section for entry in selected[:2]] == [
+        "Vie à bord–Extérieurs",
+        "Vie à bord–Extérieurs Pont",
+    ]
+    # ...followed by up to three interior representatives, one per distinct room.
+    assert [entry.section for entry in selected[2:]] == [
+        "Vie à bord–Intérieurs Chambre",
+        "Vie à bord–Intérieurs Cuisine",
+        "Vie à bord–Intérieurs Salon",
+    ]
+
+
+def test_focus_interieurs_selection_backfills_with_interior_when_exterior_is_scarce() -> None:
+    sections = ("Hero/Identité", "Vie à bord–Intérieurs Chambre", "Vie à bord–Intérieurs Cuisine")
+    entries = tuple(_selection_entry(index, section) for index, section in enumerate(sections))
+
+    selected = select_video_entries(entries, video_style="focus_interieurs")
+
+    # No exterior available at all: the whole budget flows to interior, then other.
+    assert [entry.section for entry in selected] == [
+        "Vie à bord–Intérieurs Chambre",
+        "Vie à bord–Intérieurs Cuisine",
+        "Hero/Identité",
+    ]
+
+
+def test_build_creative_idempotency_key_classique_is_unchanged_but_other_styles_differ() -> None:
+    digest = "b" * 64
+    classique_key = build_creative_idempotency_key(digest)
+    assert classique_key == build_creative_idempotency_key(digest, "classique")
+    focus_key = build_creative_idempotency_key(digest, "focus_interieurs")
+    assert focus_key != classique_key
+
+
 def test_veo_429_preserves_quota_metric_dimensions_and_retry_delay(monkeypatch) -> None:
     body = json.dumps(
         {

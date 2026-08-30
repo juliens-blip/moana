@@ -161,6 +161,7 @@ def build_section_prompt(
     sequence_index: int = 1,
     total_sequences: int = 1,
     context: VeoPromptContext | None = None,
+    video_style: str = "classique",
 ) -> str:
     """Build one deterministic six-second prompt within a larger brochure video."""
     if total_sequences < 1:
@@ -193,6 +194,20 @@ def build_section_prompt(
         facts_block = f"Verified brochure facts:\n{verified_facts}"
     else:
         facts_block = "No verified facts available; display no factual overlay."
+
+    if video_style == "focus_interieurs":
+        focus_interieurs_block = (
+            "\n\nFOCUS INTERIEURS EDIT\n\n"
+            "This clip belongs to a \"focus interieurs\" edit: a brief exterior establishing block "
+            "followed by a longer, detailed interior tour. If the source depicts an interior, film it "
+            "unhurried and intimate — take the full six seconds to reveal craftsmanship, materials, "
+            "layout and real detail rather than a quick establishing pass. If the source depicts an "
+            "exterior, deck or flybridge, keep the coverage brief and wide — a single clean "
+            "establishing movement, since this edit dedicates most of its runtime to interiors, not "
+            "exteriors."
+        )
+    else:
+        focus_interieurs_block = ""
 
     if sequence_index == 1 and context.yacht_name:
         overlay_direction = (
@@ -258,7 +273,7 @@ EXTERIOR AND AMENITY DIRECTION
 If the source depicts an exterior, deck, upper-deck amenity, tender, water toy, or surrounding environment, choose one purposeful cinematic movement appropriate to what is actually visible. This may include a controlled lateral track, gentle orbit, forward reveal, elevated establishing movement, or progressive detail shot.
 
 Preserve the yacht's exact geometry, proportions, hull lines, materials, surroundings, equipment, and identifying features.
-
+{focus_interieurs_block}
 LOGO WATERMARK
 
 If the brokerage agency logo is clearly and unambiguously visible in the supplied source material, preserve its exact design, proportions, colors, and spelling as a persistent, static, very light semi-transparent watermark for the entire clip at approximately 8-12 percent opacity.
@@ -297,8 +312,13 @@ Never invent, add, remove, embellish, extrapolate, or exaggerate any detail, obj
 Avoid passive hovering, static pans, simple zoom-ins or zoom-outs, Ken Burns effects, cheap slideshow aesthetics, flicker, exposure pumping, warping, morphing, unstable geometry, duplicated or disappearing objects, artificial sharpening, unrealistic reflections, unreadable or invented text, and impossible camera movements."""
 
 
-def _object_key(document_digest: str, image_id: str) -> str:
-    return f"veo-clips/{document_digest[:16]}/{VEO_PROMPT_VERSION}/{image_id}.mp4"
+def _object_key(document_digest: str, image_id: str, video_style: str = "classique") -> str:
+    # A non-classique style segment keeps its clips in a separate Storage
+    # namespace: the same image_id gets genuinely different clip content
+    # (different prompt) per style, and the classique path must stay byte-for
+    # -byte unchanged so existing checkpoints/clips are never invalidated.
+    style_segment = "" if video_style == "classique" else f"{video_style}/"
+    return f"veo-clips/{document_digest[:16]}/{VEO_PROMPT_VERSION}/{style_segment}{image_id}.mp4"
 
 
 def build_clip_content_digest(entry: ManifestEntry, prompt: str | None = None) -> str:
@@ -352,6 +372,7 @@ def generate_section_clips(
     settings: VeoSettings | None = None,
     sleep: Callable[[float], None] = time.sleep,
     rand: Callable[[], float] = random.random,
+    video_style: str = "classique",
 ) -> VeoGenerationResult:
     """Generate one six-second clip per manifest entry, resuming idempotently.
 
@@ -369,7 +390,7 @@ def generate_section_clips(
     clips: list[ClipCheckpoint] = []
     total_sequences = len(manifest.entries)
     for sequence_index, entry in enumerate(manifest.entries, start=1):
-        prompt = build_section_prompt(entry, sequence_index, total_sequences, prompt_context)
+        prompt = build_section_prompt(entry, sequence_index, total_sequences, prompt_context, video_style)
         expected_content_digest = build_clip_content_digest(entry, prompt)
         cached = existing.get(entry.image_id)
         if cached is not None and cached.content_digest == expected_content_digest:
@@ -384,7 +405,7 @@ def generate_section_clips(
 
         new_checkpoint = ClipCheckpoint(
             image_id=entry.image_id,
-            object_key=_object_key(manifest.document_digest, entry.image_id),
+            object_key=_object_key(manifest.document_digest, entry.image_id, video_style),
             duration_s=CLIP_DURATION_S,
             content_digest=expected_content_digest,
         )

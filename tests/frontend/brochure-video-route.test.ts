@@ -280,6 +280,35 @@ await run('creates the remote job layout before starting the unit, and the SSH c
   const manifestBody = JSON.parse(String(manifestCall.input));
   assert.equal(manifestBody.document_digest, expectedDigest);
   assert.match(manifestBody.document_digest, /^[0-9a-f]{64}$/);
+  assert.equal(manifestBody.video_style, 'classique', 'video_style defaults to classique when omitted');
+});
+
+await run('a caller-supplied video_style is written into the remote manifest', async () => {
+  const jobId = 'jobStyleFocusInterieurs01';
+  const { deps, calls } = fakeDeps({ jobId });
+  const response = await handleBrochureVideoUpload(
+    buildRequest({ path: VALID_UPLOAD_PATH, video_style: 'focus_interieurs' }),
+    deps
+  );
+  assert.equal(response.status, 200);
+
+  const jobDir = `/home/ubuntu/moana/var/brochure-video-jobs/${jobId}`;
+  const manifestCall = calls.find(
+    (call) => call.command === `cat > ${jobDir}/manifest.json.tmp && mv -f ${jobDir}/manifest.json.tmp ${jobDir}/manifest.json`
+  );
+  assert.ok(manifestCall, 'manifest write call must be observed');
+  const manifestBody = JSON.parse(String(manifestCall!.input));
+  assert.equal(manifestBody.video_style, 'focus_interieurs');
+});
+
+await run('rejects an unknown video_style before any download/SSH call', async () => {
+  const { deps, calls } = fakeDeps();
+  const response = await handleBrochureVideoUpload(
+    buildRequest({ path: VALID_UPLOAD_PATH, video_style: 'not_a_real_style' }),
+    deps
+  );
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 0);
 });
 
 await run('an SSH failure returns a 5xx without leaking stderr/stdout, and still deletes the uploaded object', async () => {

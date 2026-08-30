@@ -53,6 +53,7 @@ from workers.gemini_pdf_classifier import (
     ClassificationTransientError,
     GeminiClassificationError,
     GeminiFlashBrochureDirectorTransport,
+    build_focus_interieurs_direction_prompt,
     make_gemini_brochure_director,
 )
 from workers.job_contract import JobError, JobPhase, JobStatus, UploadStatusResultJob
@@ -145,9 +146,20 @@ class BrochureEditorialDirectionError(BrochureVideoRunnerError):
     """Raised before Veo when the required brochure-wide direction is unavailable."""
 
 
-def build_creative_idempotency_key(document_digest: str) -> str:
-    """Version the final montage cache while keeping Veo clip checkpoints reusable."""
-    return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}".encode()).hexdigest()
+_VALID_VIDEO_STYLES = frozenset({"classique", "focus_interieurs"})
+DEFAULT_VIDEO_STYLE = "classique"
+
+
+def build_creative_idempotency_key(document_digest: str, video_style: str = DEFAULT_VIDEO_STYLE) -> str:
+    """Version the final montage cache while keeping Veo clip checkpoints reusable.
+
+    A non-classique ``video_style`` is folded into the hash input so a
+    "focus_interieurs" run of the same PDF never collides with (or reuses)
+    the classique montage. The classique case omits the style segment
+    entirely, so existing published-video idempotency keys are unaffected.
+    """
+    style_segment = "" if video_style == DEFAULT_VIDEO_STYLE else f"\0{video_style}"
+    return hashlib.sha256(f"{CREATIVE_PIPELINE_VERSION}\0{document_digest}{style_segment}".encode()).hexdigest()
 
 
 _INTERIOR_MARKERS = ("interieur", "interior")
@@ -168,10 +180,46 @@ def _classify_view(section: str) -> str:
     return "other"
 
 
+def _select_focus_interieurs_entries(
+    deduped: Sequence[ManifestEntry], limit: int
+) -> tuple[ManifestEntry, ...]:
+    """Front-load a short exterior block, then dedicate the rest to interiors.
+
+    Target split for the product 5-clip cap: at most 2 exterior clips (12s at
+    ``CLIP_DURATION_S=6.0``, within the "brief exterior" brief) followed by up
+    to 3 interior clips (cabins, galley, salon, common areas) — unlike the
+    classique selection, the return order is grouped by view (all exterior
+    entries first, then interior, then any leftover), not brochure page
+    order, so the assembled video actually opens on the exterior block before
+    moving to interiors. Brochures poor in one view fall back deterministically
+    to whatever is available, same spirit as the classique selection.
+    """
+    exterior_pool = [entry for entry in deduped if _classify_view(entry.section) == "exterior"]
+    interior_pool = [entry for entry in deduped if _classify_view(entry.section) == "interior"]
+    other_pool = [entry for entry in deduped if _classify_view(entry.section) == "other"]
+
+    ext_cap = 2 if limit >= 3 else max(0, limit - 1)
+    ext_take = min(ext_cap, len(exterior_pool))
+    remaining = limit - ext_take
+
+    int_take = min(remaining, len(interior_pool))
+    remaining -= int_take
+
+    other_take = min(remaining, len(other_pool))
+    remaining -= other_take
+
+    if remaining > 0:
+        extra_ext = min(remaining, len(exterior_pool) - ext_take)
+        ext_take += extra_ext
+
+    return (*exterior_pool[:ext_take], *interior_pool[:int_take], *other_pool[:other_take])
+
+
 def select_video_entries(
     entries: Sequence[ManifestEntry],
     limit: int = MAX_VIDEO_CLIPS,
     logo_image_id: str | None = None,
+    video_style: str = DEFAULT_VIDEO_STYLE,
 ) -> tuple[ManifestEntry, ...]:
     """Keep one representative image per editorial section, up to ``limit``.
 
@@ -208,6 +256,9 @@ def select_video_entries(
             continue
         seen_sections.add(section_key)
         deduped.append(entry)
+
+    if video_style == "focus_interieurs":
+        return _select_focus_interieurs_entries(deduped, limit)
 
     max_per_view = -(-limit // 2)  # ceil(limit / 2): the 2-3/2-3 balance target
     interior_pool = [entry for entry in deduped if _classify_view(entry.section) == "interior"]
@@ -262,6 +313,9 @@ def _load_and_validate_marker(marker_path: Path, expected_document_digest: str) 
         raise InvalidJobInputError("manifest marker document_digest must be a 64-char sha256 hex digest")
     if digest != expected_document_digest:
         raise InvalidJobInputError("manifest marker document_digest does not match the PDF's content digest")
+    video_style = marker.get("video_style", DEFAULT_VIDEO_STYLE)
+    if video_style not in _VALID_VIDEO_STYLES:
+        raise InvalidJobInputError(f"manifest marker video_style must be one of {sorted(_VALID_VIDEO_STYLES)}")
     return marker
 
 
@@ -393,6 +447,8 @@ def run_brochure_video_job(
     idempotency_key: str | None = None,
     pdf_classifier: ClassifierStrategy | None = None,
     editorial_director: Callable[[bytes, Sequence[ExtractedImage]], BrochureEditorialPlan] | None = None,
+    editorial_directors: Mapping[str, Callable[[bytes, Sequence[ExtractedImage]], BrochureEditorialPlan]]
+    | None = None,
     veo_settings: VeoSettings | None = None,
     assembly_settings: AssemblySettings | None = None,
     run: RunFn = subprocess.run,
@@ -417,7 +473,11 @@ def run_brochure_video_job(
     injection point (``ExtractedImage -> str``): production wiring passes a
     Gemini Flash free-tier classifier (see ``main``); tests may inject a
     fake or omit it to fall back to ``pdf_image_extractor``'s default
-    content-derived label.
+    content-derived label. The marker's optional ``video_style`` (default
+    ``"classique"``) selects which of ``editorial_directors`` runs and how
+    ``select_video_entries``/Veo prompts behave; ``editorial_director`` is
+    kept as the legacy single-style (classique) injection point for callers
+    that only ever exercise one style.
     """
     _validate_job_id(job_id)
     pdf_path = _validate_input_file(Path(pdf_path), "pdf_path")
@@ -433,9 +493,10 @@ def run_brochure_video_job(
         try:
             pdf_bytes = pdf_path.read_bytes()
             document_digest = hashlib.sha256(pdf_bytes).hexdigest()
-            _load_and_validate_marker(manifest_marker_path, document_digest)
+            marker = _load_and_validate_marker(manifest_marker_path, document_digest)
+            video_style = marker.get("video_style", DEFAULT_VIDEO_STYLE)
 
-            key = idempotency_key or build_creative_idempotency_key(document_digest)
+            key = idempotency_key or build_creative_idempotency_key(document_digest, video_style)
             existing_artifact = publish_checkpoint.load_confirmed(document_digest, key)
             if existing_artifact is not None:
                 # Un nouveau job pour le même PDF doit réutiliser la vidéo
@@ -450,11 +511,18 @@ def run_brochure_video_job(
                 state_store.complete(job_id, start, result)
                 return _envelope_from_state(job_id, upload_ref, state_store.load(job_id))
 
+            directors: dict[str, Callable[[bytes, Sequence[ExtractedImage]], BrochureEditorialPlan]] = dict(
+                editorial_directors or {}
+            )
+            if editorial_director is not None:
+                directors.setdefault(DEFAULT_VIDEO_STYLE, editorial_director)
+            active_director = directors.get(video_style) or directors.get(DEFAULT_VIDEO_STYLE)
+
             editorial_plan = BrochureEditorialPlan()
             images = extract_pdf_images(pdf_bytes)
-            if editorial_director is not None:
+            if active_director is not None:
                 try:
-                    editorial_plan = editorial_director(pdf_bytes, images)
+                    editorial_plan = active_director(pdf_bytes, images)
                 except (ClassificationTransientError, GeminiClassificationError, RuntimeError) as exc:
                     raise BrochureEditorialDirectionError(
                         f"gemini brochure direction unavailable: {exc.__class__.__name__}: {exc}"
@@ -475,7 +543,7 @@ def run_brochure_video_job(
                 None,
             )
             video_entries = select_video_entries(
-                manifest.entries, logo_image_id=editorial_plan.logo_image_id
+                manifest.entries, logo_image_id=editorial_plan.logo_image_id, video_style=video_style
             )
             video_manifest = PdfImageManifest(
                 document_digest=manifest.document_digest,
@@ -495,6 +563,7 @@ def run_brochure_video_job(
                     settings=veo_settings,
                     sleep=sleep,
                     rand=rand,
+                    video_style=video_style,
                 )
             except VeoGenerationFailure as exc:
                 cause = str(exc.__cause__ or "")
@@ -857,14 +926,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     supabase_url = os.environ[SUPABASE_URL_VAR]
     supabase_key = os.environ[SUPABASE_SERVICE_ROLE_KEY_VAR]
     flash_api_key = os.environ[GEMINI_FREE_TIER_API_KEY_VAR]
-    editorial_director = make_gemini_brochure_director(
-        GeminiFlashBrochureDirectorTransport(flash_api_key),
-        # Un seul appel qui embarque le PDF entier + toutes les images extraites
-        # en multimodal : le défaut de 30s (calibré pour la classification
-        # image-par-image) expire systématiquement avant que Gemini ait fini de
-        # générer le plan éditorial complet.
-        settings=ClassificationSettings(max_retries=0, timeout_s=180.0),
-    )
+    # Un seul appel qui embarque le PDF entier + toutes les images extraites
+    # en multimodal : le défaut de 30s (calibré pour la classification
+    # image-par-image) expire systématiquement avant que Gemini ait fini de
+    # générer le plan éditorial complet.
+    director_settings = ClassificationSettings(max_retries=0, timeout_s=180.0)
+    editorial_directors = {
+        "classique": make_gemini_brochure_director(
+            GeminiFlashBrochureDirectorTransport(flash_api_key),
+            settings=director_settings,
+        ),
+        "focus_interieurs": make_gemini_brochure_director(
+            GeminiFlashBrochureDirectorTransport(flash_api_key),
+            settings=director_settings,
+            prompt_builder=build_focus_interieurs_direction_prompt,
+        ),
+    }
 
     pdf_path, manifest_marker_path, state_dir = _default_job_paths(job_id)
     envelope = run_brochure_video_job(
@@ -877,7 +954,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         veo_checkpoint=SupabaseVeoStorageCheckpoint(supabase_url, supabase_key),
         clip_source=SupabaseClipSource(supabase_url, supabase_key),
         publish_checkpoint=SupabaseStoragePublishCheckpoint(supabase_url, supabase_key),
-        editorial_director=editorial_director,
+        editorial_directors=editorial_directors,
     )
     if envelope.status == JobStatus.DONE.value:
         print(f"job {job_id!r}: done, result={envelope.result}")

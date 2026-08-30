@@ -3,7 +3,12 @@ import { randomBytes, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Client as SshClient } from 'ssh2';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { BROCHURE_UPLOAD_BUCKET, BROCHURE_UPLOAD_PATH_RE } from '@/lib/brochure-video-contract';
+import {
+  BROCHURE_UPLOAD_BUCKET,
+  BROCHURE_UPLOAD_PATH_RE,
+  DEFAULT_VIDEO_STYLE,
+  isVideoStyle,
+} from '@/lib/brochure-video-contract';
 
 // L'exécution SSH démarre dans /home/ubuntu, alors que systemd exécute le
 // worker avec WorkingDirectory=/home/ubuntu/moana. Utiliser le chemin absolu
@@ -306,6 +311,12 @@ export async function handleBrochureVideoUpload(
     return jsonError('Référence de fichier invalide', 400);
   }
 
+  const rawVideoStyle = (body as { video_style?: unknown } | null)?.video_style;
+  const videoStyle = rawVideoStyle === undefined ? DEFAULT_VIDEO_STYLE : rawVideoStyle;
+  if (!isVideoStyle(videoStyle)) {
+    return jsonError('Style vidéo invalide', 400);
+  }
+
   let buffer: Buffer;
   try {
     buffer = await deps.downloadUploadedPdf(path);
@@ -335,7 +346,7 @@ export async function handleBrochureVideoUpload(
     }
 
     const documentDigest = createHash('sha256').update(buffer).digest('hex');
-    const manifest = JSON.stringify({ document_digest: documentDigest });
+    const manifest = JSON.stringify({ document_digest: documentDigest, video_style: videoStyle });
     const jobDir = `${REMOTE_JOBS_ROOT}/${jobId}`;
     const pdfTmpPath = `${jobDir}/input.pdf.tmp`;
     const pdfFinalPath = `${jobDir}/input.pdf`;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isTerminalVideoJobStatus, type VideoJobError, type VideoJobStatus } from '@/lib/video-job-types';
+import { DEFAULT_VIDEO_STYLE, type VideoStyle } from '@/lib/brochure-video-contract';
 
 export const BROCHURE_VIDEO_POLL_INTERVAL_MS = 2000;
 
@@ -116,7 +117,7 @@ export class BrochureVideoJobController {
     this.listeners.forEach((listener) => listener(next));
   }
 
-  async submit(file: File): Promise<void> {
+  async submit(file: File, videoStyle: VideoStyle = DEFAULT_VIDEO_STYLE): Promise<void> {
     if (this.disposed) {
       return;
     }
@@ -143,7 +144,7 @@ export class BrochureVideoJobController {
       response = await this.deps.fetchImpl('/api/brochure-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: uploadResult.path }),
+        body: JSON.stringify({ path: uploadResult.path, video_style: videoStyle }),
       });
     } catch {
       if (this.disposed) return;
@@ -300,8 +301,8 @@ export function useBrochureVideoJob() {
     };
   }, []);
 
-  const submit = useCallback((file: File) => {
-    void controllerRef.current?.submit(file);
+  const submit = useCallback((file: File, videoStyle: VideoStyle = DEFAULT_VIDEO_STYLE) => {
+    void controllerRef.current?.submit(file, videoStyle);
   }, []);
 
   return {

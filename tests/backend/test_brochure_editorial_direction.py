@@ -421,6 +421,58 @@ def test_runner_skips_logo_clip_and_adds_persistent_logo_watermark_only(tmp_path
     )
 
 
+def test_runner_dispatches_to_the_director_matching_the_marker_video_style(tmp_path) -> None:
+    pdf_bytes = _two_image_pdf()
+    pdf_path, marker_path = _write_job_inputs(tmp_path, pdf_bytes)
+    marker_path.write_text(
+        json.dumps({"document_digest": hashlib.sha256(pdf_bytes).hexdigest(), "video_style": "focus_interieurs"})
+    )
+    digest = hashlib.sha256(pdf_bytes).hexdigest()
+    photo_id = f"{digest[:16]}:0000:0000"
+    logo_id = f"{digest[:16]}:0000:0001"
+    transport = FakeVeoTransport()
+    classique_calls: list[str] = []
+    focus_calls: list[str] = []
+
+    def classique_director(_pdf_bytes, images):
+        classique_calls.append("called")
+        return BrochureEditorialPlan(sections=((photo_id, "Hero/Identité"), (logo_id, "Brokerage Logo/Branding")), logo_image_id=logo_id)
+
+    def focus_interieurs_director(_pdf_bytes, images):
+        focus_calls.append("called")
+        return BrochureEditorialPlan(
+            sections=((photo_id, "Vie à bord–Intérieurs Salon"), (logo_id, "Brokerage Logo/Branding")),
+            logo_image_id=logo_id,
+        )
+
+    def successful_ffmpeg(command, **kwargs):
+        with open(command[-1], "wb") as handle:
+            handle.write(b"fake-mp4")
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    envelope = run_brochure_video_job(
+        job_id="editorial-job-style",
+        pdf_path=pdf_path,
+        manifest_marker_path=marker_path,
+        upload_ref="uploads/editorial-job-style/input.pdf",
+        state_store=AtomicJobStateStore(tmp_path / "state"),
+        veo_transport=transport,
+        veo_checkpoint=FakeVeoStorageCheckpoint(),
+        clip_source=FakeClipSource(),
+        publish_checkpoint=InMemoryPublishCheckpoint(),
+        editorial_directors={"classique": classique_director, "focus_interieurs": focus_interieurs_director},
+        run=successful_ffmpeg,
+        sleep=_no_sleep,
+        rand=_fixed_rand,
+        env=FAKE_SUPABASE_ENV,
+        now=lambda: 0.0,
+    )
+
+    assert envelope.status == "done"
+    assert focus_calls == ["called"], "video_style=focus_interieurs must dispatch to the focus_interieurs director"
+    assert classique_calls == [], "the classique director must never run for a focus_interieurs job"
+
+
 def test_runner_fails_before_veo_when_required_editorial_direction_is_unavailable(tmp_path) -> None:
     pdf_bytes = _two_image_pdf()
     pdf_path, marker_path = _write_job_inputs(tmp_path, pdf_bytes)

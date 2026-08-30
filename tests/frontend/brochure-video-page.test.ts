@@ -163,7 +163,7 @@ await run('a failed uploadPdf surfaces its error and never calls fetchImpl (no j
   }
 });
 
-await run('submit posts the uploadPdf path as JSON to /api/brochure-video', async () => {
+await run('submit posts the uploadPdf path and defaults video_style to classique', async () => {
   const timer = createFakeTimer();
   let capturedBody: string | undefined;
   const controller = new BrochureVideoJobController({
@@ -175,7 +175,28 @@ await run('submit posts the uploadPdf path as JSON to /api/brochure-video', asyn
     uploadPdf: async () => ({ path: 'brochure-video-uploads/abc123.pdf' }),
   });
   await controller.submit(pdfFile());
-  assert.deepEqual(JSON.parse(capturedBody ?? '{}'), { path: 'brochure-video-uploads/abc123.pdf' });
+  assert.deepEqual(JSON.parse(capturedBody ?? '{}'), {
+    path: 'brochure-video-uploads/abc123.pdf',
+    video_style: 'classique',
+  });
+});
+
+await run('submit posts the caller-supplied video_style (focus_interieurs)', async () => {
+  const timer = createFakeTimer();
+  let capturedBody: string | undefined;
+  const controller = new BrochureVideoJobController({
+    fetchImpl: async (_input, init) => {
+      capturedBody = init?.body as string;
+      return jsonResponse({ jobId: 'jobPath', statusUrl: '/status/jobPath' });
+    },
+    timer,
+    uploadPdf: async () => ({ path: 'brochure-video-uploads/abc123.pdf' }),
+  });
+  await controller.submit(pdfFile(), 'focus_interieurs');
+  assert.deepEqual(JSON.parse(capturedBody ?? '{}'), {
+    path: 'brochure-video-uploads/abc123.pdf',
+    video_style: 'focus_interieurs',
+  });
 });
 
 await run('activate() restores updates after the Strict Mode setup -> cleanup -> setup sequence', async () => {

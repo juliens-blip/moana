@@ -4,10 +4,12 @@ import React, { useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { useBrochureVideoJob } from '@/lib/hooks/useBrochureVideoJob';
+import type { VideoStyle } from '@/lib/brochure-video-contract';
 
 export function BrochureVideoUploader() {
   const { status, submit } = useBrochureVideoJob();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [pendingStyle, setPendingStyle] = useState<VideoStyle | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -18,9 +20,10 @@ export function BrochureVideoUploader() {
     setSelectedFile(event.target.files?.[0] ?? null);
   }
 
-  function handleSubmit() {
+  function handleSubmit(videoStyle: VideoStyle) {
     if (!selectedFile) return;
-    submit(selectedFile);
+    setPendingStyle(videoStyle);
+    submit(selectedFile, videoStyle);
   }
 
   async function handleDownload(videoUrl: string) {
@@ -62,15 +65,29 @@ export function BrochureVideoUploader() {
         onChange={handleFileChange}
       />
 
-      <Button
-        type="button"
-        aria-label="Générer la vidéo à partir du PDF"
-        onClick={handleSubmit}
-        disabled={isBusy || !selectedFile}
-        loading={status.state === 'uploading'}
-      >
-        {status.state === 'running' ? 'Génération en cours…' : 'Générer la vidéo'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          aria-label="Générer la vidéo classique à partir du PDF"
+          onClick={() => handleSubmit('classique')}
+          disabled={isBusy || !selectedFile}
+          loading={status.state === 'uploading' && pendingStyle === 'classique'}
+        >
+          {status.state === 'running' && pendingStyle === 'classique' ? 'Génération en cours…' : 'Générer classique'}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          aria-label="Générer la vidéo focus intérieurs à partir du PDF"
+          onClick={() => handleSubmit('focus_interieurs')}
+          disabled={isBusy || !selectedFile}
+          loading={status.state === 'uploading' && pendingStyle === 'focus_interieurs'}
+        >
+          {status.state === 'running' && pendingStyle === 'focus_interieurs'
+            ? 'Génération en cours…'
+            : 'Générer focus intérieurs'}
+        </Button>
+      </div>
 
       {(status.state === 'uploading' || status.state === 'running') && (
         <div className="space-y-2" aria-live="polite">

@@ -16,3 +16,20 @@ export const BROCHURE_UPLOAD_BUCKET = 'brochure-video-uploads';
 
 /** 32 caractères alphanumériques + extension .pdf — généré exclusivement par generateUploadPath(). */
 export const BROCHURE_UPLOAD_PATH_RE = /^[A-Za-z0-9]{32}\.pdf$/;
+
+/**
+ * Styles de montage disponibles pour la vidéo brochure, en miroir de
+ * `_VALID_VIDEO_STYLES` côté worker (workers/brochure_video_runner.py) :
+ * "classique" est le montage historique (couverture équilibrée intérieur/
+ * extérieur) ; "focus_interieurs" ouvre sur un bref plan extérieur (2 clips
+ * max, ~12s) puis enchaîne sur un montage intérieur plus long (chambres,
+ * cuisine, salon, espaces communs). Un client et un worker qui divergent sur
+ * ces valeurs feraient échouer la validation du marker distant.
+ */
+export const VIDEO_STYLES = ['classique', 'focus_interieurs'] as const;
+export type VideoStyle = (typeof VIDEO_STYLES)[number];
+export const DEFAULT_VIDEO_STYLE: VideoStyle = 'classique';
+
+export function isVideoStyle(value: unknown): value is VideoStyle {
+  return typeof value === 'string' && (VIDEO_STYLES as readonly string[]).includes(value);
+}

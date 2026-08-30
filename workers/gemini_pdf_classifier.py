@@ -195,6 +195,54 @@ def build_brochure_direction_prompt(image_ids: Sequence[str]) -> str:
     )
 
 
+def build_focus_interieurs_direction_prompt(image_ids: Sequence[str]) -> str:
+    """Ask Gemini for a director's cut biased toward interior coverage.
+
+    Same JSON response contract as ``build_brochure_direction_prompt``
+    (sections/logo_image_id/yacht_name/facts) so the rest of the pipeline
+    (``BrochureEditorialPlan`` parsing, ``select_video_entries``'s
+    ``"focus_interieurs"`` branch in ``workers/brochure_video_runner.py``)
+    needs no separate parsing path — only the section-assignment
+    instructions differ, to produce a brief exterior establishing block
+    followed by a longer, room-diverse interior tour.
+    """
+    candidates = ", ".join(image_ids)
+    return (
+        "Act as the editorial director for a premium yacht brokerage video, cut specifically for a "
+        '"focus interieurs" edit: a brief exterior establishing block followed by a longer, richly '
+        "detailed interior tour. Analyze the complete PDF and every candidate image supplied after it. "
+        "Return decisions grounded only in the brochure. The final edit contains at most five "
+        "six-second clips: reserve at most two for exterior/deck/flybridge establishing views, and "
+        "dedicate the rest to interiors — maximize diversity across distinct interior spaces such as "
+        "cabins/bedrooms, galley/kitchen, salon/living area, and other common indoor spaces, never "
+        "spending more than one selection on the same room type. Keep the brochure's natural page "
+        f"order in the section decisions. Candidate image_ids are: {candidates}. Classify every "
+        "image_id exactly once. For the at most two exterior selections, use a section label "
+        'containing the word "Exterieur" (e.g. "Vie a bord-Exterieurs" or "Ponts & Flybridge"). For '
+        'interior selections, use a section label containing the word "Interieur" and naming the '
+        'specific space, e.g. "Interieur-Chambre", "Interieur-Cuisine", "Interieur-Salon", '
+        '"Interieur-Espace commun" — a distinct label per distinct room so no two interior selections '
+        "collapse into the same label. Any remaining image not selected as exterior or interior may use "
+        "any other relevant free-form label. Identify logo_image_id only when the candidate is "
+        "unambiguously and exclusively the actual BROKERAGE AGENCY logo — never the yacht name, "
+        "builder, shipyard, model badge, flag, certification mark, watermark, or decorative icon. If "
+        "you are not fully certain a candidate is the brokerage agency's own logo, return null; a "
+        "missed logo is always preferable to a wrong one. Extract yacht_name only when it is printed "
+        "verbatim in the brochure text or images; never infer, guess, complete, or normalize it from a "
+        "builder, model line, or partial mention — return null rather than a plausible-sounding name. "
+        "Select zero to three facts maximum, ordered by editorial importance and appearance flow. Keep "
+        "only high-value facts such as builder or model, year and length, accommodation, or a "
+        "distinctive verified performance fact, each one taken verbatim or near-verbatim from the "
+        "brochure. Never invent, estimate, round, or infer a fact that is not explicitly stated. Do not "
+        "include phone numbers, emails, URLs, legal text, repeated facts, generic slogans, or invented "
+        "claims. Each label must be at most 24 characters and each value at most 48 characters. "
+        "Respond as strict JSON with exactly these keys: "
+        '{"sections":[{"image_id":"...","section":"..."}],"logo_image_id":null,'
+        '"yacht_name":null,"facts":[{"label":"...","value":"..."}]}. '
+        "Use JSON null, not an empty string, for absent logo or yacht name."
+    )
+
+
 def _clean_optional_text(value: object, field: str, max_length: int) -> str | None:
     if value is None:
         return None
@@ -624,14 +672,21 @@ def _director_image_id(document_digest: str, image: ExtractedImage) -> str:
 def make_gemini_brochure_director(
     transport: GeminiBrochureDirectorTransport,
     settings: ClassificationSettings | None = None,
+    prompt_builder: Callable[[Sequence[str]], str] = build_brochure_direction_prompt,
 ) -> Callable[[bytes, Sequence[ExtractedImage]], BrochureEditorialPlan]:
-    """Build the one-call-per-brochure editorial director."""
+    """Build the one-call-per-brochure editorial director.
+
+    ``prompt_builder`` defaults to the classique ``build_brochure_direction_prompt``;
+    pass ``build_focus_interieurs_direction_prompt`` to get a director biased
+    toward interior coverage instead — the response parsing/shape is identical
+    either way.
+    """
     settings = settings or ClassificationSettings(max_retries=0)
 
     def direct(pdf_bytes: bytes, images: Sequence[ExtractedImage]) -> BrochureEditorialPlan:
         document_digest = hashlib.sha256(pdf_bytes).hexdigest()
         image_ids = tuple(_director_image_id(document_digest, image) for image in images)
-        prompt = build_brochure_direction_prompt(image_ids)
+        prompt = prompt_builder(image_ids)
 
         def attempt() -> BrochureEditorialPlan:
             raw = transport.direct(pdf_bytes, images, image_ids, prompt, settings.timeout_s)

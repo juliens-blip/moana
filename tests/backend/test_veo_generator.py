@@ -211,6 +211,16 @@ def test_prompt_is_pure_and_deterministic_per_entry() -> None:
     assert build_section_prompt(entry) == build_section_prompt(entry)
 
 
+def test_focus_interieurs_style_adds_a_dedicated_direction_block_and_changes_the_digest() -> None:
+    entry = _entry("img-1", "Main Salon")
+    classique_prompt = build_section_prompt(entry, video_style="classique")
+    focus_prompt = build_section_prompt(entry, video_style="focus_interieurs")
+
+    assert "FOCUS INTERIEURS EDIT" not in classique_prompt
+    assert "FOCUS INTERIEURS EDIT" in focus_prompt
+    assert build_clip_content_digest(entry, classique_prompt) != build_clip_content_digest(entry, focus_prompt)
+
+
 def test_no_real_network_call_and_manifest_read_before_any_transport_call() -> None:
     manifest = _manifest(_entry("img-1", "bow"))
     checkpoint = FakeStorageCheckpoint()
@@ -242,6 +252,31 @@ def test_clip_is_persisted_immediately_with_deterministic_object_key() -> None:
     assert key_first == key_second
     assert f"/{VEO_PROMPT_VERSION}/" in key_first
     assert key_first.endswith("img-1.mp4")
+
+
+def test_non_classique_style_namespaces_the_object_key_and_never_collides_with_classique() -> None:
+    manifest = _manifest(_entry("img-1", "bow"))
+
+    classique_result = generate_section_clips(
+        manifest, FakeVeoTransport(), FakeStorageCheckpoint(), sleep=_no_sleep, rand=_fixed_rand
+    )
+    focus_result = generate_section_clips(
+        manifest,
+        FakeVeoTransport(),
+        FakeStorageCheckpoint(),
+        sleep=_no_sleep,
+        rand=_fixed_rand,
+        video_style="focus_interieurs",
+    )
+
+    classique_key = classique_result.clips[0].object_key
+    focus_key = focus_result.clips[0].object_key
+    assert classique_key != focus_key
+    assert "focus_interieurs/" in focus_key
+    assert "focus_interieurs/" not in classique_key
+    # The classique path must stay byte-for-byte what it always was, so existing
+    # checkpoints/clips are never invalidated by the new style parameter.
+    assert classique_key == f"veo-clips/aaaaaaaaaaaaaaaa/{VEO_PROMPT_VERSION}/img-1.mp4"
 
 
 def test_no_secret_header_or_signed_url_is_logged(caplog: pytest.LogCaptureFixture) -> None:
