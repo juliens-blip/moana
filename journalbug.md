@@ -401,3 +401,23 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   au typecheck (dataclass, pas de contrat statique partagé). Toujours vérifier
   `git stash list` sur toutes les branches avant de conclure qu'un fix « jamais
   fait » quand le code consommateur laisse penser qu'il existe déjà.
+- **[2026-08-30, résolu (mitigation)]** brochure-video / assemblage ffmpeg |
+  après le fix `mime_type` ci-dessus, une brochure reste bloquée ~10 min côté
+  UI sans jamais aboutir ni afficher d'erreur | `journalctl -u
+  moana-brochure-video@<jobId>` sur l'EC2 dédié (`moana-brochure-video`,
+  51.45.17.78) montre `oom-kill` : le noyau tue le process `ffmpeg`
+  (`anon-rss:1094676kB`) pendant l'assemblage des 5 clips avec transitions
+  `xfade` — l'instance n'a que 1.9 Go de RAM et **0 swap**. Le process tué par
+  SIGKILL n'a pas le temps d'écrire un statut d'erreur, d'où le blocage
+  silencieux côté UI plutôt qu'un message d'échec | fix (mitigation
+  immédiate, pas de resize d'instance) : 4 Go de swap ajoutés (`/swapfile`,
+  persistant via `/etc/fstab`, `vm.swappiness=10` pour ne swapper qu'en
+  dernier recours) + `systemctl reset-failed` sur les unités
+  `moana-brochure-video@*` bloquées en échec | à surveiller : si l'usage swap
+  devient fréquent (`free -h`/`vmstat`), ffmpeg ralentira au lieu de planter —
+  envisager alors soit d'alléger le filtergraph
+  (`workers/video_assembler.py`, transitions `xfade` + `scale` du logo), soit
+  d'upgrader l'instance (RAM) ; et indépendamment, un job tué par OOM/SIGKILL
+  devrait écrire un statut d'échec exploitable côté UI au lieu de laisser le
+  polling tourner indéfiniment (amélioration UX non traitée dans cette
+  passe).
