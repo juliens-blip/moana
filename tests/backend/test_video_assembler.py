@@ -40,6 +40,7 @@ from workers.video_assembler import (
     InMemoryPublishCheckpoint,
     PublishedArtifact,
     SupabaseStoragePublishCheckpoint,
+    VideoBranding,
     _build_branding_ffmpeg_command,
     _cleanup_stale_temp_dirs,
     assemble_and_publish,
@@ -64,7 +65,13 @@ def _clip(image_id: str, object_key: str | None = None, digest: str = "d" * 64) 
 
 
 class FakeClipSource:
-    """In-memory clip download fake: raises injected errors, never touches a network."""
+    """In-memory clip download fake: raises injected errors, never touches a network.
+
+    ``download_clip`` returns opaque bytes only — ``ClipSource`` is a
+    protocol this module defines itself (not a third-party API), so there
+    is no external response shape to capture: any bytes stand in equally
+    well for "clip content" in these tests.
+    """
 
     def __init__(self, failures_by_key: dict[str, list[Exception]] | None = None) -> None:
         self._failures_by_key = failures_by_key or {}
@@ -553,6 +560,9 @@ def test_duplicate_image_id_raises_value_error() -> None:
 
 
 def test_supabase_storage_checkpoint_creates_object_with_upsert_false() -> None:
+    # Only the documented Supabase Storage HTTP status codes for object/info
+    # GET (404 when absent) and object create (201 Created) are asserted
+    # here — no response body shape is fabricated, so no capture is needed.
     recorded_requests: list[tuple[str, dict[str, str], bytes | None, float]] = []
 
     def fake_request(url, headers, body, timeout):
@@ -603,6 +613,8 @@ def test_supabase_storage_checkpoint_reuses_object_on_conflict_status() -> None:
             info_get_count["n"] += 1
             if info_get_count["n"] == 1:
                 return 404, b""  # pre-check: not yet visible to this caller
+            # object/info body shape (name/etag/size, no checksum) captured
+            # from a live Supabase Storage GET, 2026-08-27.
             return 200, json.dumps({
                 "name": expected_object_key,
                 "etag": "production-etag",
@@ -710,6 +722,8 @@ def test_supabase_storage_checkpoint_load_confirmed_skips_produce_entirely() -> 
     def fake_request(url, headers, body, timeout):
         assert body is None  # load_confirmed only ever issues a GET
         if "/object/info/" in url:
+            # object/info body shape (name/etag/size, no checksum) captured
+            # from a live Supabase Storage GET, 2026-08-27.
             return 200, json.dumps({
                 "name": expected_object_key,
                 "etag": "production-etag",
@@ -746,6 +760,8 @@ def test_supabase_storage_checkpoint_verifies_real_supabase_info_shape_from_obje
     def fake_request(url, headers, body, timeout):
         assert body is None
         if "/object/info/" in url:
+            # object/info body shape (name/etag/size, no checksum) captured
+            # from a live Supabase Storage GET, 2026-08-27.
             return 200, json.dumps({
                 "name": expected_object_key,
                 "etag": "production-etag",
@@ -774,6 +790,8 @@ def test_supabase_storage_checkpoint_verifies_real_supabase_info_shape_from_obje
 def test_supabase_storage_checkpoint_definitive_status_raises_without_retrying() -> None:
     call_count = {"n": 0}
 
+    # 404/400 are plain HTTP status codes only — no fabricated response body
+    # schema, so no capture is needed (see FakeClipSource docstring above).
     def fake_request(url, headers, body, timeout):
         if body is None:
             return 404, b""
@@ -801,6 +819,8 @@ def test_supabase_storage_checkpoint_definitive_status_raises_without_retrying()
 def test_supabase_storage_checkpoint_retries_transient_upload_status_then_succeeds() -> None:
     upload_attempts = {"n": 0}
 
+    # 404/503/201 are plain HTTP status codes only — no fabricated response
+    # body schema, so no capture is needed.
     def fake_request(url, headers, body, timeout):
         if body is None:
             return 404, b""
@@ -830,6 +850,8 @@ def test_supabase_storage_checkpoint_retries_transient_upload_status_then_succee
 def test_supabase_storage_checkpoint_dead_letters_only_after_transient_retries_exhausted() -> None:
     upload_attempts = {"n": 0}
 
+    # 404/503 are plain HTTP status codes only — no fabricated response
+    # body schema, so no capture is needed.
     def fake_request(url, headers, body, timeout):
         if body is None:
             return 404, b""
@@ -855,6 +877,8 @@ def test_supabase_storage_checkpoint_dead_letters_only_after_transient_retries_e
 
 
 def test_assemble_and_publish_dead_letters_after_storage_retries_are_exhausted() -> None:
+    # 404/503 are plain HTTP status codes only — no fabricated response
+    # body schema, so no capture is needed.
     def always_unavailable(url, headers, body, timeout):
         if body is None:
             return 404, b""
@@ -889,6 +913,8 @@ def test_assemble_and_publish_dead_letters_after_storage_retries_are_exhausted()
 
 
 def test_supabase_storage_checkpoint_never_sends_service_role_key_in_a_readable_url() -> None:
+    # 404/201 are plain HTTP status codes only — no fabricated response
+    # body schema, so no capture is needed.
     def fake_request(url, headers, body, timeout):
         assert "fake-service-role-key-sentinel" not in url
         return (404, b"") if body is None else (201, b"")
@@ -947,6 +973,43 @@ def test_existing_contract_alignment() -> None:
         env=FAKE_SUPABASE_ENV,
     )
     assert job.status == JobStatus.DONE.value
+
+
+def test_video_assembler_contract_imports_and_video_branding() -> None:
+    """``video_assembler`` sources its Veo-shaped symbols from ``veo_generator``.
+
+    ``CLIP_DURATION_S``/``ClipCheckpoint``/``run_with_retry`` must be the
+    exact objects defined in ``workers/veo_generator.py`` (no shadow copy,
+    no drift), the module must never actively import
+    ``gemini_veo_generator`` (deprecated dual-pipeline reference only
+    belongs in a comment, not an ``import`` statement), and ``VideoBranding``
+    must reject the removed ``yacht_name``/``facts`` fields it carried
+    before the branding-cost fix.
+    """
+    import workers.veo_generator as veo_generator
+    import workers.video_assembler as module
+
+    assert module.CLIP_DURATION_S is veo_generator.CLIP_DURATION_S
+    assert module.ClipCheckpoint is veo_generator.ClipCheckpoint
+    assert module.run_with_retry is veo_generator.run_with_retry
+
+    source = module.__file__
+    with open(source, encoding="utf-8") as handle:
+        text = handle.read()
+    assert "import gemini_veo_generator" not in text
+    assert "from workers.gemini_veo_generator" not in text
+    assert "from workers import gemini_veo_generator" not in text
+
+    branding = VideoBranding(logo_bytes=b"logo")
+    assert branding.logo_bytes == b"logo"
+    assert not hasattr(branding, "yacht_name")
+    assert not hasattr(branding, "facts")
+
+    with pytest.raises(TypeError):
+        VideoBranding(logo_bytes=b"logo", yacht_name="M/Y Test")  # type: ignore[call-arg]
+
+    with pytest.raises(TypeError):
+        VideoBranding(logo_bytes=b"logo", facts=["fact-1"])  # type: ignore[call-arg]
 
 
 # --- _cleanup_stale_temp_dirs: orphaned job temp dirs on a RAM-backed /tmp ---
