@@ -7,5 +7,8 @@ Application interne de gestion de listings de bateaux et de leads commerciaux.
 - Démarrage : `npm install`, puis `npm run dev` avec les variables d’environnement requises.
 - Mémoire projet : commencer par [index.md](index.md).
 - Règles agent : voir [CLAUDE.md](CLAUDE.md).
+- Hook universel de déploiement du worker vidéo : `./scripts/deploy-brochure-video`
+  (plan sans réseau par défaut, `check`, puis `--apply`) ; procédure détaillée dans
+  [wiki/Deploy-Brochure-Video-Worker.md](wiki/Deploy-Brochure-Video-Worker.md).
 
 Ne jamais ajouter de secret ou de valeur d’environnement à la documentation.

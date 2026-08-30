@@ -81,6 +81,7 @@ from workers.veo_generator import (
     CLIP_DURATION_S,
     ClipCheckpoint,
     VeoGenerationFailure,
+    VeoPromptContext,
     VeoSettings,
     VeoTransientError,
     VeoTransport,
@@ -117,7 +118,7 @@ LOGGER = logging.getLogger("moana.brochure_video_runner")
 # must stay above this value (see moana-brochure-video@.service) so this
 # check fires cleanly before the OS kills the process outright.
 JOB_TIMEOUT_S = 3600.0
-CREATIVE_PIPELINE_VERSION = "editorial-branding-v3-five-sections"
+CREATIVE_PIPELINE_VERSION = "sequenced-editorial-v4-five-sections"
 MAX_VIDEO_CLIPS = 5
 _MAX_REASON_LENGTH = 500
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -487,6 +488,10 @@ def run_brochure_video_job(
                     video_manifest,
                     veo_transport,
                     veo_checkpoint,
+                    prompt_context=VeoPromptContext(
+                        yacht_name=editorial_plan.yacht_name,
+                        verified_facts=tuple(fact.display_text for fact in editorial_plan.facts),
+                    ),
                     settings=veo_settings,
                     sleep=sleep,
                     rand=rand,

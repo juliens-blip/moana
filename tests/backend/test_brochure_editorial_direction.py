@@ -9,6 +9,20 @@ import zlib
 
 import pytest
 
+from tests.backend.test_brochure_video_runner import (
+    FAKE_SUPABASE_ENV,
+    IMAGE_A0,
+    FakeClipSource,
+    FakeVeoStorageCheckpoint,
+    FakeVeoTransport,
+    _content_object,
+    _dict_object,
+    _fixed_rand,
+    _image_object,
+    _no_sleep,
+    _page_object,
+    _write_job_inputs,
+)
 from workers.brochure_video_runner import AtomicJobStateStore, run_brochure_video_job
 from workers.gemini_pdf_classifier import (
     MAX_EDITORIAL_FACTS,
@@ -19,21 +33,6 @@ from workers.gemini_pdf_classifier import (
     parse_brochure_direction_response,
 )
 from workers.video_assembler import InMemoryPublishCheckpoint
-
-from tests.backend.test_brochure_video_runner import (
-    FAKE_SUPABASE_ENV,
-    FakeClipSource,
-    FakeVeoStorageCheckpoint,
-    FakeVeoTransport,
-    IMAGE_A0,
-    _content_object,
-    _dict_object,
-    _fixed_rand,
-    _image_object,
-    _no_sleep,
-    _page_object,
-    _write_job_inputs,
-)
 
 
 def _two_image_pdf() -> bytes:
@@ -400,6 +399,15 @@ def test_runner_skips_logo_clip_and_adds_persistent_logo_watermark_only(tmp_path
 
     assert envelope.status == "done"
     assert transport.calls == [photo_id], "the broker logo must never become its own Veo clip"
+    assert len(transport.prompts) == 1
+    generated_prompt = transport.prompts[0]
+    assert "sequence 1 of 1" in generated_prompt
+    assert 'for the motor yacht "M/Y EXAMPLE"' in generated_prompt
+    assert '"Builder — Example Yachts"' in generated_prompt
+    assert '"Length — 42 m"' in generated_prompt
+    assert '"Guests — 10 in 5 cabins"' in generated_prompt
+    assert "{YACHT_NAME}" not in generated_prompt
+    assert "{VERIFIED_FACTS}" not in generated_prompt
     assert len(recorded_commands) == 2, "assembly plus one deterministic branding pass"
     branding_command = recorded_commands[1]
     filter_graph = branding_command[branding_command.index("-filter_complex") + 1]

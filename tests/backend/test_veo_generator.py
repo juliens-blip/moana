@@ -15,12 +15,13 @@ import pytest
 from workers.pdf_image_extractor import ManifestEntry, PdfImageManifest
 from workers.veo_generator import (
     CLIP_DURATION_S,
+    VEO_PROMPT_VERSION,
     ClipCheckpoint,
     VeoGenerationFailure,
     VeoGenerationResult,
+    VeoPromptContext,
     VeoSettings,
     VeoTransientError,
-    VEO_PROMPT_VERSION,
     build_clip_content_digest,
     build_section_prompt,
     generate_section_clips,
@@ -108,37 +109,101 @@ def test_prompt_forbids_invention_and_exaggeration_for_every_section() -> None:
     generate_section_clips(manifest, transport, checkpoint, sleep=_no_sleep, rand=_fixed_rand)
 
     assert len(transport.calls) == 2
-    for image_id, prompt, _timeout in transport.calls:
-        assert "never invent" in prompt
+    for sequence_index, (image_id, prompt, _timeout) in enumerate(transport.calls, start=1):
+        assert "Never invent" in prompt
         assert "exaggerate" in prompt
         assert "6.0-second" in prompt
+        assert f"sequence {sequence_index} of 2" in prompt
+        assert "will later be assembled" in prompt
         assert image_id in {"img-1", "img-2"}
 
 
 def test_prompt_requests_subtle_logo_watermark_premium_quality_and_interior_room_tour() -> None:
-    prompt = build_section_prompt(_entry("img-interior", "Vie à bord–Intérieurs"))
+    prompt = build_section_prompt(
+        _entry("img-interior", "Vie à bord–Intérieurs"),
+        sequence_index=1,
+        total_sequences=2,
+    )
 
     assert "premium luxury-yacht brokerage footage" in prompt
     assert "persistent, static, very light semi-transparent watermark" in prompt
     assert "entire clip" in prompt
     assert "8-12 percent opacity" in prompt
-    assert "full-screen image" in prompt
-    assert "active, premium room tour with three clear beats" in prompt
+    assert "turn the logo into the main subject" in prompt
+    assert "active premium room tour" in prompt
     assert "strong natural parallax" in prompt
-    assert "directional motion" in prompt
-    assert "simple zoom-in, zoom-out" in prompt
-    assert "never invent an unseen room" in prompt
+    assert "cut naturally into the following shot" in prompt
+    assert "simple zoom-ins or zoom-outs" in prompt
+    assert "Never invent an unseen room" in prompt
 
 
 def test_prompt_uses_exact_brochure_text_for_opening_title_and_section_facts() -> None:
-    prompt = build_section_prompt(_entry("img-hero", "Hero/Identité"))
+    context = VeoPromptContext(
+        yacht_name="M/Y EXAMPLE",
+        verified_facts=("Builder — Example Yachts", "Length — 42 m"),
+    )
+    prompt = build_section_prompt(
+        _entry("img-hero", "Hero/Identité"),
+        sequence_index=1,
+        total_sequences=3,
+        context=context,
+    )
 
-    assert "exact yacht name" in prompt
-    assert "first moments" in prompt
-    assert "builder, model, year, length" in prompt
-    assert "lower-thirds or section cards" in prompt
-    assert "Never invent a yacht name" in prompt
-    assert "when exact wording is not confidently readable, show no text" in prompt
+    assert 'for the motor yacht "M/Y EXAMPLE"' in prompt
+    assert 'Yacht name: "M/Y EXAMPLE"' in prompt
+    assert 'introduce the exact yacht name "M/Y EXAMPLE"' in prompt
+    assert '"Builder — Example Yachts"' in prompt
+    assert '"Length — 42 m"' in prompt
+    assert "Do not display a factual lower-third in the same clip" in prompt
+    assert "If a verified value cannot be rendered confidently and legibly, show no text" in prompt
+
+
+def test_later_sequence_uses_at_most_one_verified_fact_and_not_the_opening_title() -> None:
+    context = VeoPromptContext(
+        yacht_name="M/Y EXAMPLE",
+        verified_facts=("Builder — Example Yachts", "Length — 42 m"),
+    )
+
+    prompt = build_section_prompt(
+        _entry("img-interior", "Main Salon"),
+        sequence_index=2,
+        total_sequences=3,
+        context=context,
+    )
+
+    assert "sequence 2 of 3" in prompt
+    assert "For this subsequent sequence, display at most one" in prompt
+    assert "For this opening sequence" not in prompt
+
+
+def test_missing_editorial_text_leaves_no_unresolved_placeholder() -> None:
+    prompt = build_section_prompt(_entry("img-1", "Exterior"))
+
+    assert "{YACHT_NAME}" not in prompt
+    assert "{VERIFIED_FACTS}" not in prompt
+    assert "No yacht name was verified. Do not display a yacht title" in prompt
+    assert "No verified facts available; display no factual overlay" in prompt
+
+
+def test_last_sequence_concludes_instead_of_promising_a_following_shot() -> None:
+    prompt = build_section_prompt(
+        _entry("img-3", "Exterior"), sequence_index=3, total_sequences=3
+    )
+
+    assert "concluding view appropriate to the final sequence" in prompt
+    assert "cut naturally into the following shot" not in prompt
+
+
+def test_prompt_context_changes_invalidate_the_clip_content_digest() -> None:
+    entry = _entry("img-1", "Exterior")
+    prompt_a = build_section_prompt(
+        entry, context=VeoPromptContext(yacht_name="M/Y ALPHA")
+    )
+    prompt_b = build_section_prompt(
+        entry, context=VeoPromptContext(yacht_name="M/Y BRAVO")
+    )
+
+    assert build_clip_content_digest(entry, prompt_a) != build_clip_content_digest(entry, prompt_b)
 
 
 def test_prompt_is_pure_and_deterministic_per_entry() -> None:

@@ -7,9 +7,9 @@ appel réseau réel, aucun ffmpeg réel, aucune attente de 600 secondes (horloge
 
 from __future__ import annotations
 
-import json
 import hashlib
 import io
+import json
 import subprocess
 import urllib.error
 
@@ -19,20 +19,20 @@ from workers.brochure_video_runner import (
     JOB_TIMEOUT_S,
     MAX_VIDEO_CLIPS,
     AtomicJobStateStore,
+    GeminiVeoTransport,
     InvalidJobInputError,
     JobAlreadyRunningError,
-    GeminiVeoTransport,
     build_creative_idempotency_key,
     run_brochure_video_job,
     select_video_entries,
 )
 from workers.job_contract import JobStatus
+from workers.pdf_image_extractor import ManifestEntry
 from workers.veo_generator import (
-    ClipCheckpoint,
     VEO_PROMPT_VERSION,
+    ClipCheckpoint,
     VeoTransientError,
 )
-from workers.pdf_image_extractor import ManifestEntry
 from workers.video_assembler import (
     CONTAINER_FORMAT,
     SUPABASE_DB_URL_VAR,
@@ -304,9 +304,11 @@ class FakeVeoTransport:
     def __init__(self, fail_with: Exception | None = None) -> None:
         self._fail_with = fail_with
         self.calls: list[str] = []
+        self.prompts: list[str] = []
 
     def generate_clip(self, prompt: str, entry, timeout: float) -> bytes:
         self.calls.append(entry.image_id)
+        self.prompts.append(prompt)
         if self._fail_with is not None:
             raise self._fail_with
         return f"clip-bytes-{entry.image_id}".encode()

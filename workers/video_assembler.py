@@ -38,8 +38,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
-from workers.gemini_veo_generator import CLIP_DURATION_S, ClipCheckpoint, run_with_retry
 from workers.job_contract import JobError, JobPhase, JobStatus, UploadStatusResultJob
+from workers.veo_generator import CLIP_DURATION_S, ClipCheckpoint, run_with_retry
 
 LOGGER = logging.getLogger("moana.video_assembler")
 

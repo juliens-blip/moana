@@ -58,7 +58,10 @@ DEFAULT_MODEL = "gemini-3.6-flash"
 SUGGESTED_SECTION_CATEGORIES = (
     "Hero/Identité",
     "Vie à bord–Extérieurs",
+    "Ponts & Flybridge",
     "Vie à bord–Intérieurs",
+    "Cabines & Hébergement",
+    "Équipements & Water Toys",
     "Performance & Technique",
     "Commercial/Closing",
 )
@@ -167,6 +170,10 @@ def build_brochure_direction_prompt(image_ids: Sequence[str]) -> str:
     return (
         "Act as the editorial director for a premium yacht brokerage video. Analyze the complete PDF "
         "and every candidate image supplied after it. Return decisions grounded only in the brochure. "
+        "The final edit contains at most five six-second clips, so maximize visual coverage: preserve "
+        "the most representative, clearly different views across identity, exterior/decks, amenities, "
+        "interiors, cabins and technical details. Do not spend all five selections on near-duplicate "
+        "views. Keep the brochure's natural page order in the section decisions. "
         f"Candidate image_ids are: {candidates}. Classify every image_id exactly once; prefer these "
         f"section labels when appropriate: {categories}. Identify logo_image_id only when the candidate "
         "is unambiguously and exclusively the actual BROKERAGE AGENCY logo — never the yacht name, "
