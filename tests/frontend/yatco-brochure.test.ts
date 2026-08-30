@@ -30,11 +30,16 @@ assert.doesNotMatch(brochureFunction, /base64/);
 
 assert.match(scriptSource, /VID ou MLS_ID requis/);
 assert.match(scriptSource, /MLSID: mlsId/);
+assert.match(scriptSource, /queueQuickPdfFromSearchResult\(resolvedVid\)/);
+assert.match(scriptSource, /getByText\('Quick PDF', \{ exact: true \}\)/);
+assert.doesNotMatch(scriptSource, /queued = await queueQuickPdf\(resolvedVid\);/);
 assert.match(scriptSource, /url: downloadUrl\.href/);
 assert.doesNotMatch(scriptSource, /body\.toString\('base64'\)/);
 assert.doesNotMatch(scriptSource, /pageNumber <= 120/);
 
+assert.match(brochureFunction, /remote\.stderr\.trim\(\)\.slice\(-4000\)/);
+
 assert.match(workerDockerfile, /glob\.glob\('\/data\/page_\*\.json'\)/);
 assert.doesNotMatch(workerDockerfile, /glob\.glob\('\/data\/\*\.json'\)/);
 
-console.log('21/21 YATCO brochure and ingestion regression checks passed');
+console.log('26/26 YATCO brochure and ingestion regression checks passed');

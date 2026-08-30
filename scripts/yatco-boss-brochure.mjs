@@ -55,6 +55,43 @@ try {
     }
   }
 
+  async function queueQuickPdfFromSearchResult(vid) {
+    // BOSS refuse certaines annonces si elles n'ont pas d'abord été ouvertes
+    // depuis les résultats de recherche. Reproduire le clic de l'interface est
+    // important : répéter simplement POST /quickpdf avec le vID résolu renvoie
+    // le même refus et ne débloque jamais la brochure.
+    const detail = page.locator(
+      `button[data-vesselid="${vid}"], a[data-vesselid="${vid}"], a[href*="vID=${vid}"]`
+    ).first();
+    if (!(await detail.count())) {
+      throw new Error(`Fiche YATCO ${vid} introuvable dans le résultat MLS`);
+    }
+
+    await detail.click();
+    await page.waitForTimeout(1500);
+    if (loginPage(await page.content())) {
+      throw new Error('YATCO BOSS session expired while opening the listing');
+    }
+
+    const quickPdf = page.getByText('Quick PDF', { exact: true }).last();
+    if (!(await quickPdf.count())) {
+      throw new Error(`Action Quick PDF indisponible pour l’annonce YATCO ${vid}`);
+    }
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes('/forsale/pdf/quickpdf/'),
+      { timeout: 30000 }
+    );
+    await quickPdf.click();
+    const response = await responsePromise;
+    const body = await response.text();
+    try {
+      return JSON.parse(body);
+    } catch {
+      if (loginPage(body)) throw new Error('YATCO BOSS session expired during quick PDF');
+      throw new Error(`YATCO quickpdf HTTP ${response.status()}: réponse invalide`);
+    }
+  }
+
   let resolvedVid = requestedVid;
   let queued = resolvedVid ? await queueQuickPdf(resolvedVid) : null;
 
@@ -84,7 +121,7 @@ try {
       return null;
     }, requestedMlsId) ?? '';
     if (!resolvedVid) throw new Error(`Annonce MLS ${requestedMlsId} introuvable dans YATCO BOSS`);
-    queued = await queueQuickPdf(resolvedVid);
+    queued = await queueQuickPdfFromSearchResult(resolvedVid);
   }
 
   if (!queueAccepted(queued)) {

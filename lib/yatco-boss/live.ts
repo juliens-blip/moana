@@ -150,7 +150,13 @@ export async function getLiveYatcoBossBrochure(
       `docker exec -e VID=${vid} -e MLS_ID=${externalId} -i scrape-mcp node -`,
       { input: script, timeoutMs: 110_000 }
     );
-    if (remote.code !== 0) throw new Error(`Génération YATCO distante échouée (code ${remote.code})`);
+    if (remote.code !== 0) {
+      // Conserver l'erreur fonctionnelle du script (session expirée, accès
+      // broker, sélecteur BOSS...) afin que la route puisse la classifier et
+      // que les logs Vercel indiquent enfin la cause réelle du 502.
+      const detail = remote.stderr.trim().slice(-4000);
+      throw new Error(`Génération YATCO distante échouée (code ${remote.code})${detail ? `: ${detail}` : ''}`);
+    }
     const result = JSON.parse(remote.stdout) as { filename?: string; contentType?: string; url?: string };
     if (!result.filename || !result.url) throw new Error('YATCO n’a pas retourné de brochure');
     const downloadUrl = new URL(result.url);
