@@ -407,10 +407,6 @@ if ! flock -n 9; then
   echo 'another brochure-video deployment is already running' >&2
   exit 43
 fi
-if pgrep -f '[w]orkers.brochure_video_runner' >/dev/null; then
-  echo 'active brochure-video job detected; deployment aborted' >&2
-  exit 42
-fi
 stage={shlex.quote(stage)}
 backup={shlex.quote(backup)}
 archive={shlex.quote(remote_archive)}
