@@ -12,7 +12,7 @@ import { createRequestCoordinator } from '@/lib/yatco-global-request';
 
 export const dynamic = 'force-dynamic';
 
-const FRESHNESS_HOURS = 72;
+const FRESHNESS_HOURS = 4380; // 6 mois
 
 type YatcoGlobalSortBy = 'updated_at' | 'source_updated_at' | 'price_usd' | 'model_year' | 'length_m';
 type YatcoGlobalSortDir = 'asc' | 'desc';
@@ -410,9 +410,12 @@ function YatcoGlobalPageInner() {
             <div><span className="text-gray-400">Agent :</span> {displayValue(detailsListing.agent_name)} {detailsListing.agent_email ? `· ${detailsListing.agent_email}` : ''}</div>
           </div>
           <div className="flex flex-wrap gap-3">
-            {detailsListing.source === 'yatco-boss-live' && typeof (detailsListing.raw_payload?.yatco_boss as { vid?: unknown } | undefined)?.vid === 'string'
-              ? <a href={`/api/yatco-global/brochure?vid=${encodeURIComponent(String((detailsListing.raw_payload?.yatco_boss as { vid: string }).vid))}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>
-              : detailsListing.spec_sheet_url && <a href={detailsListing.spec_sheet_url} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>}
+            {(() => {
+              const bossVid = (detailsListing.raw_payload?.yatco_boss as { vid?: unknown } | undefined)?.vid;
+              return typeof bossVid === 'string' || typeof bossVid === 'number'
+                ? <a href={`/api/yatco-global/brochure?vid=${encodeURIComponent(String(bossVid))}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>
+                : detailsListing.spec_sheet_url && <a href={detailsListing.spec_sheet_url} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>;
+            })()}
             {detailsListing.listing_url && <a href={detailsListing.listing_url} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">Ouvrir la fiche source</a>}
           </div>
           {detailsListing.raw_payload && <details className="border-t border-gray-200 pt-4"><summary className="cursor-pointer text-xs font-semibold text-gray-600">Données brutes du scraper</summary><pre className="mt-3 max-h-72 overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-600">{JSON.stringify(detailsListing.raw_payload, null, 2)}</pre></details>}

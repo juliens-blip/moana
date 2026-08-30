@@ -109,7 +109,7 @@ run('schema keeps new filters optional and existing defaults stable when omitted
   assert.equal(parsed.length_m, undefined);
   assert.equal(parsed.price_usd_min, undefined);
   assert.equal(parsed.price_usd_max, undefined);
-  assert.equal(parsed.freshnessHours, 72);
+  assert.equal(parsed.freshnessHours, 4380);
   assert.equal(parsed.minLengthMeters, 26);
   assert.equal(parsed.minYear, 2010);
   assert.equal(parsed.page, 1);

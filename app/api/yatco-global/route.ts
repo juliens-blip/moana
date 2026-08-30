@@ -16,7 +16,7 @@ export const maxDuration = 300;
  * browser scraper synchronously from this request.
  *
  * Query params:
- * - freshnessHours=number: Only listings created or updated within this many hours (default 72)
+ * - freshnessHours=number: Only listings created or updated within this many hours (default 4380 ≈ 6 months)
  * - minLengthMeters=number: Minimum length in meters (default 26)
  * - minYear=number: Minimum model year (default 2010)
  * - country=string: Filter by country (case-insensitive)

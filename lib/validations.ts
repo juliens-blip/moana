@@ -240,7 +240,7 @@ export const yatcoGlobalQuerySchema = z.object({
       .positive('freshnessHours doit être positif')
       .max(8760, 'freshnessHours invalide')
       .optional()
-      .default(72)
+      .default(4380)
   ),
   minLengthMeters: z.preprocess(
     parseNumberInput,

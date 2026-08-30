@@ -103,7 +103,7 @@ export async function getYatcoGlobalListings(
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const freshnessHours = filters.freshnessHours ?? 72;
+  const freshnessHours = filters.freshnessHours ?? 4380;
   const minLengthMeters = filters.minLengthMeters ?? 26;
   const minYear = filters.minYear ?? 2010;
   // Backward-compatible alias for bookmarked URLs created before the BOSS
