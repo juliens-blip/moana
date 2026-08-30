@@ -201,6 +201,52 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
 
 ## Bugs bruts
 
+- **[2026-08-30, résolu]** `dev/software_factory` (hors moana) / orchestrateur live
+  tmux | l'utilisateur soumet une demande dans le pane « Orchestrator » et le
+  modèle exécute directement le code lui-même au lieu de router vers les
+  équipes — aucune auto-identification au rôle d'orchestrateur sauf si
+  l'utilisateur le lui rappelle explicitement dans le prompt | `tmux_factory.sh
+  setup_orchestrator_window()` avait été silencieusement remplacé (commit
+  `2df6b83`, message « corrige les causes racines de l'échec brochure-vidéo »
+  — sans rapport réel) : la session `claude --model claude-sonnet-5 --effort
+  high` (system prompt injecté via `--append-system-prompt
+  prompts/orchestrator_live_system.md`, `--allowedTools "Bash(./run_background.sh
+  *)" Read Grep Glob`, `--disallowedTools Edit Write NotebookEdit`) a été
+  échangée contre `codex --model gpt-5.6-sol --dangerously-bypass-approvals-and-
+  sandbox` **sans aucun system prompt ni restriction d'outils** — Codex/GPT-5.6
+  est un agent de codage autonome par nature ; sans contre-instruction système
+  et sans sandbox, il traite toute demande comme une tâche de code à exécuter
+  lui-même. Régression détectée une première fois le 2026-08-22 (alerte
+  sécurité posée en mémoire) mais jamais corrigée dans le fichier — restée 8
+  jours en l'état, aggravée le 2026-08-27 par un typo (`extra_high` au lieu de
+  `xhigh`, valeur rejetée par l'API) qui a masqué le vrai problème derrière une
+  erreur de param plus visible | config d'origine restaurée dans
+  `tmux_factory.sh` (retour à `claude`/Sonnet 5, system prompt +
+  allow/disallowTools réels) ; `config/orchestrator.yaml` (orchestrateur batch
+  `route.json`, rôle distinct mais même famille de bug) durci en parallèle :
+  modèle repassé de `codex_orchestrator`/`gpt-5.6-sol` à `claude_orchestrator`/
+  `claude-sonnet-5`, et `--disallowedTools Edit,NotebookEdit` ajouté au gabarit
+  CLI pour que l'interdiction d'édition soit technique et non plus un simple
+  texte « INTERDITS » noyé dans le prompt (jusque-là décoratif : n'importe quel
+  modèle qui ignore la consigne pouvait éditer le code sans que rien ne l'en
+  empêche réellement — `_run_role`/`Orchestrator.route` dans
+  `workflows/adw_sdlc.py` n'appliquent `tools.allow/deny` qu'en texte, jamais en
+  flag CLI) | **résiduel non traité** : les 4 Team Leads (`osint`/`rag`/
+  `frontend`/`backend`) tournent avec exactement le même patron non protégé
+  (`provider: codex`, `gpt-5.6-sol`, `--dangerously-bypass-approvals-and-
+  sandbox`, `tools.deny` textuel uniquement) — même classe de vulnérabilité,
+  pas corrigée dans cette passe (aucun `--disallowedTools` équivalent pour le
+  binaire `codex`, seul un `--sandbox` grossier read-only/workspace-write/
+  danger-full-access existe, insuffisant pour restreindre à `route_team.json`
+  sans casser l'accès en lecture au repo) ; la session tmux déjà active garde
+  l'ancien process tant qu'elle n'est pas relancée (`./tmux_factory.sh kill`
+  puis `./start_factory.sh`) | leçon : un commit au message « fix » peut
+  cacher une régression sécurité sans rapport ; toujours diffter le fichier
+  entier (pas juste relire le message) avant de faire confiance à un commit
+  historique sur un fichier sensible. Et : une alerte de sécurité posée en
+  mémoire (ici 2026-08-22) doit se traduire en fix committé dans la foulée,
+  sinon elle se perd — 8 jours plus tard le bug tournait encore en prod locale.
+
 - [2026-08-22] dashboard UI | le logo Moana apparaissait en très grand en
   arrière-plan, particulièrement sur YATCO Global | le layout dashboard
   appliquait une image JPEG 1600x800 en filigrane avec `background-repeat`,
@@ -297,8 +343,61 @@ Format : `[AAAA-MM-JJ] <tool> | symptôme | cause racine | fix | leçon`.
   notre propre ingestion » avant de filtrer sur la fraîcheur — la première peut
   être absente ou quasi statique sans que ce soit visible en base tant qu'on ne
   compare pas les deux.
+- **[2026-08-30, résolu et confirmé en prod]** yatco-global (brochure 502 en
+  prod) | `GET /api/yatco-global/brochure` renvoie 502 « Brochure indisponible »
+  après le commit `045ee59`, alors que le script distant/Docker/session YATCO
+  BOSS fonctionnent (reproduits avec succès hors Vercel via `ssh` et `ssh2`,
+  même transport qu'en prod) et que le security group EC2 est ouvert
+  (`0.0.0.0/0` sur 22) | cause racine confirmée par les logs Vercel (`vercel
+  logs --follow`) : `Error: All configured authentication methods failed`
+  (ssh2, `level: 'client-authentication'`) — un second EC2
+  (`moana-brochure-video`, 51.45.17.78) a été créé le 2026-08-29 pour le
+  pipeline vidéo, et `MOANA_SSH_KEY`/`MOANA_SSH_HOST` (variables `Secret`
+  Vercel, jamais relisibles) ont été repointées vers ce nouveau serveur ; la
+  route brochure BOSS retombe sur ces mêmes variables en fallback
+  (`lib/yatco-boss/live.ts`) faute de `YATCO_SSH_KEY`/`YATCO_SSH_HOST` dédiées
+  — jamais créées dans Vercel bien que le code les prévoie déjà | fix : ajout
+  de `YATCO_SSH_KEY` (clé `moanakyc.pem`, confirmée par empreinte
+  `SHA256:cq5Q4Y3C4K2Zv6AKjd1h0H8L8oHR32ONaKpsPZoCaeI` présente dans
+  `authorized_keys` sur `moana-kyc-worker`/51.44.220.145) et `YATCO_SSH_HOST`
+  (`ubuntu@51.44.220.145`) en environnement Production Vercel, puis
+  redéploiement (`vercel redeploy ... --target production`) ; aucun changement
+  de code | vérifié en prod : l'utilisateur confirme le téléchargement
+  fonctionnel après redéploiement | leçon : deux services qui partagent une
+  paire de variables d'environnement SSH (`MOANA_SSH_*`) divergent
+  silencieusement dès qu'un des deux services change de serveur — préférer
+  des variables dédiées par service dès la création du deuxième serveur,
+  pas seulement les prévoir dans le code sans jamais les renseigner ; une
+  variable Vercel de type `Secret` n'est jamais relisible (CLI ni dashboard),
+  donc si son contenu est suspect il faut la comparer indirectement (logs
+  runtime, fingerprint de la clé attendue) plutôt qu'espérer la lire.
+  Méthode de diagnostic détaillée : [[YATCO-Brochure-Diagnostic]]
+  (`wiki/YATCO-Brochure-Diagnostic.md`).
 - **[2026-08-19/20, à traiter] ⚠️ sécurité** — le relais `env.sh` introduit au Cycle 14
   (`dev/software_factory`, hors moana) pour propager les secrets aux panes tmux
   écrit `MOANA_SSH_KEY` en clair sur disque (0600, supprimé après l'appel, mais
   présent en clair pendant l'exécution) | pas encore durci (ex. named pipe / lecture
   unique) ; à vérifier avant la prochaine campagne de déploiement prod.
+- **[2026-08-30, résolu]** brochure-video / classification Gemini |
+  `AttributeError: 'ExtractedImage' object has no attribute 'mime_type'` à la
+  génération de brochure | le champ `mime_type` avait bien été développé
+  (encodage PNG pour les images Flate+SMask, JPEG réel pour DCTDecode/JPXDecode)
+  avec ses tests dans `workers/pdf_image_extractor.py`, mais uniquement dans un
+  `git stash` laissé sur la branche `fix/yatco-global-vercel` — jamais appliqué
+  sur `main`. Or les consommateurs (`gemini_pdf_classifier.py`,
+  `brochure_video_runner.py`, `vertex_veo_transport.py`) avaient déjà été
+  committés sur `main` en s'appuyant sur `image.mime_type`/`entry.mime_type` |
+  fix : diff isolé du stash (`git diff <parent> <stash> -- workers/
+  pdf_image_extractor.py tests/backend/test_pdf_image_extractor.py`) puis
+  réappliqué sur `main` via `git apply`, sans toucher au reste du stash (retry
+  `veo_generator.py`, renommage `gemini_veo_generator.py`→`veo_generator.py`,
+  fichiers app/lib non liés) qui reste non concerné et non appliqué | tests :
+  `test_pdf_image_extractor.py` 30/31 (1 échec préexistant sans rapport,
+  `SUGGESTED_SECTION_CATEGORIES` 8 vs 5 attendu) + `test_remote_brochure_video_
+  smoke.py::test_pdf_fixture_contract` vert | leçon : un `git stash` sur une
+  branche de travail est invisible aux commits qui partent d'ailleurs — si le
+  code consommateur d'un champ est mergé avant le code producteur, l'erreur
+  n'apparaît qu'à l'exécution (`AttributeError`), jamais à la revue de code ni
+  au typecheck (dataclass, pas de contrat statique partagé). Toujours vérifier
+  `git stash list` sur toutes les branches avant de conclure qu'un fix « jamais
+  fait » quand le code consommateur laisse penser qu'il existe déjà.

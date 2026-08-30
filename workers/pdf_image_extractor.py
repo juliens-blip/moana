@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 import zlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -62,6 +63,7 @@ class ExtractedImage:
     height: int | None
     color_space: str | None
     content_digest: str
+    mime_type: str = "image/jpeg"
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,7 @@ class ManifestEntry:
     content_digest: str
     byte_length: int
     image_data: bytes = b""
+    mime_type: str = "image/jpeg"
 
 
 @dataclass(frozen=True)
@@ -418,6 +421,149 @@ def _decode_stream(obj_value: dict[str, Any], raw: bytes) -> bytes:
     return raw
 
 
+def _filter_chain(obj_value: Mapping[str, Any]) -> tuple[str, ...]:
+    filt = obj_value.get("Filter")
+    if isinstance(filt, str):
+        return (filt,)
+    if isinstance(filt, list) and all(isinstance(item, str) for item in filt):
+        return tuple(filt)
+    return ()
+
+
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    checksum = zlib.crc32(kind)
+    checksum = zlib.crc32(payload, checksum) & 0xFFFFFFFF
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+
+def _encode_png(width: int, height: int, samples: bytes, components: int) -> bytes:
+    """Encode unpacked 8-bit Gray/RGB/GrayA/RGBA samples as a valid PNG."""
+    color_type_by_components = {1: 0, 2: 4, 3: 2, 4: 6}
+    color_type = color_type_by_components.get(components)
+    if color_type is None:
+        raise PdfExtractionError(f"cannot encode PNG with {components} color components")
+    row_bytes = width * components
+    if len(samples) != row_bytes * height:
+        raise PdfExtractionError(
+            f"raw image sample length mismatch: expected {row_bytes * height}, got {len(samples)}"
+        )
+    scanlines = b"".join(
+        b"\x00" + samples[offset : offset + row_bytes]
+        for offset in range(0, len(samples), row_bytes)
+    )
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    return (
+        signature
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(scanlines))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+def _color_component_count(objects: Mapping[int, _PdfObject], color_space: Any) -> int:
+    if isinstance(color_space, _Ref):
+        referenced = objects.get(color_space.number)
+        color_space = referenced.value if referenced is not None else None
+    if color_space in ("DeviceGray", "G"):
+        return 1
+    if color_space in ("DeviceRGB", "RGB"):
+        return 3
+    if color_space in ("DeviceCMYK", "CMYK"):
+        return 4
+    if isinstance(color_space, list) and color_space:
+        if color_space[0] == "ICCBased" and len(color_space) >= 2:
+            profile = color_space[1]
+            if isinstance(profile, _Ref):
+                profile_obj = objects.get(profile.number)
+                profile = profile_obj.value if profile_obj is not None else None
+            if isinstance(profile, dict) and profile.get("N") in (1, 3, 4):
+                return profile["N"]
+    raise PdfExtractionError(f"unsupported raw image color space {color_space!r}")
+
+
+def _raw_image_samples(
+    objects: Mapping[int, _PdfObject], obj_value: Mapping[str, Any], decoded: bytes
+) -> tuple[int, int, int, bytes]:
+    width = obj_value.get("Width")
+    height = obj_value.get("Height")
+    bits = obj_value.get("BitsPerComponent")
+    if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
+        raise PdfExtractionError("raw image has invalid dimensions")
+    if bits != 8:
+        raise PdfExtractionError(f"unsupported raw image BitsPerComponent {bits!r}")
+    decode_parms = obj_value.get("DecodeParms")
+    if isinstance(decode_parms, dict) and decode_parms.get("Predictor", 1) != 1:
+        raise PdfExtractionError("raw FlateDecode images with predictors are not supported")
+    components = _color_component_count(objects, obj_value.get("ColorSpace"))
+    expected = width * height * components
+    if len(decoded) != expected:
+        raise PdfExtractionError(f"raw image sample length mismatch: expected {expected}, got {len(decoded)}")
+    return width, height, components, decoded
+
+
+def _cmyk_to_rgb(samples: bytes) -> bytes:
+    rgb = bytearray()
+    for offset in range(0, len(samples), 4):
+        c, m, y, k = samples[offset : offset + 4]
+        rgb.extend((255 - min(255, c + k), 255 - min(255, m + k), 255 - min(255, y + k)))
+    return bytes(rgb)
+
+
+def _extract_image_payload(
+    objects: Mapping[int, _PdfObject], obj_value: dict[str, Any], raw_stream: bytes
+) -> tuple[bytes, str]:
+    """Return self-contained image bytes and their truthful media type.
+
+    DCT/JPX streams are already encoded files. A plain FlateDecode image is
+    only unpacked pixel samples, not a JPEG; encode those samples as PNG so
+    Gemini and FFmpeg never receive raw bytes falsely labelled image/jpeg.
+    """
+    decoded = _decode_stream(obj_value, raw_stream)
+    filters = _filter_chain(obj_value)
+    if "DCTDecode" in filters:
+        return decoded, "image/jpeg"
+    if "JPXDecode" in filters:
+        return decoded, "image/jp2"
+    if "FlateDecode" not in filters:
+        # Preserve the historical contract for unfiltered hand-built fixtures.
+        return decoded, "image/jpeg"
+
+    width, height, components, samples = _raw_image_samples(objects, obj_value, decoded)
+    if components == 4:
+        samples = _cmyk_to_rgb(samples)
+        components = 3
+
+    smask = obj_value.get("SMask")
+    if isinstance(smask, _Ref):
+        mask_obj = objects.get(smask.number)
+        if mask_obj is None or not isinstance(mask_obj.value, dict) or mask_obj.stream is None:
+            raise PdfExtractionError(f"image soft mask object {smask.number} is missing")
+        # A soft mask may itself be a JPEG/JPX stream. Decoding that codec is
+        # deliberately outside this dependency-free parser; the RGB payload
+        # remains a truthful, valid PNG without it. Raw Flate masks can be
+        # interleaved losslessly and preserve transparency.
+        mask_filters = _filter_chain(mask_obj.value)
+        if "DCTDecode" not in mask_filters and "JPXDecode" not in mask_filters:
+            mask_decoded = _decode_stream(mask_obj.value, mask_obj.stream)
+            mask_width, mask_height, mask_components, alpha = _raw_image_samples(
+                objects, mask_obj.value, mask_decoded
+            )
+            if (mask_width, mask_height, mask_components) != (width, height, 1):
+                raise PdfExtractionError("image soft mask dimensions or color space do not match")
+            if mask_obj.value.get("Decode") == [1, 0]:
+                alpha = bytes(255 - value for value in alpha)
+            interleaved = bytearray()
+            for pixel in range(width * height):
+                start = pixel * components
+                interleaved.extend(samples[start : start + components])
+                interleaved.append(alpha[pixel])
+            samples = bytes(interleaved)
+            components += 1
+
+    return _encode_png(width, height, samples, components), "image/png"
+
+
 def _resolve_dict(objects: Mapping[int, _PdfObject], value: Any) -> dict[str, Any] | None:
     if isinstance(value, _Ref):
         obj = objects.get(value.number)
@@ -472,7 +618,7 @@ def _collect_xobject_images(
     if xobj.value.get("Subtype") == "Image":
         if xobj.stream is None:
             raise PdfExtractionError(f"image XObject {obj_num} has no stream data")
-        image_bytes = _decode_stream(xobj.value, xobj.stream)
+        image_bytes, mime_type = _extract_image_payload(objects, xobj.value, xobj.stream)
         width = xobj.value.get("Width")
         height = xobj.value.get("Height")
         color_space = xobj.value.get("ColorSpace")
@@ -485,6 +631,7 @@ def _collect_xobject_images(
             height=height if isinstance(height, int) else None,
             color_space=color_space if isinstance(color_space, str) else None,
             content_digest=hashlib.sha256(image_bytes).hexdigest(),
+            mime_type=mime_type,
         )], occurrence + 1
     if xobj.value.get("Subtype") != "Form" or xobj.stream is None:
         return [], occurrence
@@ -609,6 +756,7 @@ def build_manifest(pdf_bytes: bytes, strategy: ClassifierStrategy | None = None)
             content_digest=image.content_digest,
             byte_length=len(image.data),
             image_data=image.data,
+            mime_type=image.mime_type,
         )
         for image in images
     )

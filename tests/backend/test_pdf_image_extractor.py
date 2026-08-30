@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import zlib
 
 import pytest
@@ -375,6 +376,65 @@ def test_chained_flate_then_dct_filter_is_decoded() -> None:
     images = extract_pdf_images(pdf_bytes)
     assert len(images) == 1
     assert images[0].data == fake_jpeg
+    assert images[0].mime_type == "image/jpeg"
+
+
+def test_flate_rgb_image_with_soft_mask_is_encoded_as_valid_rgba_png() -> None:
+    """Raw Flate samples must never be sent to Gemini under an image/jpeg MIME."""
+    rgb = bytes((255, 0, 0, 0, 255, 0))  # two pixels: red then green
+    alpha = bytes((255, 0))
+    compressed_rgb = zlib.compress(rgb)
+    compressed_alpha = zlib.compress(alpha)
+    parts = [b"%PDF-1.4\n"]
+    parts.append(_dict_object(1, "<< /Type /Catalog /Pages 2 0 R >>"))
+    parts.append(_dict_object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"))
+    parts.append(_page_object(3, 2, {"Im0": 4}, 6))
+    parts.append(
+        b"4 0 obj\n"
+        + (
+            f"<< /Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB "
+            f"/BitsPerComponent 8 /Filter /FlateDecode /SMask 5 0 R /Length {len(compressed_rgb)} >>\n"
+        ).encode("ascii")
+        + b"stream\n"
+        + compressed_rgb
+        + b"\nendstream\nendobj\n"
+    )
+    parts.append(
+        b"5 0 obj\n"
+        + (
+            f"<< /Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceGray "
+            f"/BitsPerComponent 8 /Filter /FlateDecode /Length {len(compressed_alpha)} >>\n"
+        ).encode("ascii")
+        + b"stream\n"
+        + compressed_alpha
+        + b"\nendstream\nendobj\n"
+    )
+    parts.append(_content_object(6, ["Im0"]))
+    parts.append(b"%%EOF\n")
+
+    pdf_bytes = b"".join(parts)
+    images = extract_pdf_images(pdf_bytes)
+
+    assert len(images) == 1
+    image = images[0]
+    assert image.mime_type == "image/png"
+    assert image.data.startswith(b"\x89PNG\r\n\x1a\n")
+
+    # Decode the sole IDAT chunk: filter byte + two RGBA pixels.
+    offset = 8
+    idat = b""
+    while offset < len(image.data):
+        length = struct.unpack(">I", image.data[offset : offset + 4])[0]
+        kind = image.data[offset + 4 : offset + 8]
+        payload = image.data[offset + 8 : offset + 8 + length]
+        if kind == b"IDAT":
+            idat += payload
+        offset += 12 + length
+    assert zlib.decompress(idat) == b"\x00\xff\x00\x00\xff\x00\xff\x00\x00"
+
+    manifest = build_manifest(pdf_bytes)
+    assert manifest.entries[0].mime_type == "image/png"
+    assert manifest.entries[0].image_data == image.data
 
 
 def test_invalid_pdf_error_rejects_non_bytes_input() -> None:
