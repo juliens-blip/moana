@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { YatcoGlobalListing } from '@/lib/types';
+import { createSshRunner } from '@/lib/brochure-video-upload';
 
 const REMOTE = 'ubuntu@51.44.220.145';
 let liveCache: YatcoGlobalListing[] | null = null;
@@ -124,19 +125,43 @@ export async function getLiveYatcoBossListings(forceRefresh = false): Promise<Ya
   }
 }
 
-export async function getLiveYatcoBossBrochure(vid: string): Promise<{ filename: string; contentType: string; base64: string }> {
-  if (!/^\d+$/.test(vid)) throw new Error('Identifiant YATCO invalide');
-  const key = process.env.MOANA_SSH_KEY;
-  if (!key) throw new Error('MOANA_SSH_KEY est requis pour le téléchargement BOSS');
+export async function getLiveYatcoBossBrochure(
+  vid: string,
+  externalId: string
+): Promise<{ filename: string; contentType: string; url: string }> {
+  if (vid && !/^\d+$/.test(vid)) throw new Error('vID YATCO invalide');
+  if (externalId && !/^\d+$/.test(externalId)) throw new Error('Identifiant MLS YATCO invalide');
+  if (!vid && !externalId) throw new Error('Identifiant YATCO manquant');
+
+  // La génération vidéo et BOSS vivent désormais sur deux EC2 distinctes.
+  // Les variables YATCO dédiées empêchent une future rotation de la clé vidéo
+  // de casser les brochures ; les anciennes variables restent un fallback de
+  // compatibilité pendant la transition Vercel.
+  const key = process.env.YATCO_SSH_KEY || process.env.MOANA_SSH_KEY;
+  const host = process.env.YATCO_SSH_HOST?.trim() || REMOTE;
+  if (!key) throw new Error('YATCO_SSH_KEY est requis pour le téléchargement BOSS');
   const temp = await mkdtemp(join(tmpdir(), 'moana-yatco-pdf-'));
   const keyPath = join(temp, 'aws-key');
   await writeFile(keyPath, `${key.trim()}\n`, { mode: 0o600 });
   try {
     const script = await readFile(join(process.cwd(), 'scripts/yatco-boss-brochure.mjs'), 'utf8');
-    const stdout = await runRemoteScript(keyPath, script, { VID: vid });
-    const result = JSON.parse(stdout) as { filename?: string; contentType?: string; base64?: string };
-    if (!result.filename || !result.base64) throw new Error('YATCO n’a pas retourné de brochure');
-    return { filename: result.filename, contentType: result.contentType ?? 'application/pdf', base64: result.base64 };
+    const runSsh = createSshRunner(keyPath, host);
+    const remote = await runSsh(
+      `docker exec -e VID=${vid} -e MLS_ID=${externalId} -i scrape-mcp node -`,
+      { input: script, timeoutMs: 110_000 }
+    );
+    if (remote.code !== 0) throw new Error(`Génération YATCO distante échouée (code ${remote.code})`);
+    const result = JSON.parse(remote.stdout) as { filename?: string; contentType?: string; url?: string };
+    if (!result.filename || !result.url) throw new Error('YATCO n’a pas retourné de brochure');
+    const downloadUrl = new URL(result.url);
+    if (downloadUrl.protocol !== 'https:' || downloadUrl.username || downloadUrl.password) {
+      throw new Error('YATCO a retourné une URL de brochure invalide');
+    }
+    return {
+      filename: result.filename,
+      contentType: result.contentType ?? 'application/pdf',
+      url: downloadUrl.href,
+    };
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

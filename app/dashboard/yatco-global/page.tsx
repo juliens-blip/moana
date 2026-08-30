@@ -412,8 +412,12 @@ function YatcoGlobalPageInner() {
           <div className="flex flex-wrap gap-3">
             {(() => {
               const bossVid = (detailsListing.raw_payload?.yatco_boss as { vid?: unknown } | undefined)?.vid;
-              return typeof bossVid === 'string' || typeof bossVid === 'number'
-                ? <a href={`/api/yatco-global/brochure?vid=${encodeURIComponent(String(bossVid))}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>
+              const externalId = String(detailsListing.external_id ?? '');
+              const brochureParams = new URLSearchParams();
+              if (/^\d+$/.test(externalId)) brochureParams.set('externalId', externalId);
+              if (/^\d+$/.test(String(bossVid ?? ''))) brochureParams.set('vid', String(bossVid));
+              return brochureParams.size > 0
+                ? <a href={`/api/yatco-global/brochure?${brochureParams.toString()}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>
                 : detailsListing.spec_sheet_url && <a href={detailsListing.spec_sheet_url} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-primary-700 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-800">Télécharger la brochure PDF</a>;
             })()}
             {detailsListing.listing_url && <a href={detailsListing.listing_url} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">Ouvrir la fiche source</a>}

@@ -233,11 +233,11 @@ run('getYatcoGlobalListings applies model_year/length_m/price_usd_min/price_usd_
 });
 
 run('getYatcoGlobalListings applies freshnessHours/minLengthMeters/minYear as base filters before range()', () => {
-  const freshnessIndex = supabaseSource.indexOf("query = query.gte('source_updated_at', freshnessThreshold);");
+  const freshnessIndex = supabaseSource.indexOf("query = query.gte('last_seen_at', freshnessThreshold);");
   const minLengthIndex = supabaseSource.indexOf("query = query.gt('length_m', minLengthMeters);");
   const minYearIndex = supabaseSource.indexOf("query = query.gte('model_year', minYear);");
   const rangeIndex = supabaseSource.indexOf('await query.range(from, to);');
-  assert.notEqual(freshnessIndex, -1, 'missing freshnessHours base filter on source_updated_at');
+  assert.notEqual(freshnessIndex, -1, 'missing inventory freshnessHours base filter on last_seen_at');
   assert.notEqual(minLengthIndex, -1, 'missing minLengthMeters base filter on length_m');
   assert.notEqual(minYearIndex, -1, 'missing minYear base filter on model_year');
   assert.notEqual(rangeIndex, -1, 'missing query.range(from, to) pagination call');

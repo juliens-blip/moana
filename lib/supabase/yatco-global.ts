@@ -84,11 +84,11 @@ async function getLatestPriceFluctuations(
 }
 
 /**
- * List deduplicated YATCO global listings selected from the authenticated
- * BOSS new/modified/sold feed. `source_updated_at` is refreshed only when an
- * event is observed in that feed, unlike the technical `updated_at` changed
- * by replaying an old public-sitemap snapshot. The remaining filters are
- * applied before pagination.
+ * List deduplicated YATCO global listings seen in the latest collector
+ * snapshots. `last_seen_at` is the inventory freshness signal; the source
+ * publication date can legitimately be old for a boat that is still listed.
+ * `source_updated_at` remains available for market-event sorting only. The
+ * remaining filters are applied before pagination.
  * refined by model_year, length_m, country, and price_usd_min/max, ordered
  * by the requested sortBy/sortDir (whitelisted columns only, default
  * updated_at DESC) then id for a stable order across pages, enriched with
@@ -128,7 +128,7 @@ export async function getYatcoGlobalListings(
     .order('id', { ascending: true });
 
   const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).toISOString();
-  query = query.gte('source_updated_at', freshnessThreshold);
+  query = query.gte('last_seen_at', freshnessThreshold);
   query = query.gt('length_m', minLengthMeters);
   query = query.gte('model_year', minYear);
 

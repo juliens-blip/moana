@@ -58,7 +58,8 @@ assert.equal(buildGlobalListingPatch(row({ mlsId: null, vid: '' }), observedAt),
 const repositorySource = fs.readFileSync(path.join(process.cwd(), 'lib/supabase/yatco-global.ts'), 'utf8');
 const pageSource = fs.readFileSync(path.join(process.cwd(), 'app/dashboard/yatco-global/page.tsx'), 'utf8');
 const cardSource = fs.readFileSync(path.join(process.cwd(), 'components/yatco-global/YatcoGlobalCard.tsx'), 'utf8');
-assert.match(repositorySource, /query = query\.gte\('source_updated_at', freshnessThreshold\)/);
+assert.match(repositorySource, /query = query\.gte\('last_seen_at', freshnessThreshold\)/);
+assert.doesNotMatch(repositorySource, /query = query\.gte\('source_updated_at', freshnessThreshold\)/);
 assert.doesNotMatch(repositorySource, /first_seen_at\.gte\.\$\{freshnessThreshold\},updated_at\.gte/);
 assert.match(pageSource, /sortBy: 'source_updated_at'/);
 assert.match(cardSource, /Repérée dans YATCO BOSS/);

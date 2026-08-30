@@ -150,7 +150,7 @@ export function boundedAppend(
  * faisait échouer `spawn('ssh', ...)` avec `ENOENT` en production. `ssh2`
  * fonctionne en JS pur (repli sans bindings natifs si non compilables).
  */
-function createSshRunner(keyPath: string, host: string): BrochureVideoDeps['runSsh'] {
+export function createSshRunner(keyPath: string, host: string): BrochureVideoDeps['runSsh'] {
   const { username, hostname } = parseRemoteTarget(host);
   return (command, opts = {}) =>
     new Promise<SshResult>((resolve, reject) => {
