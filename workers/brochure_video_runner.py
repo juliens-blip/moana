@@ -929,8 +929,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Un seul appel qui embarque le PDF entier + toutes les images extraites
     # en multimodal : le défaut de 30s (calibré pour la classification
     # image-par-image) expire systématiquement avant que Gemini ait fini de
-    # générer le plan éditorial complet.
-    director_settings = ClassificationSettings(max_retries=0, timeout_s=180.0)
+    # générer le plan éditorial complet. 4 retries avec backoff jusqu'à 45s
+    # (budget job de 3600s très large) : un `http_503`/timeout ponctuel se
+    # rétablit en général en quelques dizaines de secondes de surcharge
+    # Gemini, pas en 1-3s — un backoff trop court épuise les tentatives
+    # avant que le service ne se libère (observé le 2026-09-03 : 3 tentatives
+    # en ~250s toutes en http_503, budget de backoff total ~3s insuffisant).
+    director_settings = ClassificationSettings(
+        max_retries=4, timeout_s=180.0, backoff_base_s=5.0, backoff_cap_s=45.0
+    )
     editorial_directors = {
         "classique": make_gemini_brochure_director(
             GeminiFlashBrochureDirectorTransport(flash_api_key),

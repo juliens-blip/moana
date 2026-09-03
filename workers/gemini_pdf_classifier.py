@@ -699,6 +699,9 @@ def make_gemini_brochure_director(
             backoff_base_s=settings.backoff_base_s,
             backoff_cap_s=settings.backoff_cap_s,
             jitter_ratio=settings.jitter_ratio,
+            on_retry=lambda attempt_n, delay: LOGGER.warning(
+                "gemini brochure director retry %s/%s in %.3fs", attempt_n, settings.max_retries, delay
+            ),
         )
 
     return direct

@@ -27,11 +27,15 @@ from workers.brochure_video_runner import AtomicJobStateStore, run_brochure_vide
 from workers.gemini_pdf_classifier import (
     MAX_EDITORIAL_FACTS,
     BrochureEditorialPlan,
+    ClassificationSettings,
+    ClassificationTransientError,
     EditorialFact,
     GeminiClassificationError,
     build_brochure_direction_prompt,
+    make_gemini_brochure_director,
     parse_brochure_direction_response,
 )
+from workers.pdf_image_extractor import extract_pdf_images
 from workers.video_assembler import InMemoryPublishCheckpoint
 
 
@@ -349,6 +353,61 @@ def test_director_leaves_yacht_name_null_when_not_explicitly_present() -> None:
 
     assert plan.yacht_name is None
     assert plan.logo_image_id is None
+
+
+class _FakeDirectorTransport:
+    """Deterministic in-memory ``GeminiBrochureDirectorTransport`` double: no network I/O."""
+
+    def __init__(self, responses: list) -> None:
+        self._responses = list(responses)
+        self.calls = 0
+
+    def direct(self, pdf_bytes, images, image_ids, prompt, timeout: float) -> str:
+        assert isinstance(prompt, str) and prompt.strip()
+        assert timeout > 0
+        self.calls += 1
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def test_director_retries_a_transient_network_timeout_then_succeeds() -> None:
+    # Regression: a single Gemini TimeoutError used to fail the whole
+    # brochure-video job outright (max_retries=0 on the director call, unlike
+    # every other Gemini call in the pipeline). One transient blip must now
+    # be absorbed instead of surfacing as BrochureEditorialDirectionError.
+    pdf_bytes = _two_image_pdf()
+    images = extract_pdf_images(pdf_bytes)
+    digest = hashlib.sha256(pdf_bytes).hexdigest()
+    photo_id = f"{digest[:16]}:0000:0000"
+    logo_id = f"{digest[:16]}:0000:0001"
+    good_response = json.dumps(
+        {
+            "sections": [
+                {"image_id": photo_id, "section": "Hero/Identité"},
+                {"image_id": logo_id, "section": "Brokerage Logo/Branding"},
+            ],
+            "logo_image_id": logo_id,
+            "yacht_name": None,
+            "facts": [],
+        }
+    )
+    transport = _FakeDirectorTransport(
+        [
+            ClassificationTransientError("gemini brochure director network_error:TimeoutError"),
+            good_response,
+        ]
+    )
+    director = make_gemini_brochure_director(
+        transport,
+        settings=ClassificationSettings(max_retries=2, timeout_s=180.0, backoff_base_s=0.01, backoff_cap_s=0.02),
+    )
+
+    plan = director(pdf_bytes, images)
+
+    assert plan.logo_image_id == logo_id
+    assert transport.calls == 2
 
 
 def test_runner_skips_logo_clip_and_adds_persistent_logo_watermark_only(tmp_path) -> None:
