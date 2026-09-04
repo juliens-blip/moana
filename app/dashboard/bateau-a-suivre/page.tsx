@@ -7,7 +7,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
 import { Button, Loading, SkeletonGrid } from '@/components/ui';
-import { ListingCard, ListingFilters, ListingDetailModal, DeleteConfirmModal } from '@/components/listings';
+import { ListingCard, ListingFilters, ListingDetailModal, DeleteConfirmModal, MoveConfirmModal } from '@/components/listings';
 import type { Listing } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
@@ -82,6 +82,8 @@ export default function BateauASuivrePage() {
   const [etoileOnly, setEtoileOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
   const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [listingToMove, setListingToMove] = useState<Listing | null>(null);
+  const [moveLoading, setMoveLoading] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const filtersRef = useRef({
@@ -390,6 +392,33 @@ export default function BateauASuivrePage() {
     }
   };
 
+  // Handle move back to the main catalog
+  const handleMove = async () => {
+    if (!listingToMove) return;
+    setMoveLoading(true);
+
+    try {
+      const response = await fetch(`/api/bateaux-a-suivre/${listingToMove.id}/move`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Bateau déplacé vers le listing principal');
+        setListings((prev) => prev.filter((l) => l.id !== listingToMove.id));
+        setListingToMove(null);
+      } else {
+        toast.error(data.error || 'Erreur lors du déplacement');
+      }
+    } catch (error) {
+      console.error('Error moving tracked listing:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -506,6 +535,15 @@ export default function BateauASuivrePage() {
                 const target = listings.find((l) => l.id === id);
                 if (target) setListingToDelete(target);
               }}
+              onMove={
+                listing.id.startsWith('virtual-')
+                  ? undefined
+                  : (id) => {
+                      const target = listings.find((l) => l.id === id);
+                      if (target) setListingToMove(target);
+                    }
+              }
+              moveLabel="Vers le listing principal"
               canEdit
               editHref={`/dashboard/bateau-a-suivre/${listing.id}/edit`}
               index={index}
@@ -530,6 +568,15 @@ export default function BateauASuivrePage() {
         onConfirm={handleDelete}
         listing={listingToDelete}
         loading={deleteLoading}
+      />
+
+      <MoveConfirmModal
+        isOpen={!!listingToMove}
+        onClose={() => setListingToMove(null)}
+        onConfirm={handleMove}
+        listing={listingToMove}
+        targetLabel="le listing principal"
+        loading={moveLoading}
       />
     </div>
   );

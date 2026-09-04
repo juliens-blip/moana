@@ -2,6 +2,7 @@ export { ListingCard } from './ListingCard';
 export { ListingForm } from './ListingForm';
 export { TrackedListingForm } from './TrackedListingForm';
 export { DeleteConfirmModal } from './DeleteConfirmModal';
+export { MoveConfirmModal } from './MoveConfirmModal';
 export { ListingFilters } from './ListingFilters';
 export { ListingDetailModal } from './ListingDetailModal';
 export { FleetAuditCard } from './FleetAuditCard';

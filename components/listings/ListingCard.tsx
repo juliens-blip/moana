@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Edit2, Trash2, Star } from 'lucide-react';
+import { Edit2, Trash2, Star, ArrowRightLeft } from 'lucide-react';
 import type { Listing } from '@/lib/types';
 import { formatNumberFlexible } from '@/lib/utils';
 import { Button } from '@/components/ui';
@@ -14,12 +14,14 @@ interface ListingCardProps {
   listing: Listing;
   onDelete?: (id: string) => void;
   onClick?: (listing: Listing) => void;
+  onMove?: (id: string) => void;
+  moveLabel?: string;
   canEdit?: boolean;
   editHref?: string;
   index?: number;
 }
 
-export function ListingCard({ listing, onDelete, onClick, canEdit = true, editHref, index = 0 }: ListingCardProps) {
+export function ListingCard({ listing, onDelete, onClick, onMove, moveLabel, canEdit = true, editHref, index = 0 }: ListingCardProps) {
   const { id } = listing;
   const listingEditHref = editHref || `/dashboard/listings/${id}/edit`;
 
@@ -143,29 +145,45 @@ export function ListingCard({ listing, onDelete, onClick, canEdit = true, editHr
 
         {/* Actions */}
         {canEdit && (
-          <div className="flex gap-2 pt-4 border-t border-gray-200">
-            <Link 
-              href={listingEditHref} 
-              className="flex-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Button variant="secondary" size="sm" className="w-full">
-                <Edit2 className="h-4 w-4 mr-2" />
-                Modifier
-              </Button>
-            </Link>
-            {onDelete && (
+          <div className="pt-4 border-t border-gray-200 space-y-2">
+            <div className="flex gap-2">
+              <Link
+                href={listingEditHref}
+                className="flex-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button variant="secondary" size="sm" className="w-full">
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Modifier
+                </Button>
+              </Link>
+              {onDelete && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(id);
+                  }}
+                  className="flex-1"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer
+                </Button>
+              )}
+            </div>
+            {onMove && (
               <Button
-                variant="danger"
+                variant="ghost"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete(id);
+                  onMove(id);
                 }}
-                className="flex-1"
+                className="w-full"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Supprimer
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                {moveLabel || 'Déplacer'}
               </Button>
             )}
           </div>

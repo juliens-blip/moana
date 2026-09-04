@@ -8,7 +8,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
 import { Button, Loading, SkeletonGrid } from '@/components/ui';
-import { ListingCard, ListingFilters, DeleteConfirmModal, ListingDetailModal } from '@/components/listings';
+import { ListingCard, ListingFilters, DeleteConfirmModal, MoveConfirmModal, ListingDetailModal } from '@/components/listings';
 import type { Listing } from '@/lib/types';
 import { debounce } from '@/lib/utils';
 
@@ -29,6 +29,8 @@ export default function DashboardPage() {
   const [etoileOnly, setEtoileOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'size-asc' | 'size-desc' | ''>('size-desc');
   const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [listingToMove, setListingToMove] = useState<Listing | null>(null);
+  const [moveLoading, setMoveLoading] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   // Refs pour stocker les valeurs actuelles des filtres
@@ -387,6 +389,34 @@ export default function DashboardPage() {
     }
   };
 
+  // Handle move to Bateaux à suivre
+  const handleMove = async () => {
+    if (!listingToMove) return;
+
+    setMoveLoading(true);
+
+    try {
+      const response = await fetch(`/api/listings/${listingToMove.id}/move`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Bateau déplacé vers Bateaux à suivre');
+        setListings((prev) => prev.filter((l) => l.id !== listingToMove.id));
+        setListingToMove(null);
+      } else {
+        toast.error(data.error || 'Erreur lors du déplacement');
+      }
+    } catch (error) {
+      console.error('Error moving listing:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
   const handleListingUpdated = (updated: Listing) => {
     setListings((prev) =>
       prev.map((listing) => (listing.id === updated.id ? updated : listing))
@@ -515,6 +545,8 @@ export default function DashboardPage() {
               listing={listing}
               onClick={(listing) => setSelectedListing(listing)}
               onDelete={(id) => setListingToDelete(listing)}
+              onMove={(id) => setListingToMove(listing)}
+              moveLabel="Vers Bateaux à suivre"
               canEdit={true}
               index={index}
             />
@@ -537,6 +569,16 @@ export default function DashboardPage() {
         onConfirm={handleDelete}
         listing={listingToDelete}
         loading={deleteLoading}
+      />
+
+      {/* Move Confirmation Modal */}
+      <MoveConfirmModal
+        isOpen={!!listingToMove}
+        onClose={() => setListingToMove(null)}
+        onConfirm={handleMove}
+        listing={listingToMove}
+        targetLabel="Bateaux à suivre"
+        loading={moveLoading}
       />
     </div>
   );
